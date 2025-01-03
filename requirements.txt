@@ -10,7 +10,7 @@ requests
 matplotlib
 python-dotenv
 python-decouple
-fpdf==1.7.2
+fpdf2==2.4.6
 twilio>=7.19.0
 xlsxwriter==3.0.9
 pyarrow==11.0.0
