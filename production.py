@@ -268,7 +268,7 @@ def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: 
     except Exception as e:
         st.error(f"Falha ao enviar e-mail: {e}")
 
-def send_stock_summary_whatsapp(recipient_number: str):
+def send_whatsapp(recipient_number: str):
     """
     Envia uma mensagem WhatsApp com o resumo da tabela de estoque usando Twilio.
     """
