@@ -366,7 +366,7 @@ def home_page():
                 # **Envio por WhatsApp com Upload Automático**
                 st.subheader("Enviar por WhatsApp")
                 with st.form(key='send_whatsapp_form'):
-                    recipient_whatsapp = st.text_input("Número do WhatsApp (+5513991545481)")
+                    recipient_whatsapp = st.text_input("Número do WhatsApp (000)")
                     #whatsapp_message = st.text_area("Mensagem", value="Olá,\n\nSegue em anexo o resumo de Estoque .\n\nAtenciosamente,\nBoituva Beach Club")
                     submit_whatsapp = st.form_submit_button(label="Enviar via WhatsApp")
 
