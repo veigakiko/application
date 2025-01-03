@@ -1,5 +1,5 @@
 streamlit==1.25.0
-psycopg2-binary>=2.9.8,<3.0.0
+psycopg2-binary>=2.9.10,<3.0.0
 Pillow==9.5.0
 pandas==2.2.3
 numpy==1.26.4
@@ -13,4 +13,4 @@ python-decouple
 fpdf2==2.4.6
 twilio>=7.19.0
 xlsxwriter==3.0.9
-pyarrow==11.0.0
+pyarrow>=12.0.0
