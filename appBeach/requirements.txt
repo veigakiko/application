@@ -14,3 +14,4 @@ python-dotenv
 streamlit
 psycopg2
 python-decouple
+psycopg2-binary
