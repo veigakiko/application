@@ -361,56 +361,6 @@ def home_page():
                 total_stock_value = int(total_stock_value)
                 st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
-                # Adicionar botões de download
-                st.markdown("### Exportar Stock vs. Orders Summary")
-                download_options = ["CSV", "Excel", "JSON", "HTML", "PDF", "Parquet"]
-                selected_format = st.selectbox("Selecione o formato de exportação:", download_options)
-
-                if selected_format == "CSV":
-                    download_df_as_csv(df_stock_vs_orders, "stock_vs_orders_summary.csv", label="Baixar CSV")
-                elif selected_format == "Excel":
-                    download_df_as_excel(df_stock_vs_orders, "stock_vs_orders_summary.xlsx", label="Baixar Excel")
-                elif selected_format == "JSON":
-                    download_df_as_json(df_stock_vs_orders, "stock_vs_orders_summary.json", label="Baixar JSON")
-                elif selected_format == "HTML":
-                    download_df_as_html(df_stock_vs_orders, "stock_vs_orders_summary.html", label="Baixar HTML")
-                elif selected_format == "PDF":
-                    pdf_data = convert_df_to_pdf(df_stock_vs_orders)
-                    st.download_button(
-                        label="Baixar PDF",
-                        data=pdf_data,
-                        file_name="stock_vs_orders_summary.pdf",
-                        mime="application/pdf",
-                    )
-                elif selected_format == "Parquet":
-                    download_df_as_parquet(df_stock_vs_orders, "stock_vs_orders_summary.parquet", label="Baixar Parquet")
-
-                # Adicionar opções de envio por E-mail e WhatsApp
-                st.markdown("### Enviar Stock vs. Orders Summary")
-
-                # Gerar PDF
-                pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
-
-                # **Envio por E-mail**
-                st.subheader("Enviar por E-mail")
-                with st.form(key='send_email_form'):
-                    recipient_email = st.text_input("E-mail do Destinatário")
-                    email_subject = st.text_input("Assunto do E-mail", value="Resumo de Estoque vs. Pedidos")
-                    email_body = st.text_area("Corpo do E-mail", value="Olá,\n\nSegue em anexo o resumo de Estoque vs. Pedidos.\n\nAtenciosamente,\nBoituva Beach Club")
-                    submit_email = st.form_submit_button(label="Enviar E-mail")
-
-                if submit_email:
-                    if recipient_email:
-                        send_email(
-                            recipient_email=recipient_email,
-                            subject=email_subject,
-                            body=email_body,
-                            attachment_bytes=pdf_bytes,
-                            attachment_filename="stock_vs_orders_summary.pdf"
-                        )
-                    else:
-                        st.warning("Por favor, insira o e-mail do destinatário.")
-
                 # **Envio por WhatsApp com Upload Automático**
                 st.subheader("Enviar por WhatsApp")
                 with st.form(key='send_whatsapp_form'):
