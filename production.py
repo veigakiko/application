@@ -78,21 +78,17 @@ def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar
     """
     Exibe um botão de download de um DataFrame como Parquet.
     """
-    import pyarrow  # Certifique-se de que o PyArrow está instalado
-    try:
-        # Escreve o DataFrame como parquet no buffer
-        parquet_buffer = BytesIO()
-        df.to_parquet(parquet_buffer, index=False, engine="pyarrow")
-        parquet_buffer.seek(0)  # Volta para o início do buffer
+    import io
+    buffer = io.BytesIO()
+    df.to_parquet(buffer, index=False)
+    buffer.seek(0)
+    st.download_button(
+        label=label,
+        data=buffer.getvalue(),
+        file_name=filename,
+        mime="application/octet-stream",
+    )
 
-        st.download_button(
-            label=label,
-            data=parquet_buffer,
-            file_name=filename,
-            mime="application/octet-stream",
-        )
-    except Exception as e:
-        st.error(f"Erro ao gerar o arquivo Parquet: {e}")
 
 ########################
 # CONEXÃO COM BANCO (SEM CACHE)
