@@ -231,9 +231,18 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
             pdf.cell(40, 10, str(item), border=1)
         pdf.ln()
 
-    # Retornar o PDF como bytes
-    return pdf.output(dest='S').encode('latin1')
+    # Obter a saída do PDF
+    pdf_output = pdf.output(dest='S')
 
+    # Verificar o tipo e retornar bytes
+    if isinstance(pdf_output, str):
+        return pdf_output.encode('latin1')
+    elif isinstance(pdf_output, bytearray):
+        return bytes(pdf_output)
+    elif isinstance(pdf_output, bytes):
+        return pdf_output
+    else:
+        raise TypeError("Tipo de saída inesperado do método FPDF.output.")
 
 def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: bytes, attachment_filename: str):
     """
