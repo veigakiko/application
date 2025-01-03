@@ -268,19 +268,44 @@ def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: 
     except Exception as e:
         st.error(f"Falha ao enviar e-mail: {e}")
 
-def send_whatsapp(recipient_number: str, media_url: str):
+def send_stock_summary_whatsapp(recipient_number: str):
     """
-    Envia uma mensagem WhatsApp com um link para o PDF.
+    Envia uma mensagem WhatsApp com o resumo da tabela de estoque usando Twilio.
     """
     try:
+        # Buscar dados da tabela de estoque
+        stock_query = """
+            SELECT SUM(quantity) AS total_products, SUM(total_value) AS total_stock_value
+            FROM public.tb_stock;
+        """
+        stock_data = run_query(stock_query)
+        
+        if not stock_data or stock_data[0][0] is None:
+            st.warning("Não há dados de estoque para enviar.")
+            return
+        
+        total_products, total_stock_value = stock_data[0]
+        total_stock_value_formatted = format_currency(total_stock_value)
+        
+        # Preparar content_variables
+        content_variables = {
+            "1": total_products,
+            "2": total_stock_value_formatted
+        }
+        content_variables_json = json.dumps(content_variables)
+        
+        # Inicializar cliente Twilio
         client = Client(st.secrets["twilio"]["account_sid"], st.secrets["twilio"]["auth_token"])
+        
+        # Enviar mensagem
         message = client.messages.create(
-            body="Olá,\n\nSegue em anexo o resumo de Estoque vs. Pedidos.",
             from_=st.secrets["twilio"]["whatsapp_from"],
-            to=f"whatsapp:{recipient_number}",
-            media_url=[media_url]
+            content_sid=st.secrets["twilio"]["content_sid"],
+            content_variables=content_variables_json,
+            to=f"whatsapp:{recipient_number}"
         )
-        st.success(f"Mensagem enviada com sucesso para {recipient_number}!")
+        
+        st.success(f"Mensagem enviada com sucesso! SID: {message.sid}")
     except Exception as e:
         st.error(f"Falha ao enviar mensagem via WhatsApp: {e}")
 
