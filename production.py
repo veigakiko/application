@@ -361,6 +361,8 @@ def home_page():
                 total_stock_value = int(total_stock_value)
                 st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
+                 # Gerar PDF
+                pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
                 # **Envio por WhatsApp com Upload Automático**
                 st.subheader("Enviar por WhatsApp")
                 with st.form(key='send_whatsapp_form'):
