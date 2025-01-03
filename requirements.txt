@@ -4,13 +4,13 @@ Pillow==9.5.0
 pandas==2.2.3
 numpy==1.26.4
 streamlit-option-menu
-streamlit_option_menu
-psycopg2
 altair==5.5.0
 plotly
 requests
 matplotlib
 python-dotenv
-streamlit
-psycopg2
 python-decouple
+fpdf==1.7.2
+twilio==7.20.0  # Substitua pela versão mais recente disponível se 7.19.0 não existir
+xlsxwriter==3.0.9
+pyarrow==11.0.0
