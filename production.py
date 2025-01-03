@@ -11,6 +11,7 @@ from fpdf import FPDF
 import smtplib
 from email.message import EmailMessage
 from twilio.rest import Client
+import json
 
 ########################
 # UTILIDADES GERAIS
@@ -88,7 +89,6 @@ def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar
         file_name=filename,
         mime="application/octet-stream",
     )
-
 
 ########################
 # CONEXÃO COM BANCO (SEM CACHE)
@@ -268,43 +268,22 @@ def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: 
     except Exception as e:
         st.error(f"Falha ao enviar e-mail: {e}")
 
-def send_whatsapp(recipient_number: str):
+def send_whatsapp(recipient_number: str, media_url: str):
     """
-    Envia uma mensagem WhatsApp com o resumo da tabela de estoque usando Twilio.
+    Envia uma mensagem WhatsApp com uma URL de mídia usando Twilio.
     """
     try:
-        # Buscar dados da tabela de estoque
-        stock_query = """
-            SELECT SUM(quantity) AS total_products, SUM(total_value) AS total_stock_value
-            FROM public.tb_stock;
-        """
-        stock_data = run_query(stock_query)
-        
-        if not stock_data or stock_data[0][0] is None:
-            st.warning("Não há dados de estoque para enviar.")
-            return
-        
-        total_products, total_stock_value = stock_data[0]
-        total_stock_value_formatted = format_currency(total_stock_value)
-        
-        # Preparar content_variables
-        content_variables = {
-            "1": total_products,
-            "2": total_stock_value_formatted
-        }
-        content_variables_json = json.dumps(content_variables)
-        
         # Inicializar cliente Twilio
         client = Client(st.secrets["twilio"]["account_sid"], st.secrets["twilio"]["auth_token"])
-        
-        # Enviar mensagem
+
+        # Enviar mensagem com mídia
         message = client.messages.create(
             from_=st.secrets["twilio"]["whatsapp_from"],
-            content_sid=st.secrets["twilio"]["content_sid"],
-            content_variables=content_variables_json,
+            body="Olá,\n\nSegue o resumo de Estoque vs. Pedidos.\n\nAtenciosamente,\nBoituva Beach Club",
+            media_url=[media_url],
             to=f"whatsapp:{recipient_number}"
         )
-        
+
         st.success(f"Mensagem enviada com sucesso! SID: {message.sid}")
     except Exception as e:
         st.error(f"Falha ao enviar mensagem via WhatsApp: {e}")
@@ -658,12 +637,7 @@ def products_page():
                         with col2:
                             edit_product = st.text_input("Product", value=original_product, max_chars=100)
                         with col3:
-                            edit_quantity = st.number_input(
-                                "Quantity",
-                                min_value=1,
-                                step=1,
-                                value=int(original_quantity)
-                            )
+                            edit_quantity = st.number_input("Quantity", min_value=1, step=1, value=int(original_quantity))
                         with col4:
                             edit_unit_value = st.number_input(
                                 "Unit Value",
@@ -865,12 +839,12 @@ def clients_page():
 
     if submit_client:
         if nome_completo:
-            data_nascimento = datetime(2000, 1, 1).date()
-            genero = "Man"
-            telefone = "0000-0000"
+            data_nascimento = datetime(2000, 1, 1).date()  # Você pode ajustar isso conforme necessário
+            genero = "Man"  # Pode ser alterado para ser selecionado pelo usuário
+            telefone = "0000-0000"  # Pode ser ajustado para entrada do usuário
             unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
             email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
-            endereco = "Endereço padrão"
+            endereco = "Endereço padrão"  # Pode ser ajustado para entrada do usuário
 
             query = """
             INSERT INTO public.tb_clientes (nome_completo, data_nascimento, genero, telefone, email, endereco, data_cadastro)
@@ -1095,45 +1069,49 @@ def login_page():
 #####################
 # INICIALIZAÇÃO
 #####################
-if 'data' not in st.session_state:
-    st.session_state.data = load_all_data()
+def initialize_session_state():
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
 
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
 
-if not st.session_state.logged_in:
-    login_page()
-else:
-    selected_page = sidebar_navigation()
+if __name__ == "__main__":
+    initialize_session_state()
 
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = selected_page
-    elif selected_page != st.session_state.current_page:
-        refresh_data()
-        st.session_state.current_page = selected_page
+    if not st.session_state.logged_in:
+        login_page()
+    else:
+        selected_page = sidebar_navigation()
+
+        if 'current_page' not in st.session_state:
+            st.session_state.current_page = selected_page
+        elif selected_page != st.session_state.current_page:
+            refresh_data()
+            st.session_state.current_page = selected_page
+            if selected_page == "Home":
+                st.session_state.home_page_initialized = False
+
+        # Roteamento de Páginas
         if selected_page == "Home":
-            st.session_state.home_page_initialized = False
+            home_page()
+        elif selected_page == "Orders":
+            orders_page()
+        elif selected_page == "Products":
+            products_page()
+        elif selected_page == "Stock":
+            stock_page()
+        elif selected_page == "Clients":
+            clients_page()
+        elif selected_page == "Nota Fiscal":
+            invoice_page()
 
-    # Roteamento de Páginas
-    if selected_page == "Home":
-        home_page()
-    elif selected_page == "Orders":
-        orders_page()
-    elif selected_page == "Products":
-        products_page()
-    elif selected_page == "Stock":
-        stock_page()
-    elif selected_page == "Clients":
-        clients_page()
-    elif selected_page == "Nota Fiscal":
-        invoice_page()
-
-    with st.sidebar:
-        if st.button("Logout"):
-            keys_to_reset = ['home_page_initialized']
-            for key in keys_to_reset:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
-            st.experimental_rerun()
+        with st.sidebar:
+            if st.button("Logout"):
+                keys_to_reset = ['home_page_initialized']
+                for key in keys_to_reset:
+                    if key in st.session_state:
+                        del st.session_state[key]
+                st.session_state.logged_in = False
+                st.success("Desconectado com sucesso!")
+                st.experimental_rerun()
