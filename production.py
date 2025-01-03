@@ -222,16 +222,18 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
 
     # Adicionar cabeçalhos
     for column in df.columns:
-        pdf.cell(60, 10, column, border=1)
+        pdf.cell(40, 10, str(column), border=1)
     pdf.ln()
 
     # Adicionar linhas de dados
-    for index, row in df.iterrows():
+    for _, row in df.iterrows():
         for item in row:
-            pdf.cell(60, 10, str(item), border=1)
+            pdf.cell(40, 10, str(item), border=1)
         pdf.ln()
 
+    # Retornar o PDF como bytes
     return pdf.output(dest='S').encode('latin1')
+
 
 def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: bytes, attachment_filename: str):
     """
