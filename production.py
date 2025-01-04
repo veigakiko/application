@@ -240,30 +240,6 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
 
     return pdf_output
 
-def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: bytes, attachment_filename: str):
-    """
-    Envia um e-mail com um anexo PDF.
-    """
-    try:
-        msg = EmailMessage()
-        msg['Subject'] = subject
-        msg['From'] = st.secrets["email"]["sender_email"]
-        msg['To'] = recipient_email
-        msg.set_content(body)
-
-        # Anexar o PDF, se houver
-        if attachment_bytes and attachment_filename:
-            msg.add_attachment(attachment_bytes, maintype='application', subtype='pdf', filename=attachment_filename)
-
-        # Conectar ao servidor SMTP e enviar o e-mail
-        with smtplib.SMTP(st.secrets["email"]["smtp_server"], st.secrets["email"]["smtp_port"]) as server:
-            server.starttls()
-            server.login(st.secrets["email"]["sender_email"], st.secrets["email"]["sender_password"])
-            server.send_message(msg)
-
-        st.success(f"E-mail enviado com sucesso para {recipient_email}!")
-    except Exception as e:
-        st.error(f"Falha ao enviar e-mail: {e}")
 
 def send_whatsapp(recipient_number: str, media_url: str):
     """
