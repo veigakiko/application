@@ -842,32 +842,42 @@ def clients_page():
             st.warning("Please fill in all required fields.")
 
     # -------------------------------
-    # Display only Full Name in All Customers table
+    # Recuperar dados completos dos clientes (incluindo email)
     # -------------------------------
     clients_data = run_query(
-        """SELECT nome_completo FROM public.tb_clientes ORDER BY data_cadastro DESC;"""
+        """SELECT nome_completo, email FROM public.tb_clientes ORDER BY data_cadastro DESC;"""
     )
     if clients_data:
         st.subheader("All Clients")
-        columns = ["Full Name"]
+        # Criar DataFrame incluindo email, mas exibir apenas o nome completo
+        columns = ["Full Name", "Email"]
         df_clients = pd.DataFrame(clients_data, columns=columns)
-        st.dataframe(df_clients, use_container_width=True)
+        st.dataframe(df_clients[["Full Name"]], use_container_width=True)
 
         download_df_as_csv(df_clients, "clients.csv", label="Download Clients CSV")
 
         if st.session_state.get("username") == "admin":
             st.subheader("Edit or Delete an Existing Client")
-            client_names = df_clients["Full Name"].unique().tolist()
-            selected_name = st.selectbox("Select a client by Full Name:", [""] + client_names)
+            # Criar uma lista de clientes com nome e email para identificação única
+            client_display = [""] + [f"{row['Full Name']} ({row['Email']})" for index, row in df_clients.iterrows()]
+            selected_display = st.selectbox("Select a client to edit/delete:", client_display)
 
-            if selected_name:
-                selected_client_row = df_clients[df_clients["Full Name"] == selected_name].iloc[0]
-                original_name = selected_client_row["Full Name"]
+            if selected_display:
+                # Extrair o email a partir da seleção
+                try:
+                    original_name, original_email = selected_display.split(" (")
+                    original_email = original_email.rstrip(")")
+                except ValueError:
+                    st.error("Seleção inválida. Por favor, selecione um cliente corretamente.")
+                    st.stop()
+
+                # Recuperar os dados completos do cliente selecionado
+                selected_client_row = df_clients[df_clients["Email"] == original_email].iloc[0]
 
                 with st.form(key='edit_client_form'):
                     col1, col2 = st.columns(2)
                     with col1:
-                        edit_name = st.text_input("Full Name", value=original_name, max_chars=100)
+                        edit_name = st.text_input("Full Name", value=selected_client_row["Full Name"], max_chars=100)
                     with col2:
                         st.write("")  # Espaço para layout
                     col_upd, col_del = st.columns(2)
@@ -881,9 +891,9 @@ def clients_page():
                         update_query = """
                         UPDATE public.tb_clientes
                         SET nome_completo = %s
-                        WHERE nome_completo = %s;
+                        WHERE email = %s;
                         """
-                        success = run_insert(update_query, (edit_name, original_name))
+                        success = run_insert(update_query, (edit_name, original_email))
                         if success:
                             st.success("Client updated successfully!")
                             refresh_data()
@@ -895,8 +905,8 @@ def clients_page():
                 if delete_button:
                     confirm = st.checkbox("Are you sure you want to delete this client?")
                     if confirm:
-                        delete_query = "DELETE FROM public.tb_clientes WHERE nome_completo = %s;"
-                        success = run_insert(delete_query, (original_name,))
+                        delete_query = "DELETE FROM public.tb_clientes WHERE email = %s;"
+                        success = run_insert(delete_query, (original_email,))
                         if success:
                             st.success("Client deleted successfully!")
                             refresh_data()
