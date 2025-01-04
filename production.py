@@ -220,30 +220,7 @@ def home_page():
                 total_stock_value = int(total_stock_value)
                 st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
-                # Gerar PDF
-                pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
-                # **Envio por WhatsApp com Upload Automático**
-                st.subheader("Enviar por WhatsApp")
-                with st.form(key='send_whatsapp_form'):
-                    recipient_whatsapp = st.text_input("Número do WhatsApp (000)")
-                    submit_whatsapp = st.form_submit_button(label="Enviar via WhatsApp")
-
-                if submit_whatsapp:
-                    if recipient_whatsapp:
-                        # Fazer upload do PDF para obter a URL
-                        media_url = upload_pdf_to_fileio(pdf_bytes)
-                        if media_url:
-                            send_whatsapp(
-                                recipient_number=recipient_whatsapp,
-                                media_url=media_url  # URL pública do PDF
-                            )
-                    else:
-                        st.warning("Por favor, insira o número do WhatsApp.")
-            else:
-                st.info("Não há dados na view vw_stock_vs_orders_summary.")
-        except Exception as e:
-            st.error(f"Erro ao gerar o resumo Stock vs. Orders: {e}")
-
+                
 #####################
 # PÁGINA ORDERS
 #####################
