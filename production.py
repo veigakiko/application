@@ -1102,6 +1102,37 @@ def login_page():
         else:
             st.error("Nome de usuário ou senha incorretos.")
 
+def apply_custom_css():
+    st.markdown(
+        """
+        <style>
+        /* Ajustar fonte e cores */
+        .css-1d391kg {  /* Classe para título */
+            font-size: 2em;
+            color: #1b4f72;
+        }
+        /* Tornar tabelas responsivas */
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        /* Ajustar botões */
+        .css-1aumxhk {
+            background-color: #1b4f72;
+            color: white;
+        }
+        /* Responsividade para dispositivos móveis */
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+            /* Outros ajustes específicos */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 #####################
 # INICIALIZAÇÃO
 #####################
