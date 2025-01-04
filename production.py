@@ -315,11 +315,8 @@ def home_page():
     st.title("🎾 Boituva Beach Club 🎾")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
-    # Espaço reservado para notificações
+# Espaço reservado para notificações
     notification_placeholder = st.empty()
-
-    # Se você não está usando st_autorefresh, pode remover ou ajustar
-    # count = st_autorefresh(interval=60000, key="fizzbuzzcounter")
 
     # Verificar por novos pedidos a cada execução (não em tempo real)
     new_orders = run_query('SELECT COUNT(*) FROM public.tb_pedido WHERE status = %s;', ('em aberto',))
