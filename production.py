@@ -231,9 +231,10 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
         pdf.ln()
 
     # Obter a saída do PDF
-    pdf_output = pdf.output(dest='S').encode('latin1')
+    pdf_output = pdf.output(dest='S')  # Não use o .encode() aqui
 
     return pdf_output
+
 
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     """
