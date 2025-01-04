@@ -724,24 +724,22 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
                             st.error("Failed to update the stock record.")
 
                     if delete_button:
-                        confirm = st.checkbox("Are you sure you want to delete this stock record?")
-                        if confirm:
-                            delete_query = """
-                            DELETE FROM public.tb_estoque
-                            WHERE "Produto" = %s AND "Transação" = %s AND "Data" = %s;
-                            """
-                            success = run_insert(delete_query, (
-                                original_product, original_transaction, original_date
-                            ))
-                            if success:
-                                st.success("Stock record deleted successfully!")
-                                refresh_data()
-                            else:
-                                st.error("Failed to delete the stock record.")
+                        # Exclusão do registro de estoque diretamente sem confirmação
+                        delete_query = """
+                        DELETE FROM public.tb_estoque
+                        WHERE "Produto" = %s AND "Transação" = %s AND "Data" = %s;
+                        """
+                        success = run_insert(delete_query, (
+                            original_product, original_transaction, original_date
+                        ))
+                        if success:
+                            st.success("Stock record deleted successfully!")
+                            refresh_data()
                         else:
-                            st.warning("Please confirm deletion by checking the box.")
+                            st.error("Failed to delete the stock record.")
     else:
         st.info("No stock records found.")
+
 
 
 #####################
