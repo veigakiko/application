@@ -1002,16 +1002,23 @@ def login_page():
     st.write("Por favor, insira suas credenciais para acessar o aplicativo.")
 
     with st.form(key='login_form'):
-        username = st.secrets["credentials"]["admin_username"]
-        password = st.secrets["credentials"]["admin_password"]
+        username = st.text_input("Username")
+        password = st.text_input("Password", type="password")
         submit_login = st.form_submit_button(label="Login")
 
     if submit_login:
-        if username == "admin" and password == "adminbeach":
+        # Carrega as credenciais do arquivo TOML
+        credentials = st.secrets["credentials"]
+        admin_username = credentials["admin_username"]
+        admin_password = credentials["admin_password"]
+        caixa_username = credentials["caixa_username"]
+        caixa_password = credentials["caixa_password"]
+
+        if username == admin_username and password == admin_password:
             st.session_state.logged_in = True
             st.session_state.username = "admin"
             st.success("Login bem-sucedido!")
-        elif username == "caixa" and password == "caixabeach":
+        elif username == caixa_username and password == caixa_password:
             st.session_state.logged_in = True
             st.session_state.username = "caixa"
             st.success("Login bem-sucedido!")
