@@ -1109,7 +1109,7 @@ def apply_custom_css():
             bottom: 0;
             width: 100%;
             text-align: center;
-            font-size: 10px;  /* Tamanho da fonte para direitos autorais */
+            font-size: 12px;  /* Tamanho da fonte para direitos autorais */
         }
         </style>
         <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
