@@ -179,6 +179,46 @@ def refresh_data():
     st.session_state.data = load_all_data()
 
 
+def events_calendar_page():
+    st.title("Calendário de Eventos")
+
+    # Placeholder para uma função que busca eventos do banco de dados ou API externa
+    def fetch_events(start_date, end_date):
+        # Exemplo de dados fictícios
+        return pd.DataFrame({
+            "Nome do Evento": ["Torneio de Beach Tennis", "Aula de Estratégia de Jogo", "Noite de Integração"],
+            "Data": [start_date + timedelta(days=i) for i in range(3)],
+            "Descrição": [
+                "Torneio aberto com premiação para os três primeiros colocados.",
+                "Aula com foco em técnicas avançadas de jogo.",
+                "Um encontro social para todos os membros do clube."
+            ],
+            "Inscrição Aberta": [True, True, False]
+        })
+
+    # Seletores de data para definir o período do calendário
+    today = datetime.now().date()
+    start_date = st.date_input("De:", today)
+    end_date = st.date_input("Até:", today + timedelta(days=30))
+
+    if start_date > end_date:
+        st.error("A data de início deve ser anterior à data de término")
+    else:
+        events = fetch_events(start_date, end_date)
+
+        if not events.empty:
+            for _, row in events.iterrows():
+                st.subheader(f"{row['Nome do Evento']} ({row['Data'].strftime('%d/%m/%Y')})")
+                st.write(f"Descrição: {row['Descrição']}")
+                if row['Inscrição Aberta']:
+                    if st.button(f"Inscrever-se em {row['Nome do Evento']}", key=row['Nome do Evento']):
+                        st.success(f"Inscrição confirmada para {row['Nome do Evento']}!")
+                else:
+                    st.info("Inscrições encerradas para este evento.")
+        else:
+            st.write("Não há eventos programados para este período.")
+
+
 def menu_page():
     st.title("Cardápio")
     categories = run_query("SELECT DISTINCT categoria FROM public.tb_products ORDER BY categoria;")
@@ -235,8 +275,10 @@ def sidebar_navigation():
         st.title("Boituva Beach Club 🎾")
         selected = option_menu(
             "Menu Principal",
-            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup", "Cardápio", "Configurações e Ajustes", "Programa de Fidelidade"],
-            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload", "list", "gear", "gift"],
+            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup", 
+             "Cardápio", "Configurações e Ajustes", "Programa de Fidelidade", "Calendário de Eventos"],  # Adicionado o novo item
+            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload", 
+                   "list", "gear", "gift", "calendar"],  # Adicionado o ícone para o calendário
             menu_icon="cast",
             default_index=0,
             styles={
