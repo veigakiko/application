@@ -645,7 +645,6 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
             if success:
                 st.success("Stock record added successfully!")
                 refresh_data()
-
             else:
                 st.error("Failed to add stock record.")
         else:
@@ -662,6 +661,7 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
 
         if st.session_state.get("username") == "admin":
             st.subheader("Edit or Delete an Existing Stock Record")
+            # Adicionando uma chave única para identificar de forma única os registros
             df_stock["unique_key"] = df_stock.apply(
                 lambda row: f"{row['Product']}|{row['Transaction']}|{row['Date'].strftime('%Y-%m-%d %H:%M:%S')}",
                 axis=1
@@ -740,6 +740,7 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
                                 st.error("Failed to delete the stock record.")
     else:
         st.info("No stock records found.")
+
 
 #####################
 # PÁGINA CLIENTS
