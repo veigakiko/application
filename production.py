@@ -1002,8 +1002,8 @@ def login_page():
     st.write("Por favor, insira suas credenciais para acessar o aplicativo.")
 
     with st.form(key='login_form'):
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        username = st.secrets["credentials"]["admin_username"]
+        password = st.secrets["credentials"]["admin_password"]
         submit_login = st.form_submit_button(label="Login")
 
     if submit_login:
