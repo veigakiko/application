@@ -14,7 +14,8 @@ from twilio.rest import Client
 import json
 import os
 import subprocess
-from streamlit_autorefresh import st_autorefresh
+# Remova ou comente a importação de streamlit_autorefresh se não for usar
+# from streamlit_autorefresh import st_autorefresh
 
 ########################
 # UTILIDADES GERAIS
@@ -317,10 +318,10 @@ def home_page():
     # Espaço reservado para notificações
     notification_placeholder = st.empty()
 
-    # Auto-refresh a cada 60 segundos
-    count = st_autorefresh(interval=60000, key="fizzbuzzcounter")
+    # Se você não está usando st_autorefresh, pode remover ou ajustar
+    # count = st_autorefresh(interval=60000, key="fizzbuzzcounter")
 
-    # Verificar por novos pedidos a cada refresh
+    # Verificar por novos pedidos a cada execução (não em tempo real)
     new_orders = run_query('SELECT COUNT(*) FROM public.tb_pedido WHERE status = %s;', ('em aberto',))
     if new_orders and new_orders[0][0] > 0:
         notification_placeholder.success(f"Há {new_orders[0][0]} novos pedidos em aberto!")
@@ -1004,43 +1005,39 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 #####################
 # PÁGINA DE BACKUP
 #####################
+def export_table_to_csv(table_name):
+    conn = get_db_connection()
+    if conn:
+        try:
+            query = f"SELECT * FROM {table_name};"
+            df = pd.read_sql_query(query, conn)
+            csv = df.to_csv(index=False)
+            st.download_button(
+                label=f"Baixar {table_name} como CSV",
+                data=csv,
+                file_name=f"{table_name}.csv",
+                mime="text/csv",
+            )
+        except Exception as e:
+            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
+        finally:
+            conn.close()
+
 def perform_backup():
-    """
-    Realiza o backup do banco de dados PostgreSQL usando pg_dump.
-    """
-    TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
-    BACKUP_DIR = "backups"
-    DB_NAME = st.secrets["db"]["name"]
-    DB_USER = st.secrets["db"]["user"]
-    DB_HOST = st.secrets["db"]["host"]
-    DB_PORT = st.secrets["db"]["port"]
-    BACKUP_PATH = os.path.join(BACKUP_DIR, f"{DB_NAME}_backup_{TIMESTAMP}.dump")
+    st.header("Sistema de Backup")
+    st.write("Clique nos botões abaixo para realizar backups das tabelas.")
 
-    os.makedirs(BACKUP_DIR, exist_ok=True)
+    # Liste as tabelas que você deseja fazer backup
+    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
 
-    try:
-        subprocess.check_call([
-            "pg_dump",
-            "-U", DB_USER,
-            "-h", DB_HOST,
-            "-p", str(DB_PORT),
-            "-F", "c",
-            "-b",
-            "-v",
-            "-f", BACKUP_PATH,
-            DB_NAME
-        ])
-        st.success(f"Backup realizado com sucesso em {BACKUP_PATH}")
-    except subprocess.CalledProcessError as e:
-        st.error(f"Falha ao realizar backup: {e}")
+    for table in tables:
+        export_table_to_csv(table)
 
 def admin_backup_section():
-    st.header("Sistema de Backup")
-
-    st.write("Clique no botão abaixo para realizar um backup do banco de dados.")
-
-    if st.button("Realizar Backup"):
+    if st.session_state.get("username") == "admin":
         perform_backup()
+    else:
+        st.warning("Acesso restrito para administradores.")
 
 #####################
 # PÁGINA DE LOGIN
@@ -1204,10 +1201,7 @@ if __name__ == "__main__":
         elif selected_page == "Nota Fiscal":
             invoice_page()
         elif selected_page == "Backup":
-            if st.session_state.get("username") == "admin":
-                admin_backup_section()
-            else:
-                st.warning("Acesso restrito para administradores.")
+            admin_backup_section()
 
         with st.sidebar:
             if st.button("Logout"):
