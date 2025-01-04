@@ -8,14 +8,9 @@ from PIL import Image
 import requests
 from io import BytesIO
 from fpdf import FPDF
-import smtplib
-from email.message import EmailMessage
-from twilio.rest import Client
 import json
 import os
 import subprocess
-# Remova ou comente a importação de streamlit_autorefresh se não for usar
-# from streamlit_autorefresh import st_autorefresh
 
 ########################
 # UTILIDADES GERAIS
@@ -240,27 +235,6 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
 
     return pdf_output
 
-
-def send_whatsapp(recipient_number: str, media_url: str):
-    """
-    Envia uma mensagem WhatsApp com uma URL de mídia usando Twilio.
-    """
-    try:
-        # Inicializar cliente Twilio
-        client = Client(st.secrets["twilio"]["account_sid"], st.secrets["twilio"]["auth_token"])
-
-        # Enviar mensagem com mídia
-        message = client.messages.create(
-            from_=st.secrets["twilio"]["whatsapp_from"],
-            body="Olá,\n\nSegue o resumo de Estoque vs. Pedidos.\n\nAtenciosamente,\nBoituva Beach Club",
-            media_url=[media_url],
-            to=f"whatsapp:{recipient_number}"
-        )
-
-        st.success(f"Mensagem enviada com sucesso! SID: {message.sid}")
-    except Exception as e:
-        st.error(f"Falha ao enviar mensagem via WhatsApp: {e}")
-
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     """
     Faz upload do PDF para File.io e retorna a URL pública.
@@ -306,7 +280,6 @@ def home_page():
         notification_placeholder.success(f"Há {client_count[0][0]} clientes com pedidos em aberto!")
     else:
         notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
-
 
     # Apenas admin vê as informações de resumo
     if st.session_state.get("username") == "admin":
@@ -410,17 +383,7 @@ def orders_page():
             if success:
                 st.success("Order registered successfully!")
                 refresh_data()
-                
-                # Preparar detalhes do pedido para notificação
-                order_details = {
-                    "Cliente": customer_name,
-                    "Produto": product,
-                    "Quantidade": quantity,
-                    "Data": timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                    "status": "em aberto"
-                }
-                send_order_notification(order_details)  # Enviar notificação
-                
+
             else:
                 st.error("Failed to register the order.")
         else:
@@ -514,7 +477,6 @@ def orders_page():
                             st.error("Failed to update the order.")
     else:
         st.info("No orders found.")
-
 #####################
 # PÁGINA PRODUCTS
 #####################
@@ -683,16 +645,7 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
             if success:
                 st.success("Stock record added successfully!")
                 refresh_data()
-                
-                # Preparar detalhes da atualização de estoque para notificação
-                stock_details = {
-                    "Produto": product,
-                    "Quantidade": quantity,
-                    "Transação": transaction,
-                    "Data": current_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                }
-                send_stock_update_notification(stock_details)  # Enviar notificação
-                
+
             else:
                 st.error("Failed to add stock record.")
         else:
@@ -1097,8 +1050,6 @@ def initialize_session_state():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
 
-
-
 def apply_custom_css():
     st.markdown(
         """
@@ -1172,3 +1123,4 @@ if __name__ == "__main__":
                 st.session_state.logged_in = False
                 st.success("Desconectado com sucesso!")
                 st.experimental_rerun()
+
