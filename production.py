@@ -315,15 +315,22 @@ def home_page():
     st.title("🎾 Boituva Beach Club 🎾")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
-# Espaço reservado para notificações
+ # Espaço reservado para notificações
     notification_placeholder = st.empty()
 
-    # Verificar por novos pedidos a cada execução (não em tempo real)
-    new_orders = run_query('SELECT COUNT(*) FROM public.tb_pedido WHERE status = %s;', ('em aberto',))
-    if new_orders and new_orders[0][0] > 0:
-        notification_placeholder.success(f"Há {new_orders[0][0]} novos pedidos em aberto!")
+    # **Nova Consulta: Contagem de Clientes Distintos com Pedidos em Aberto**
+    client_count_query = """
+    SELECT COUNT(DISTINCT "Cliente") AS client_count
+    FROM public.tb_pedido
+    WHERE status = %s;
+    """
+    client_count = run_query(client_count_query, ('em aberto',))
+
+    if client_count and client_count[0][0] > 0:
+        notification_placeholder.success(f"Há {client_count[0][0]} clientes com pedidos em aberto!")
     else:
-        notification_placeholder.info("Nenhum novo pedido no momento.")
+        notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
+
 
     # Apenas admin vê as informações de resumo
     if st.session_state.get("username") == "admin":
