@@ -12,6 +12,9 @@ import smtplib
 from email.message import EmailMessage
 from twilio.rest import Client
 import json
+import os
+import subprocess
+from streamlit_autorefresh import st_autorefresh
 
 ########################
 # UTILIDADES GERAIS
@@ -190,8 +193,8 @@ def sidebar_navigation():
         st.title("Boituva Beach Club 🎾")
         selected = option_menu(
             "Menu Principal",
-            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal"],
-            icons=["house", "file-text", "box", "list-task", "layers", "receipt"],
+            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup"],
+            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -232,17 +235,9 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
         pdf.ln()
 
     # Obter a saída do PDF
-    pdf_output = pdf.output(dest='S')
+    pdf_output = pdf.output(dest='S').encode('latin1')
 
-    # Verificar o tipo e retornar bytes
-    if isinstance(pdf_output, str):
-        return pdf_output.encode('latin1')
-    elif isinstance(pdf_output, bytearray):
-        return bytes(pdf_output)
-    elif isinstance(pdf_output, bytes):
-        return pdf_output
-    else:
-        raise TypeError("Tipo de saída inesperado do método FPDF.output.")
+    return pdf_output
 
 def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: bytes, attachment_filename: str):
     """
@@ -255,8 +250,9 @@ def send_email(recipient_email: str, subject: str, body: str, attachment_bytes: 
         msg['To'] = recipient_email
         msg.set_content(body)
 
-        # Anexar o PDF
-        msg.add_attachment(attachment_bytes, maintype='application', subtype='pdf', filename=attachment_filename)
+        # Anexar o PDF, se houver
+        if attachment_bytes and attachment_filename:
+            msg.add_attachment(attachment_bytes, maintype='application', subtype='pdf', filename=attachment_filename)
 
         # Conectar ao servidor SMTP e enviar o e-mail
         with smtplib.SMTP(st.secrets["email"]["smtp_server"], st.secrets["email"]["smtp_port"]) as server:
@@ -318,6 +314,19 @@ def home_page():
     st.title("🎾 Boituva Beach Club 🎾")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
+    # Espaço reservado para notificações
+    notification_placeholder = st.empty()
+
+    # Auto-refresh a cada 60 segundos
+    count = st_autorefresh(interval=60000, key="fizzbuzzcounter")
+
+    # Verificar por novos pedidos a cada refresh
+    new_orders = run_query('SELECT COUNT(*) FROM public.tb_pedido WHERE status = %s;', ('em aberto',))
+    if new_orders and new_orders[0][0] > 0:
+        notification_placeholder.success(f"Há {new_orders[0][0]} novos pedidos em aberto!")
+    else:
+        notification_placeholder.info("Nenhum novo pedido no momento.")
+
     # Apenas admin vê as informações de resumo
     if st.session_state.get("username") == "admin":
         st.markdown("**Open Orders Summary**")
@@ -361,13 +370,12 @@ def home_page():
                 total_stock_value = int(total_stock_value)
                 st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
-                 # Gerar PDF
+                # Gerar PDF
                 pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
                 # **Envio por WhatsApp com Upload Automático**
                 st.subheader("Enviar por WhatsApp")
                 with st.form(key='send_whatsapp_form'):
                     recipient_whatsapp = st.text_input("Número do WhatsApp (000)")
-                    #whatsapp_message = st.text_area("Mensagem", value="Olá,\n\nSegue em anexo o resumo de Estoque .\n\nAtenciosamente,\nBoituva Beach Club")
                     submit_whatsapp = st.form_submit_button(label="Enviar via WhatsApp")
 
                 if submit_whatsapp:
@@ -421,6 +429,17 @@ def orders_page():
             if success:
                 st.success("Order registered successfully!")
                 refresh_data()
+                
+                # Preparar detalhes do pedido para notificação
+                order_details = {
+                    "Cliente": customer_name,
+                    "Produto": product,
+                    "Quantidade": quantity,
+                    "Data": timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+                    "status": "em aberto"
+                }
+                send_order_notification(order_details)  # Enviar notificação
+                
             else:
                 st.error("Failed to register the order.")
         else:
@@ -683,6 +702,16 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
             if success:
                 st.success("Stock record added successfully!")
                 refresh_data()
+                
+                # Preparar detalhes da atualização de estoque para notificação
+                stock_details = {
+                    "Produto": product,
+                    "Quantidade": quantity,
+                    "Transação": transaction,
+                    "Data": current_datetime.strftime('%Y-%m-%d %H:%M:%S')
+                }
+                send_stock_update_notification(stock_details)  # Enviar notificação
+                
             else:
                 st.error("Failed to add stock record.")
         else:
@@ -787,16 +816,16 @@ def clients_page():
 
     with st.form(key='client_form'):
         nome_completo = st.text_input("Full Name", max_chars=100)
+        data_nascimento = st.date_input("Date of Birth", value=date(2000, 1, 1))
+        genero = st.selectbox("Gender", ["Man", "Woman", "Other"])
+        telefone = st.text_input("Phone Number", value="0000-0000")
+        endereco = st.text_input("Address", value="Endereço padrão")
         submit_client = st.form_submit_button(label="Register New Client")
 
     if submit_client:
-        if nome_completo:
-            data_nascimento = datetime(2000, 1, 1).date()  # Você pode ajustar isso conforme necessário
-            genero = "Man"  # Pode ser alterado para ser selecionado pelo usuário
-            telefone = "0000-0000"  # Pode ser ajustado para entrada do usuário
+        if nome_completo and telefone and endereco:
             unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
             email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
-            endereco = "Endereço padrão"  # Pode ser ajustado para entrada do usuário
 
             query = """
             INSERT INTO public.tb_clientes (nome_completo, data_nascimento, genero, telefone, email, endereco, data_cadastro)
@@ -806,8 +835,10 @@ def clients_page():
             if success:
                 st.success("Client registered successfully!")
                 refresh_data()
+            else:
+                st.error("Failed to register the client.")
         else:
-            st.warning("Please fill in the Full Name field.")
+            st.warning("Please fill in all required fields.")
 
     # -------------------------------
     # Display only Full Name in All Customers table
@@ -971,6 +1002,47 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     st.text("\n".join(invoice_note))
 
 #####################
+# PÁGINA DE BACKUP
+#####################
+def perform_backup():
+    """
+    Realiza o backup do banco de dados PostgreSQL usando pg_dump.
+    """
+    TIMESTAMP = datetime.now().strftime("%Y%m%d%H%M%S")
+    BACKUP_DIR = "backups"
+    DB_NAME = st.secrets["db"]["name"]
+    DB_USER = st.secrets["db"]["user"]
+    DB_HOST = st.secrets["db"]["host"]
+    DB_PORT = st.secrets["db"]["port"]
+    BACKUP_PATH = os.path.join(BACKUP_DIR, f"{DB_NAME}_backup_{TIMESTAMP}.dump")
+
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+
+    try:
+        subprocess.check_call([
+            "pg_dump",
+            "-U", DB_USER,
+            "-h", DB_HOST,
+            "-p", str(DB_PORT),
+            "-F", "c",
+            "-b",
+            "-v",
+            "-f", BACKUP_PATH,
+            DB_NAME
+        ])
+        st.success(f"Backup realizado com sucesso em {BACKUP_PATH}")
+    except subprocess.CalledProcessError as e:
+        st.error(f"Falha ao realizar backup: {e}")
+
+def admin_backup_section():
+    st.header("Sistema de Backup")
+
+    st.write("Clique no botão abaixo para realizar um backup do banco de dados.")
+
+    if st.button("Realizar Backup"):
+        perform_backup()
+
+#####################
 # PÁGINA DE LOGIN
 #####################
 def login_page():
@@ -1035,7 +1107,74 @@ def initialize_session_state():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
 
+def send_order_notification(order_details: dict):
+    """
+    Envia uma notificação por e-mail para o administrador sobre um novo pedido.
+    """
+    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
+    subject = "Novo Pedido Registrado"
+    body = f"""
+    Um novo pedido foi registrado.
+
+    Detalhes do Pedido:
+    Cliente: {order_details['Cliente']}
+    Produto: {order_details['Produto']}
+    Quantidade: {order_details['Quantidade']}
+    Data: {order_details['Data']}
+    Status: {order_details['status']}
+    """
+    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
+
+def send_stock_update_notification(stock_details: dict):
+    """
+    Envia uma notificação por e-mail para o administrador sobre uma atualização de estoque.
+    """
+    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
+    subject = "Atualização de Estoque"
+    body = f"""
+    Uma atualização de estoque foi realizada.
+
+    Detalhes da Atualização:
+    Produto: {stock_details['Produto']}
+    Quantidade: {stock_details['Quantidade']}
+    Transação: {stock_details['Transação']}
+    Data: {stock_details['Data']}
+    """
+    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
+
+def apply_custom_css():
+    st.markdown(
+        """
+        <style>
+        /* Ajustar fonte e cores */
+        .css-1d391kg {  /* Classe para título */
+            font-size: 2em;
+            color: #1b4f72;
+        }
+        /* Tornar tabelas responsivas */
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        /* Ajustar botões */
+        .css-1aumxhk {
+            background-color: #1b4f72;
+            color: white;
+        }
+        /* Responsividade para dispositivos móveis */
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+            /* Outros ajustes específicos */
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
 if __name__ == "__main__":
+    apply_custom_css()
     initialize_session_state()
 
     if not st.session_state.logged_in:
@@ -1064,6 +1203,11 @@ if __name__ == "__main__":
             clients_page()
         elif selected_page == "Nota Fiscal":
             invoice_page()
+        elif selected_page == "Backup":
+            if st.session_state.get("username") == "admin":
+                admin_backup_section()
+            else:
+                st.warning("Acesso restrito para administradores.")
 
         with st.sidebar:
             if st.button("Logout"):
