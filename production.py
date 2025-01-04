@@ -738,6 +738,8 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
                                 refresh_data()
                             else:
                                 st.error("Failed to delete the stock record.")
+                        else:
+                            st.warning("Please confirm deletion by checking the box.")
     else:
         st.info("No stock records found.")
 
