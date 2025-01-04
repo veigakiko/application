@@ -1018,6 +1018,8 @@ if __name__ == "__main__":
         elif selected_page != st.session_state.current_page:
             refresh_data()
             st.session_state.current_page = selected_page
+
+        # Roteamento para as páginas
         if selected_page == "Home":
             home_page()
         elif selected_page == "Orders":
@@ -1032,6 +1034,15 @@ if __name__ == "__main__":
             invoice_page()
         elif selected_page == "Backup":
             admin_backup_section()
+        elif selected_page == "Cardápio":
+            menu_page()
+        elif selected_page == "Configurações e Ajustes":
+            settings_page()
+        elif selected_page == "Programa de Fidelidade":
+            loyalty_program_page()
+        elif selected_page == "Calendário de Eventos":
+            events_calendar_page()
+
         with st.sidebar:
             if st.button("Logout"):
                 keys_to_reset = ['home_page_initialized']
