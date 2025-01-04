@@ -177,6 +177,20 @@ def refresh_data():
     Recarrega todos os dados e atualiza o estado da sessão.
     """
     st.session_state.data = load_all_data()
+# Dicionário de funções de página
+    page_functions = {
+    "Home": home_page,
+    "Orders": orders_page,
+    "Products": products_page,
+    "Stock": stock_page,
+    "Clients": clients_page,
+    "Nota Fiscal": invoice_page,
+    "Backup": admin_backup_section,
+    "Cardápio": menu_page,
+    "Configurações e Ajustes": settings_page,
+    "Programa de Fidelidade": loyalty_program_page,
+    "Calendário de Eventos": events_calendar_page  # Certifique-se que esta linha está correta
+}
 
 
 def events_calendar_page():
