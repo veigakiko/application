@@ -886,6 +886,7 @@ def clients_page():
                     with col_del:
                         delete_button = st.form_submit_button(label="Delete Client")
 
+                # Atualizar Cliente
                 if update_button:
                     if edit_name:
                         update_query = """
@@ -902,16 +903,16 @@ def clients_page():
                     else:
                         st.warning("Please fill in the Full Name field.")
 
+                # Deletar Cliente
                 if delete_button:
-                    confirm = st.checkbox("Are you sure you want to delete this client?")
-                    if confirm:
-                        delete_query = "DELETE FROM public.tb_clientes WHERE email = %s;"
-                        success = run_insert(delete_query, (original_email,))
-                        if success:
-                            st.success("Client deleted successfully!")
-                            refresh_data()
-                        else:
-                            st.error("Failed to delete the client.")
+                    delete_query = "DELETE FROM public.tb_clientes WHERE email = %s;"
+                    success = run_insert(delete_query, (original_email,))
+                    if success:
+                        # Remover a mensagem de sucesso e apenas atualizar os dados
+                        refresh_data()
+                        st.experimental_rerun()  # Recarregar a página para refletir a remoção
+                    else:
+                        st.error("Failed to delete the client.")
     else:
         st.info("No clients found.")
 
