@@ -8,14 +8,9 @@ from PIL import Image
 import requests
 from io import BytesIO
 from fpdf import FPDF
-import smtplib
-from email.message import EmailMessage
-from twilio.rest import Client
 import json
 import os
 import subprocess
-# Remova ou comente a importação de streamlit_autorefresh se não for usar
-# from streamlit_autorefresh import st_autorefresh
 
 ########################
 # UTILIDADES GERAIS
@@ -28,7 +23,71 @@ def format_currency(value: float) -> str:
     """
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
+def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV"):
+    """
+    Exibe um botão de download de um DataFrame como CSV.
+    """
+    csv_data = df.to_csv(index=False)
+    st.download_button(
+        label=label,
+        data=csv_data,
+        file_name=filename,
+        mime="text/csv",
+    )
 
+def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar Excel"):
+    """
+    Exibe um botão de download de um DataFrame como Excel.
+    """
+    towrite = BytesIO()
+    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Stock_vs_Orders')
+    towrite.seek(0)
+    st.download_button(
+        label=label,
+        data=towrite,
+        file_name=filename,
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+
+def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
+    """
+    Exibe um botão de download de um DataFrame como JSON.
+    """
+    json_data = df.to_json(orient='records', lines=True)
+    st.download_button(
+        label=label,
+        data=json_data,
+        file_name=filename,
+        mime="application/json",
+    )
+
+def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
+    """
+    Exibe um botão de download de um DataFrame como HTML.
+    """
+    html_data = df.to_html(index=False)
+    st.download_button(
+        label=label,
+        data=html_data,
+        file_name=filename,
+        mime="text/html",
+    )
+
+def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar Parquet"):
+    """
+    Exibe um botão de download de um DataFrame como Parquet.
+    """
+    import io
+    buffer = io.BytesIO()
+    df.to_parquet(buffer, index=False)
+    buffer.seek(0)
+    st.download_button(
+        label=label,
+        data=buffer.getvalue(),
+        file_name=filename,
+        mime="application/octet-stream",
+    )
 
 ########################
 # CONEXÃO COM BANCO (SEM CACHE)
@@ -152,6 +211,52 @@ def sidebar_navigation():
 #####################
 # FUNÇÕES ADICIONAIS PARA ENVIO
 #####################
+def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
+    """
+    Converte um DataFrame em PDF.
+    """
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Adicionar cabeçalhos
+    for column in df.columns:
+        pdf.cell(40, 10, str(column), border=1)
+    pdf.ln()
+
+    # Adicionar linhas de dados
+    for _, row in df.iterrows():
+        for item in row:
+            pdf.cell(40, 10, str(item), border=1)
+        pdf.ln()
+
+    # Obter a saída do PDF
+    pdf_output = pdf.output(dest='S').encode('latin1')
+
+    return pdf_output
+
+def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
+    """
+    Faz upload do PDF para File.io e retorna a URL pública.
+    """
+    try:
+        response = requests.post(
+            'https://file.io/',
+            files={'file': ('stock_vs_orders_summary.pdf', pdf_bytes, 'application/pdf')}
+        )
+        if response.status_code == 200:
+            json_resp = response.json()
+            if json_resp['success']:
+                return json_resp['link']
+            else:
+                st.error("Falha no upload do arquivo.")
+                return ""
+        else:
+            st.error("Erro ao conectar com o serviço de upload.")
+            return ""
+    except Exception as e:
+        st.error(f"Erro ao fazer upload do arquivo: {e}")
+        return ""
 
 #####################
 # PÁGINA HOME
@@ -175,7 +280,6 @@ def home_page():
         notification_placeholder.success(f"Há {client_count[0][0]} clientes com pedidos em aberto!")
     else:
         notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
-
 
     # Apenas admin vê as informações de resumo
     if st.session_state.get("username") == "admin":
@@ -220,7 +324,30 @@ def home_page():
                 total_stock_value = int(total_stock_value)
                 st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
-                
+                # Gerar PDF
+                pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
+                # **Envio por WhatsApp com Upload Automático**
+                st.subheader("Enviar por WhatsApp")
+                with st.form(key='send_whatsapp_form'):
+                    recipient_whatsapp = st.text_input("Número do WhatsApp (000)")
+                    submit_whatsapp = st.form_submit_button(label="Enviar via WhatsApp")
+
+                if submit_whatsapp:
+                    if recipient_whatsapp:
+                        # Fazer upload do PDF para obter a URL
+                        media_url = upload_pdf_to_fileio(pdf_bytes)
+                        if media_url:
+                            send_whatsapp(
+                                recipient_number=recipient_whatsapp,
+                                media_url=media_url  # URL pública do PDF
+                            )
+                    else:
+                        st.warning("Por favor, insira o número do WhatsApp.")
+            else:
+                st.info("Não há dados na view vw_stock_vs_orders_summary.")
+        except Exception as e:
+            st.error(f"Erro ao gerar o resumo Stock vs. Orders: {e}")
+
 #####################
 # PÁGINA ORDERS
 #####################
@@ -256,17 +383,7 @@ def orders_page():
             if success:
                 st.success("Order registered successfully!")
                 refresh_data()
-                
-                # Preparar detalhes do pedido para notificação
-                order_details = {
-                    "Cliente": customer_name,
-                    "Produto": product,
-                    "Quantidade": quantity,
-                    "Data": timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-                    "status": "em aberto"
-                }
-                send_order_notification(order_details)  # Enviar notificação
-                
+
             else:
                 st.error("Failed to register the order.")
         else:
@@ -360,7 +477,6 @@ def orders_page():
                             st.error("Failed to update the order.")
     else:
         st.info("No orders found.")
-
 #####################
 # PÁGINA PRODUCTS
 #####################
@@ -529,16 +645,7 @@ Com este sistema, você poderá monitorar todas as adições ao estoque com maio
             if success:
                 st.success("Stock record added successfully!")
                 refresh_data()
-                
-                # Preparar detalhes da atualização de estoque para notificação
-                stock_details = {
-                    "Produto": product,
-                    "Quantidade": quantity,
-                    "Transação": transaction,
-                    "Data": current_datetime.strftime('%Y-%m-%d %H:%M:%S')
-                }
-                send_stock_update_notification(stock_details)  # Enviar notificação
-                
+
             else:
                 st.error("Failed to add stock record.")
         else:
@@ -942,41 +1049,6 @@ def initialize_session_state():
 
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
-
-def send_order_notification(order_details: dict):
-    """
-    Envia uma notificação por e-mail para o administrador sobre um novo pedido.
-    """
-    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
-    subject = "Novo Pedido Registrado"
-    body = f"""
-    Um novo pedido foi registrado.
-
-    Detalhes do Pedido:
-    Cliente: {order_details['Cliente']}
-    Produto: {order_details['Produto']}
-    Quantidade: {order_details['Quantidade']}
-    Data: {order_details['Data']}
-    Status: {order_details['status']}
-    """
-    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
-
-def send_stock_update_notification(stock_details: dict):
-    """
-    Envia uma notificação por e-mail para o administrador sobre uma atualização de estoque.
-    """
-    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
-    subject = "Atualização de Estoque"
-    body = f"""
-    Uma atualização de estoque foi realizada.
-
-    Detalhes da Atualização:
-    Produto: {stock_details['Produto']}
-    Quantidade: {stock_details['Quantidade']}
-    Transação: {stock_details['Transação']}
-    Data: {stock_details['Data']}
-    """
-    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
 
 def apply_custom_css():
     st.markdown(
