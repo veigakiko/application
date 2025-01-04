@@ -1028,8 +1028,7 @@ def export_table_to_csv(table_name):
             )
         except Exception as e:
             st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-        finally:
-            conn.close()
+
 
 def perform_backup():
     st.header("Sistema de Backup")
