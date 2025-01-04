@@ -231,7 +231,7 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
         pdf.ln()
 
     # Obter a saída do PDF
-    pdf_output = pdf.output(dest='S').encode('latin1')
+    pdf_output = pdf.output(dest='S')
 
     return pdf_output
 
