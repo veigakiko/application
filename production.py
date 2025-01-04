@@ -817,14 +817,16 @@ def clients_page():
 
     with st.form(key='client_form'):
         nome_completo = st.text_input("Full Name", max_chars=100)
-        data_nascimento = st.date_input("Date of Birth", value=date(2000, 1, 1))
-        genero = st.selectbox("Gender", ["Man", "Woman", "Other"])
-        telefone = st.text_input("Phone Number", value="0000-0000")
-        endereco = st.text_input("Address", value="Endereço padrão")
         submit_client = st.form_submit_button(label="Register New Client")
 
     if submit_client:
-        if nome_completo and telefone and endereco:
+        if nome_completo:
+            # Definir valores padrão para os demais campos
+            data_nascimento = date(2000, 1, 1)  # Data de nascimento padrão
+            genero = "Other"  # Gênero padrão
+            telefone = "0000-0000"  # Telefone padrão
+            endereco = "Endereço padrão"  # Endereço padrão
+
             unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
             email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
 
@@ -839,7 +841,7 @@ def clients_page():
             else:
                 st.error("Failed to register the client.")
         else:
-            st.warning("Please fill in all required fields.")
+            st.warning("Please fill in the Full Name field.")
 
     # -------------------------------
     # Recuperar dados completos dos clientes (incluindo email)
