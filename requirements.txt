@@ -14,3 +14,12 @@ fpdf2==2.4.6
 twilio>=7.19.0
 xlsxwriter==3.0.9
 pyarrow>=12.0.0
+streamlit
+streamlit-option-menu
+psycopg2
+pandas
+Pillow
+requests
+fpdf
+twilio
+streamlit-autorefresh
