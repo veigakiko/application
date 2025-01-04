@@ -189,8 +189,8 @@ def sidebar_navigation():
         st.title("Boituva Beach Club 🎾")
         selected = option_menu(
             "Menu Principal",
-            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup"],
-            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload"],
+            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup", "Analytics"],  # Adicionando a página Analytics
+            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload", "chart-line"],  # Ícone do gráfico
             menu_icon="cast",
             default_index=0,
             styles={
@@ -208,6 +208,67 @@ def sidebar_navigation():
         )
     return selected
 
+#####################
+# PÁGINA DE ANALYTICS
+#####################
+def analytics_page():
+    st.title("Analytics - Faturamento por Produto")
+
+    # Consulta à view
+    query = """
+    SELECT 
+        "Produto", 
+        REPLACE(total_faturado, 'R$', '')::NUMERIC AS total_faturado
+    FROM 
+        vw_produto_total_faturado
+    ORDER BY 
+        total_faturado DESC;
+    """
+
+    conn = connect_to_db()
+
+    if conn:
+        try:
+            # Carregando os dados
+            df = pd.read_sql_query(query, conn)
+
+            # Fechando a conexão
+            conn.close()
+
+            # Formatação dos valores em reais
+            df["total_faturado_formatado"] = df["total_faturado"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+
+            # Criando o gráfico
+            chart = alt.Chart(df).mark_bar().encode(
+                x=alt.X("total_faturado:Q", title="Total Faturado (R$)"),
+                y=alt.Y("Produto:O", sort='-x', title="Produto"),
+                tooltip=[
+                    "Produto",
+                    alt.Tooltip("total_faturado:Q", title="Total Faturado (R$)", format=",.2f")
+                ]
+            ).properties(
+                title="Faturamento por Produto",
+                width=600,
+                height=400
+            )
+
+            # Adicionando rótulos de texto
+            text = chart.mark_text(
+                align='left',
+                baseline='middle',
+                dx=3  # Deslocamento
+            ).encode(
+                text=alt.Text("total_faturado_formatado:N")
+            )
+
+            # Exibindo o gráfico
+            final_chart = chart + text
+            st.altair_chart(final_chart, use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Erro ao processar os dados: {e}")
+    else:
+        st.error("Conexão com o banco de dados falhou.")
 #####################
 # FUNÇÕES ADICIONAIS PARA ENVIO
 #####################
@@ -1051,77 +1112,31 @@ def initialize_session_state():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
 
-def apply_custom_css():
-    st.markdown(
-        """
-        <style>
-        /* Ajustar fonte e cores */
-        .css-1d391kg {  /* Classe para título */
-            font-size: 2em;
-            color: #1b4f72;
-        }
-        /* Tornar tabelas responsivas */
-        .stDataFrame table {
-            width: 100%;
-            overflow-x: auto;
-        }
-        /* Ajustar botões */
-        .css-1aumxhk {
-            background-color: #1b4f72;
-            color: white;
-        }
-        /* Responsividade para dispositivos móveis */
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-            /* Outros ajustes específicos */
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
 if __name__ == "__main__":
     apply_custom_css()
     initialize_session_state()
 
-    if not st.session_state.logged_in:
-        login_page()
-    else:
-        selected_page = sidebar_navigation()
+    selected_page = sidebar_navigation()
 
-        if 'current_page' not in st.session_state:
-            st.session_state.current_page = selected_page
-        elif selected_page != st.session_state.current_page:
-            refresh_data()
-            st.session_state.current_page = selected_page
-            if selected_page == "Home":
-                st.session_state.home_page_initialized = False
+    if selected_page == "Home":
+        home_page()
+    elif selected_page == "Orders":
+        orders_page()
+    elif selected_page == "Products":
+        products_page()
+    elif selected_page == "Stock":
+        stock_page()
+    elif selected_page == "Clients":
+        clients_page()
+    elif selected_page == "Nota Fiscal":
+        invoice_page()
+    elif selected_page == "Backup":
+        admin_backup_section()
+    elif selected_page == "Analytics":
+        analytics_page()  # Página de Analytics
 
-        # Roteamento de Páginas
-        if selected_page == "Home":
-            home_page()
-        elif selected_page == "Orders":
-            orders_page()
-        elif selected_page == "Products":
-            products_page()
-        elif selected_page == "Stock":
-            stock_page()
-        elif selected_page == "Clients":
-            clients_page()
-        elif selected_page == "Nota Fiscal":
-            invoice_page()
-        elif selected_page == "Backup":
-            admin_backup_section()
-
-        with st.sidebar:
-            if st.button("Logout"):
-                keys_to_reset = ['home_page_initialized']
-                for key in keys_to_reset:
-                    if key in st.session_state:
-                        del st.session_state[key]
-                st.session_state.logged_in = False
-                st.success("Desconectado com sucesso!")
-                st.experimental_rerun()
-
+    with st.sidebar:
+        if st.button("Logout"):
+            st.session_state.logged_in = False
+            st.success("Desconectado com sucesso!")
+            st.experimental_rerun()
