@@ -178,19 +178,65 @@ def refresh_data():
     """
     st.session_state.data = load_all_data()
 
+
+def menu_page():
+    st.title("Cardápio")
+    categories = run_query("SELECT DISTINCT categoria FROM public.tb_products ORDER BY categoria;")
+    category_list = [row[0] for row in categories] if categories else []
+
+    selected_category = st.selectbox("Selecione a Categoria", [""] + category_list)
+    if selected_category:
+        products = run_query(f"SELECT product, description, price FROM public.tb_products WHERE categoria = '{selected_category}';")
+        for product in products:
+            st.subheader(product[0])
+            st.write(f"Descrição: {product[1]}")
+            st.write(f"Preço: R$ {product[2]:.2f}")
+
+
+def settings_page():
+    st.title("Configurações e Ajustes")
+    st.subheader("Ajustes de Conta")
+    if 'username' in st.session_state:
+        new_username = st.text_input("Alterar nome de usuário", st.session_state.username)
+        if st.button("Salvar Nome de Usuário"):
+            st.session_state.username = new_username
+            st.success("Nome de usuário atualizado!")
+
+    st.subheader("Preferências do Aplicativo")
+    theme_choice = st.radio("Escolha o tema do aplicativo", ('Claro', 'Escuro'))
+    if st.button("Salvar Preferências"):
+        st.session_state.theme = theme_choice
+        st.success("Preferências salvas!")
+
+
+def loyalty_program_page():
+    st.title("Programa de Fidelidade")
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
+
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados com sucesso! Total de pontos: {st.session_state.points}")
+
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado com sucesso!")
+        else:
+            st.error("Pontos insuficientes para resgate.")
+
 #####################
 # MENU LATERAL
 #####################
 def sidebar_navigation():
-    """
-    Cria um menu lateral para navegação usando streamlit_option_menu.
-    """
     with st.sidebar:
         st.title("Boituva Beach Club 🎾")
         selected = option_menu(
             "Menu Principal",
-            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup"],
-            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload"],
+            ["Home", "Orders", "Products", "Stock", "Clients", "Nota Fiscal", "Backup", "Cardápio", "Configurações e Ajustes", "Programa de Fidelidade"],
+            icons=["house", "file-text", "box", "list-task", "layers", "receipt", "cloud-upload", "list", "gear", "gift"],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -207,6 +253,7 @@ def sidebar_navigation():
             },
         )
     return selected
+
 
 #####################
 # FUNÇÕES ADICIONAIS PARA ENVIO
