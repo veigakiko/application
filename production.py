@@ -315,7 +315,7 @@ def home_page():
     st.title("🎾 Boituva Beach Club 🎾")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
-    # Espaço reservado para notificações
+ # Espaço reservado para notificações
     notification_placeholder = st.empty()
 
     # **Nova Consulta: Contagem de Clientes Distintos com Pedidos em Aberto**
@@ -331,61 +331,73 @@ def home_page():
     else:
         notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
 
-    # **Gráfico de Faturamento por Produto**
-    # Executando a consulta para obter dados de faturamento por produto
-    query = """
-    SELECT 
-        "Produto", 
-        REPLACE(total_faturado, 'R$', '')::NUMERIC AS total_faturado
-    FROM 
-        vw_produto_total_faturado
-    ORDER BY 
-        total_faturado DESC;
-    """
-    conn = connect_to_db()
-    if conn:
+
+    # Apenas admin vê as informações de resumo
+    if st.session_state.get("username") == "admin":
+        st.markdown("**Open Orders Summary**")
+        open_orders_query = """
+        SELECT "Cliente", SUM("total") as Total
+        FROM public.vw_pedido_produto
+        WHERE status = %s
+        GROUP BY "Cliente"
+        ORDER BY "Cliente" DESC;
+        """
+        open_orders_data = run_query(open_orders_query, ('em aberto',))
+        if open_orders_data:
+            df_open_orders = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
+            total_open = df_open_orders["Total"].sum()
+            df_open_orders["Total_display"] = df_open_orders["Total"].apply(format_currency)
+            st.table(df_open_orders[["Client", "Total_display"]])
+            st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
+        else:
+            st.info("Nenhum pedido em aberto encontrado.")
+
+        st.markdown("**Stock vs. Orders Summary**")
         try:
-            # Carregando os dados
-            df = pd.read_sql_query(query, conn)
+            stock_vs_orders_query = """
+                SELECT product, stock_quantity, orders_quantity, total_in_stock
+                FROM public.vw_stock_vs_orders_summary
+            """
+            stock_vs_orders_data = run_query(stock_vs_orders_query)
+            if stock_vs_orders_data:
+                df_stock_vs_orders = pd.DataFrame(
+                    stock_vs_orders_data, 
+                    columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+                )
 
-            # Fechando a conexão
-            conn.close()
+                # Manipulação dos dados
+                df_stock_vs_orders["Total_in_Stock_display"] = df_stock_vs_orders["Total_in_Stock"]
+                df_stock_vs_orders.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                df_display = df_stock_vs_orders[["Product", "Total_in_Stock_display"]]
+                st.table(df_display)
 
-            # Formatação dos valores em reais
-            df["total_faturado_formatado"] = df["total_faturado"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+                total_stock_value = df_stock_vs_orders["Total_in_Stock"].sum()
+                total_stock_value = int(total_stock_value)
+                st.markdown(f"**Total Geral (Stock vs. Orders):** {total_stock_value}")
 
-            # Criando o gráfico
-            chart = alt.Chart(df).mark_bar().encode(
-                x=alt.X("total_faturado:Q", title="Total Faturado (R$)"),
-                y=alt.Y("Produto:O", sort='-x', title="Produto"),
-                tooltip=[
-                    "Produto",
-                    alt.Tooltip("total_faturado:Q", title="Total Faturado (R$)", format=",.2f")
-                ]
-            ).properties(
-                title="Faturamento por Produto",
-                width=600,
-                height=400
-            )
+                # Gerar PDF
+                pdf_bytes = convert_df_to_pdf(df_stock_vs_orders)
+                # **Envio por WhatsApp com Upload Automático**
+                st.subheader("Enviar por WhatsApp")
+                with st.form(key='send_whatsapp_form'):
+                    recipient_whatsapp = st.text_input("Número do WhatsApp (000)")
+                    submit_whatsapp = st.form_submit_button(label="Enviar via WhatsApp")
 
-            # Adicionando rótulos de texto
-            text = chart.mark_text(
-                align='left',
-                baseline='middle',
-                dx=3  # Deslocamento
-            ).encode(
-                text=alt.Text("total_faturado_formatado:N")
-            )
-
-            # Exibindo o gráfico
-            final_chart = chart + text
-            st.altair_chart(final_chart)
-
+                if submit_whatsapp:
+                    if recipient_whatsapp:
+                        # Fazer upload do PDF para obter a URL
+                        media_url = upload_pdf_to_fileio(pdf_bytes)
+                        if media_url:
+                            send_whatsapp(
+                                recipient_number=recipient_whatsapp,
+                                media_url=media_url  # URL pública do PDF
+                            )
+                    else:
+                        st.warning("Por favor, insira o número do WhatsApp.")
+            else:
+                st.info("Não há dados na view vw_stock_vs_orders_summary.")
         except Exception as e:
-            st.error(f"Erro ao processar os dados do gráfico: {e}")
-    else:
-        st.error("Conexão com o banco de dados falhou.")
-
+            st.error(f"Erro ao gerar o resumo Stock vs. Orders: {e}")
 
 #####################
 # PÁGINA ORDERS
@@ -1109,40 +1121,7 @@ def initialize_session_state():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
 
-def send_order_notification(order_details: dict):
-    """
-    Envia uma notificação por e-mail para o administrador sobre um novo pedido.
-    """
-    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
-    subject = "Novo Pedido Registrado"
-    body = f"""
-    Um novo pedido foi registrado.
 
-    Detalhes do Pedido:
-    Cliente: {order_details['Cliente']}
-    Produto: {order_details['Produto']}
-    Quantidade: {order_details['Quantidade']}
-    Data: {order_details['Data']}
-    Status: {order_details['status']}
-    """
-    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
-
-def send_stock_update_notification(stock_details: dict):
-    """
-    Envia uma notificação por e-mail para o administrador sobre uma atualização de estoque.
-    """
-    recipient_email = st.secrets["email"]["admin_email"]  # Adicione o email do administrador nas secrets
-    subject = "Atualização de Estoque"
-    body = f"""
-    Uma atualização de estoque foi realizada.
-
-    Detalhes da Atualização:
-    Produto: {stock_details['Produto']}
-    Quantidade: {stock_details['Quantidade']}
-    Transação: {stock_details['Transação']}
-    Data: {stock_details['Data']}
-    """
-    send_email(recipient_email, subject, body, attachment_bytes=b'', attachment_filename='')  # Sem anexo
 
 def apply_custom_css():
     st.markdown(
