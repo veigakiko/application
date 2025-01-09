@@ -176,28 +176,28 @@ def get_db_connection():
         return None
 
 
-def run_query(query: str, values=None, commit: bool = False):
-    """
-    Executa SQL. Se commit=True, faz INSERT/UPDATE/DELETE; senão, SELECT.
-    Evita rollback caso a conexão esteja fechada.
-    """
+def run_query(query, values=None, commit=False):
     conn = get_db_connection()
     if not conn:
-        return None  # Falha na conexão
-
+        return None
     try:
         with conn.cursor() as cursor:
             cursor.execute(query, values or ())
             if commit:
                 conn.commit()
-                return True
             else:
                 return cursor.fetchall()
     except Exception as e:
+        # só faz rollback se a conexão estiver aberta
         if conn and not conn.closed:
             conn.rollback()
         st.error(f"Erro ao executar a consulta: {e}")
         return None
+    finally:
+        # se não estiver usando cache, feche
+        if conn and not conn.closed:
+            conn.close()
+
 
 
 
