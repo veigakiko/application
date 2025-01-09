@@ -869,7 +869,7 @@ def menu_page():
 
         with col1:
             # Você pode substituir a URL abaixo por uma coluna do seu DB contendo o link da imagem
-            st.image("https://via.placeholder.com/100", width=100)  # Placeholder de 100x100 px
+            st.image("https://images.piclumen.com/normal/20241226/08/d7168816cbc4460ab9102714a0c83827.webp", width=100)  # Placeholder de 100x100 px
 
         with col2:
             st.subheader(row["Product"])
