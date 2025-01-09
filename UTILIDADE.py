@@ -840,23 +840,36 @@ def invoice_page():
     else:
         st.warning("Selecione um cliente.")
 
-
 def menu_page():
     st.title("Cardápio")
-    categories = run_query("SELECT DISTINCT categoria FROM public.tb_products ORDER BY categoria;")
-    category_list = [row[0] for row in categories] if categories else []
+    
+    # Carrega os dados de produtos (supplier, product, quantity, unit_value, total_value, creation_date)
+    product_data = st.session_state.data.get("products", [])
 
-    selected_category = st.selectbox("Selecione a Categoria", [""]+category_list)
-    if selected_category:
-        query = "SELECT product,description,price FROM public.tb_products WHERE categoria=%s;"
-        products = run_query(query, (selected_category,))
-        if products:
-            for prod in products:
-                st.subheader(prod[0])
-                st.write(f"Descrição: {prod[1]}")
-                st.write(f"Preço: {format_currency(prod[2])}")
-        else:
-            st.warning("Nenhum produto encontrado nessa categoria.")
+    # Se não houver nenhum produto, exiba mensagem de aviso
+    if not product_data:
+        st.warning("Nenhum produto encontrado no cardápio.")
+        return
+
+    st.subheader("Itens Disponíveis")
+    
+    # Converte a lista em DataFrame para manipular e exibir apenas as colunas desejadas
+    df_products = pd.DataFrame(product_data, columns=[
+        "Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"
+    ])
+
+    # Seleciona as colunas que desejamos exibir no cardápio
+    df_menu = df_products[["Product", "Unit Value"]].copy()
+
+    # Formata a coluna "Unit Value" como moeda (opcional)
+    df_menu["Preço"] = df_menu["Unit Value"].apply(format_currency)
+
+    # Remove a coluna crua "Unit Value" (se quiser exibir apenas a coluna formatada)
+    df_menu.drop(columns=["Unit Value"], inplace=True)
+
+    # Exibe em formato de tabela interativa
+    st.dataframe(df_menu, use_container_width=True)
+
 
 
 def settings_page():
