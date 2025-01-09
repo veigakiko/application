@@ -198,8 +198,7 @@ def run_query(query: str, values=None, commit: bool = False):
             conn.rollback()
         st.error(f"Erro ao executar a consulta: {e}")
         return None
-    finally:
-        conn.close()
+
 
 
 ###############################################################################
