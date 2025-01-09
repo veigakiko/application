@@ -843,32 +843,41 @@ def invoice_page():
 def menu_page():
     st.title("Cardápio")
     
-    # Carrega os dados de produtos (supplier, product, quantity, unit_value, total_value, creation_date)
+    # Carrega os dados de products que vêm de "st.session_state.data['products']"
+    # Cada item da lista tem o formato:
+    # [supplier, product, quantity, unit_value, total_value, creation_date]
     product_data = st.session_state.data.get("products", [])
 
-    # Se não houver nenhum produto, exiba mensagem de aviso
     if not product_data:
         st.warning("Nenhum produto encontrado no cardápio.")
         return
 
+    # Converte a lista em DataFrame para manipular colunas
+    df_products = pd.DataFrame(
+        product_data, 
+        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"]
+    )
+
+    # Formata a coluna de preço (unit_value) como moeda brasileira
+    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
+
     st.subheader("Itens Disponíveis")
-    
-    # Converte a lista em DataFrame para manipular e exibir apenas as colunas desejadas
-    df_products = pd.DataFrame(product_data, columns=[
-        "Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"
-    ])
 
-    # Seleciona as colunas que desejamos exibir no cardápio
-    df_menu = df_products[["Product", "Unit Value"]].copy()
+    # Exibe cada item numa "seção" própria, com imagem na coluna esquerda e informações na direita
+    for idx, row in df_products.iterrows():
+        col1, col2 = st.columns([1, 3])  # Ajuste a proporção das colunas conforme desejar
 
-    # Formata a coluna "Unit Value" como moeda (opcional)
-    df_menu["Preço"] = df_menu["Unit Value"].apply(format_currency)
+        with col1:
+            # Você pode substituir a URL abaixo por uma coluna do seu DB contendo o link da imagem
+            st.image("https://via.placeholder.com/100", width=100)  # Placeholder de 100x100 px
 
-    # Remove a coluna crua "Unit Value" (se quiser exibir apenas a coluna formatada)
-    df_menu.drop(columns=["Unit Value"], inplace=True)
+        with col2:
+            st.subheader(row["Product"])
+            st.write(f"Preço: {row['Preço']}")
 
-    # Exibe em formato de tabela interativa
-    st.dataframe(df_menu, use_container_width=True)
+        # Linha divisória entre os itens (opcional)
+        st.markdown("---")
+
 
 
 
