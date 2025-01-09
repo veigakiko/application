@@ -840,43 +840,137 @@ def invoice_page():
     else:
         st.warning("Selecione um cliente.")
 
+import os
+import uuid
+import pandas as pd
+import streamlit as st
+from datetime import datetime
+# Outras imports que você já possua (funções run_query, format_currency etc.)
+
 def menu_page():
     st.title("Cardápio")
-    
-    # Carrega os dados de products que vêm de "st.session_state.data['products']"
-    # Cada item da lista tem o formato:
-    # [supplier, product, quantity, unit_value, total_value, creation_date]
-    product_data = st.session_state.data.get("products", [])
 
+    # ======================================================
+    # 1. Carregando dados de produtos
+    # ======================================================
+    # product_data = st.session_state.data["products"] 
+    # ou, se preferir atualizar no momento do menu_page:
+    product_data = run_query("""
+        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
+        FROM public.tb_products
+        ORDER BY creation_date DESC
+    """)
     if not product_data:
         st.warning("Nenhum produto encontrado no cardápio.")
         return
-
-    # Converte a lista em DataFrame para manipular colunas
+    
+    # Converte a lista em DataFrame
     df_products = pd.DataFrame(
         product_data, 
-        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"]
+        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
     )
-
-    # Formata a coluna de preço (unit_value) como moeda brasileira
+    # Cria coluna "Preço" formatada
     df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
 
-    st.subheader("Itens Disponíveis")
+    # ======================================================
+    # 2. Criamos abas: "Ver Cardápio" e "Gerenciar Imagens"
+    # ======================================================
+    tabs = st.tabs(["Ver Cardápio", "Gerenciar Imagens"])
 
-    # Exibe cada item numa "seção" própria, com imagem na coluna esquerda e informações na direita
-    for idx, row in df_products.iterrows():
-        col1, col2 = st.columns([1, 3])  # Ajuste a proporção das colunas conforme desejar
+    # ------------------- ABA 1: VER CARDÁPIO -------------------
+    with tabs[0]:
+        st.subheader("Itens Disponíveis")
 
-        with col1:
-            # Você pode substituir a URL abaixo por uma coluna do seu DB contendo o link da imagem
-            st.image("https://images.piclumen.com/normal/20241226/08/d7168816cbc4460ab9102714a0c83827.webp", width=100)  # Placeholder de 100x100 px
+        # Exibe cada produto em um 'cartão'
+        for idx, row in df_products.iterrows():
+            product_name = row["Product"]
+            price_text   = row["Preço"]
+            image_url    = row["image_url"] if row["image_url"] else ""
 
-        with col2:
-            st.subheader(row["Product"])
-            st.write(f"Preço: {row['Preço']}")
+            # Se não houver caminho de imagem, usamos um placeholder
+            if not image_url:
+                image_url = "https://via.placeholder.com/120"
 
-        # Linha divisória entre os itens (opcional)
-        st.markdown("---")
+            # Exibe layout em colunas
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                # Tenta exibir a imagem do disco local ou, se for URL externa, também funciona
+                try:
+                    # Para caminho local, por exemplo: "uploaded_images/produto123.png"
+                    # Ajuste conforme a forma de armazenar (URL completa, caminho relativo, etc.)
+                    st.image(image_url, width=120)
+                except:
+                    # Em caso de erro, exibe placeholder
+                    st.image("https://via.placeholder.com/120", width=120)
+
+            with col2:
+                st.subheader(product_name)
+                st.write(f"Preço: {price_text}")
+            
+            st.markdown("---")
+
+    # ---------------- ABA 2: GERENCIAR IMAGENS -----------------
+    with tabs[1]:
+        st.subheader("Fazer upload/editar imagem de cada produto")
+
+        # Seleciona o produto que queremos gerenciar a imagem
+        product_names = df_products["Product"].unique().tolist()
+        chosen_product = st.selectbox("Selecione o produto", options=[""] + product_names)
+
+        if chosen_product:
+            # Localiza no DataFrame
+            df_sel = df_products[df_products["Product"] == chosen_product].head(1)
+            if not df_sel.empty:
+                current_image = df_sel.iloc[0]["image_url"] or ""
+            else:
+                current_image = ""
+
+            st.write("Imagem atual:")
+            if current_image:
+                try:
+                    st.image(current_image, width=200)
+                except:
+                    st.image("https://via.placeholder.com/200", width=200)
+            else:
+                st.image("https://via.placeholder.com/200", width=200)
+
+            # Upload da nova imagem
+            uploaded_file = st.file_uploader("Carregar nova imagem do produto (PNG/JPG)", type=["png", "jpg", "jpeg"])
+
+            # Botão para salvar alterações
+            if st.button("Salvar Imagem"):
+                if not uploaded_file:
+                    st.warning("Selecione um arquivo antes de salvar.")
+                else:
+                    # Gera um nome único para o arquivo, para evitar sobrescrita
+                    file_ext = os.path.splitext(uploaded_file.name)[1]
+                    new_filename = f"{uuid.uuid4()}{file_ext}"
+
+                    # Cria o diretório se não existir
+                    os.makedirs("uploaded_images", exist_ok=True)
+
+                    # Caminho local para salvar a imagem
+                    save_path = os.path.join("uploaded_images", new_filename)
+
+                    # Salva o arquivo no disco
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+
+                    # Atualiza o campo image_url no banco de dados
+                    update_query = """
+                        UPDATE public.tb_products
+                        SET image_url=%s
+                        WHERE product=%s
+                    """
+                    # Podemos armazenar apenas o caminho relativo, ex.: "uploaded_images/xxxx.jpg"
+                    # Ou caminho completo, ex.: "http://meuservidor.com/imagens/xxxx.jpg"
+                    run_query(update_query, (save_path, chosen_product), commit=True)
+
+                    st.success("Imagem atualizada com sucesso!")
+                    # Recarrega dados para refletir a mudança
+                    refresh_data()
+                    st.experimental_rerun()
+
 
 
 
