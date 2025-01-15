@@ -1622,12 +1622,26 @@ def login_page():
     # 2) Carregar logo
     # ---------------------------------------------------------------------
     logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
+    placeholder_image_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL de imagem padrão
+
     try:
         resp = requests.get(logo_url, timeout=5)
         if resp.status_code == 200:
             logo = Image.open(BytesIO(resp.content))
             st.image(logo, use_column_width=True)
-    
+        else:
+            # Opcional: Exibir imagem padrão se o logo falhar ao carregar
+            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
+            st.image(logo_placeholder, use_column_width=True)
+    except Exception:
+        # Opcional: Exibir imagem padrão em caso de exceção
+        try:
+            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
+            st.image(logo_placeholder, use_column_width=True)
+        except Exception:
+            # Se até a imagem padrão falhar, não exiba nada
+            pass
+
     st.title("")
 
     # ---------------------------------------------------------------------
@@ -1700,6 +1714,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
@@ -1933,7 +1948,7 @@ def login_page():
             logo = Image.open(BytesIO(resp.content))
             st.image(logo, use_column_width=True)
     except Exception:
-        
+        st.error("Não foi possível carregar o logo.")
 
     st.title("")
 
