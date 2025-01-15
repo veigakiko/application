@@ -1375,7 +1375,7 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("DESCRIÇÃO             QTD     TOTAL")
     invoice.append("--------------------------------------------------")
 
-    # Garante que df["total"] seja numérico
+    # Garante que df["Total"] seja numérico
     df["Total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
     grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','Total':'sum'}).reset_index()
     total_general = 0
