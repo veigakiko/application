@@ -1081,24 +1081,6 @@ def analytics_page():
     st.write(df_faturado.dtypes)    # tipos de cada coluna
     # --------------------------------------------------------
 
-    # 4) Função para converter string no formato "1.234,56" (BR) em float 1234.56
-    def br_to_float(x):
-        if pd.isna(x):
-            return 0.0
-        s = str(x).strip()
-        # Remove separador de milhar (ponto) e substitui vírgula decimal por ponto
-        s = s.replace(".", "")
-        s = s.replace(",", ".")
-        try:
-            return float(s)
-        except ValueError:
-            return 0.0
-
-    # Aplica a função de conversão linha a linha
-    # Se o valor já vier em formato numérico (ex. 1234.56), essa conversão não prejudicará.
-    df_faturado["total_faturado"] = df_faturado["total_faturado"].apply(br_to_float)
-
-    # --------------------------------------------------------
    
 
 
