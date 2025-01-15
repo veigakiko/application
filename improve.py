@@ -1447,7 +1447,7 @@ def login_page():
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
 
-        col1, col2 = st.columns([1, 1], gap="small")
+        col1, col2 = st.columns([1, 1], gap="medium")
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
