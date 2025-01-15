@@ -43,5 +43,19 @@ flask
 flask-session
 authlib
 requests
+streamlit
+streamlit-option-menu
+psycopg2-binary
+pandas
+Pillow
+requests
+fpdf
+altair
+numpy
+scikit-learn
+streamlit-aggrid
+matplotlib
+twilio
+
 
 
