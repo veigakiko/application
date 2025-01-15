@@ -23,3 +23,15 @@ requests
 fpdf
 twilio
 streamlit-autorefresh
+streamlit
+streamlit-option_menu
+psycopg2
+pandas
+Pillow
+requests
+fpdf
+xlsxwriter
+altair
+numpy
+scikit-learn
+twilio
