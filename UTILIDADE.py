@@ -914,9 +914,6 @@ def invoice_page():
 ###############################################################################
 #                            BACKUP (ADMIN)
 ###############################################################################
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
 def export_table_to_csv(table_name):
     """Permite o download de uma tabela específica como CSV."""
     conn = get_db_connection()
@@ -985,7 +982,6 @@ def admin_backup_section():
         perform_backup()
     else:
         st.warning("Acesso restrito para administradores.")
-
 
 
 ###############################################################################
@@ -1263,8 +1259,86 @@ import matplotlib.pyplot as plt
 
 def analytics_page():
     """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
-    st.title("Editar Pedidos com MitoSheet")
-    
+    st.title("Analytics")
+
+    # 1) Carregar dados de faturamento
+    faturamento_query = """
+        SELECT date("Data") as dt, SUM("total") as total_dia
+        FROM public.vw_pedido_produto
+        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+        GROUP BY date("Data")
+        ORDER BY date("Data")
+    """
+    faturamento_data = run_query(faturamento_query)
+    if faturamento_data:
+        df_faturamento = pd.DataFrame(faturamento_data, columns=["Data", "Total do Dia"])
+        df_faturamento["Data"] = pd.to_datetime(df_faturamento["Data"])
+    else:
+        df_faturamento = pd.DataFrame(columns=["Data", "Total do Dia"])
+
+    # 2) Exibir gráfico de faturamento
+    st.subheader("Faturamento ao Longo do Tempo")
+    if not df_faturamento.empty:
+        chart = alt.Chart(df_faturamento).mark_line(point=True).encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', axis=alt.Axis(title='Total Faturado (R$)')),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para exibir.")
+
+    st.markdown("---")
+
+    # 3) Gráfico de Previsão de Faturamento usando Regressão Linear
+    st.subheader("Previsão de Faturamento para os Próximos 30 Dias")
+    if not df_faturamento.empty:
+        df_faturamento = df_faturamento.sort_values("Data")
+        df_faturamento['Timestamp'] = df_faturamento['Data'].map(datetime.timestamp)
+
+        # Modelo de Regressão Linear
+        X = df_faturamento[['Timestamp']]
+        y = df_faturamento['Total do Dia']
+        model = LinearRegression()
+        model.fit(X, y)
+
+        # Previsão para os próximos 30 dias
+        last_date = df_faturamento['Data'].max()
+        future_dates = [last_date + timedelta(days=i) for i in range(1, 31)]
+        future_timestamps = [[datetime.timestamp(d)] for d in future_dates]
+        predictions = model.predict(future_timestamps)
+
+        df_pred = pd.DataFrame({
+            "Data": future_dates,
+            "Previsão de Faturamento": predictions
+        })
+
+        # Gráfico
+        chart_pred = alt.Chart(pd.concat([df_faturamento, df_pred])).mark_line().encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', title='Total Faturado (R$)'),
+            color=alt.condition(
+                alt.datum.Data <= last_date,
+                alt.value('steelblue'),  # cor para dados reais
+                alt.value('orange')      # cor para previsões
+            ),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart_pred, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para realizar previsão.")
+
+    st.markdown("---")
+
+    # 4) Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+
     # Função para carregar dados de tb_pedido
     @st.cache_data(show_spinner=False)
     def load_pedido_data():
@@ -1277,71 +1351,40 @@ def analytics_page():
             return df
         else:
             return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-    
+
     pedido_data = load_pedido_data()
-    
-    # Adicionar o gráfico de Top 10 Produtos por Receita Total
-    st.subheader("Top 10 Produtos por Receita Total (em Reais)")
-    
+
     if not pedido_data.empty:
-        # Adiciona uma coluna "Preço" simulada (substituir com valores reais, se disponíveis)
-        import numpy as np
-        np.random.seed(42)
-        pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
+        # Inicializa MitoSheet com os dados de tb_pedido
+        new_dfs, code = spreadsheet(pedido_data)
+        code = code if code else "# Edite a planilha acima para gerar código"
+        st.code(code)
 
-        # Calcula a receita total por produto
-        product_revenue = (
-            pedido_data
-            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
-            .groupby("Produto")["Receita"]
-            .sum()
-            .reset_index()
-            .sort_values(by="Receita", ascending=False)
-            .head(10)
-        )
+        # Função para limpar o cache do MitoSheet periodicamente
+        def clear_mito_backend_cache():
+            _get_mito_backend.clear()
 
-        # Cria o gráfico
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
-        ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
-        ax.set_xlabel("Receita Total (R$)", fontsize=12)
-        ax.set_ylabel("Produto", fontsize=12)
-        plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
-        st.pyplot(fig)
+        # Função para armazenar o tempo da última execução
+        @st.cache_resource
+        def get_cached_time():
+            return {"last_executed_time": None}
+
+        def try_clear_cache():
+            CLEAR_DELTA = timedelta(hours=12)
+            current_time = datetime.now()
+            cached_time = get_cached_time()
+            if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+                clear_mito_backend_cache()
+                cached_time["last_executed_time"] = current_time
+
+        try_clear_cache()
+
+        # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+        # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+        st.markdown("---")
+        st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
     else:
-        st.warning("Nenhum dado disponível para gerar o gráfico.")
-    
-    # Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
-    
-    # Inicializa MitoSheet com os dados de tb_pedido
-    new_dfs, code = spreadsheet(pedido_data)
-    code = code if code else "# Edite a planilha acima para gerar código"
-    st.code(code)
-    
-    # Função para limpar o cache do MitoSheet periodicamente
-    def clear_mito_backend_cache():
-        _get_mito_backend.clear()
-    
-    # Função para armazenar o tempo da última execução
-    @st.cache_resource
-    def get_cached_time():
-        return {"last_executed_time": None}
-    
-    def try_clear_cache():
-        CLEAR_DELTA = timedelta(hours=12)
-        current_time = datetime.now()
-        cached_time = get_cached_time()
-        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-            clear_mito_backend_cache()
-            cached_time["last_executed_time"] = current_time
-    
-    try_clear_cache()
-    
-    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
-    st.markdown("---")
-    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+        st.info("Nenhum pedido encontrado para editar.")
 
 
 ###############################################################################
@@ -1349,7 +1392,6 @@ def analytics_page():
 ###############################################################################
 def login_page():
     """Página de login do aplicativo."""
-    import streamlit as st
     from PIL import Image
     import requests
     from io import BytesIO
@@ -1415,16 +1457,18 @@ def login_page():
             font-weight: bold;
             cursor: pointer;
             text-align: center;
-            margin-bottom: 10px;
+            margin-top: 10px;
             display: block;
             width: 100%;
         }
         .gmail-login:hover {
             background-color: #c33d30;
         }
-        /* Remove qualquer espaço entre os input boxes */
-        .form-container input {
+        /* Remove espaço entre os input boxes */
+        .css-1siy2j8 input {
             margin-bottom: 0 !important; /* Sem margem entre os campos */
+            padding-top: 5px;
+            padding-bottom: 5px;
         }
         </style>
         """,
@@ -1434,7 +1478,7 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = "https://ibb.co/9sXD0H5"
+    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL direto para a imagem
     logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
@@ -1457,11 +1501,10 @@ def login_page():
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
 
-        # Botão
+        # Botão de login
         btn_login = st.form_submit_button("Log in")
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Botão de login com Google
+        # Botão de login com Google (fora do formulário)
         st.markdown(
             """
             <button class='gmail-login'>Log in with Google</button>
@@ -1572,7 +1615,7 @@ def sidebar_navigation():
         # Novo texto acima do menu
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
 
         st.title("Boituva Beach Club 🎾")
@@ -1699,9 +1742,87 @@ def menu_page():
 #                     NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
 def analytics_page():
-    """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
-    st.title("Editar Pedidos com MitoSheet")
-    
+    """Página de Analytics contendo gráficos de faturamento."""
+    st.title("Analytics")
+
+    # 1) Carregar dados de faturamento
+    faturamento_query = """
+        SELECT date("Data") as dt, SUM("total") as total_dia
+        FROM public.vw_pedido_produto
+        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+        GROUP BY date("Data")
+        ORDER BY date("Data")
+    """
+    faturamento_data = run_query(faturamento_query)
+    if faturamento_data:
+        df_faturamento = pd.DataFrame(faturamento_data, columns=["Data", "Total do Dia"])
+        df_faturamento["Data"] = pd.to_datetime(df_faturamento["Data"])
+    else:
+        df_faturamento = pd.DataFrame(columns=["Data", "Total do Dia"])
+
+    # 2) Exibir gráfico de faturamento
+    st.subheader("Faturamento ao Longo do Tempo")
+    if not df_faturamento.empty:
+        chart = alt.Chart(df_faturamento).mark_line(point=True).encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', axis=alt.Axis(title='Total Faturado (R$)')),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para exibir.")
+
+    st.markdown("---")
+
+    # 3) Gráfico de Previsão de Faturamento usando Regressão Linear
+    st.subheader("Previsão de Faturamento para os Próximos 30 Dias")
+    if not df_faturamento.empty:
+        df_faturamento = df_faturamento.sort_values("Data")
+        df_faturamento['Timestamp'] = df_faturamento['Data'].map(datetime.timestamp)
+
+        # Modelo de Regressão Linear
+        X = df_faturamento[['Timestamp']]
+        y = df_faturamento['Total do Dia']
+        model = LinearRegression()
+        model.fit(X, y)
+
+        # Previsão para os próximos 30 dias
+        last_date = df_faturamento['Data'].max()
+        future_dates = [last_date + timedelta(days=i) for i in range(1, 31)]
+        future_timestamps = [[datetime.timestamp(d)] for d in future_dates]
+        predictions = model.predict(future_timestamps)
+
+        df_pred = pd.DataFrame({
+            "Data": future_dates,
+            "Previsão de Faturamento": predictions
+        })
+
+        # Gráfico
+        chart_pred = alt.Chart(pd.concat([df_faturamento, df_pred])).mark_line().encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', title='Total Faturado (R$)'),
+            color=alt.condition(
+                alt.datum.Data <= last_date,
+                alt.value('steelblue'),  # cor para dados reais
+                alt.value('orange')      # cor para previsões
+            ),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart_pred, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para realizar previsão.")
+
+    st.markdown("---")
+
+    # 4) Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+
     # Função para carregar dados de tb_pedido
     @st.cache_data(show_spinner=False)
     def load_pedido_data():
@@ -1714,40 +1835,40 @@ def analytics_page():
             return df
         else:
             return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-    
+
     pedido_data = load_pedido_data()
-    
-    # Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
-    
-    # Inicializa MitoSheet com os dados de tb_pedido
-    new_dfs, code = spreadsheet(pedido_data)
-    code = code if code else "# Edite a planilha acima para gerar código"
-    st.code(code)
-    
-    # Função para limpar o cache do MitoSheet periodicamente
-    def clear_mito_backend_cache():
-        _get_mito_backend.clear()
-    
-    # Função para armazenar o tempo da última execução
-    @st.cache_resource
-    def get_cached_time():
-        return {"last_executed_time": None}
-    
-    def try_clear_cache():
-        CLEAR_DELTA = timedelta(hours=12)
-        current_time = datetime.now()
-        cached_time = get_cached_time()
-        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-            clear_mito_backend_cache()
-            cached_time["last_executed_time"] = current_time
-    
-    try_clear_cache()
-    
-    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
-    st.markdown("---")
-    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+
+    if not pedido_data.empty:
+        # Inicializa MitoSheet com os dados de tb_pedido
+        new_dfs, code = spreadsheet(pedido_data)
+        code = code if code else "# Edite a planilha acima para gerar código"
+        st.code(code)
+
+        # Função para limpar o cache do MitoSheet periodicamente
+        def clear_mito_backend_cache():
+            _get_mito_backend.clear()
+
+        # Função para armazenar o tempo da última execução
+        @st.cache_resource
+        def get_cached_time():
+            return {"last_executed_time": None}
+
+        def try_clear_cache():
+            CLEAR_DELTA = timedelta(hours=12)
+            current_time = datetime.now()
+            cached_time = get_cached_time()
+            if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+                clear_mito_backend_cache()
+                cached_time["last_executed_time"] = current_time
+
+        try_clear_cache()
+
+        # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+        # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+        st.markdown("---")
+        st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+    else:
+        st.info("Nenhum pedido encontrado para editar.")
 
 
 ###############################################################################
