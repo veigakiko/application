@@ -11,9 +11,7 @@ from fpdf import FPDF
 import os
 import uuid
 import calendar
-import altair as alt
-import numpy as np
-from sklearn.linear_model import LinearRegression
+
 
 
 ###############################################################################
