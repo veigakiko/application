@@ -36,3 +36,7 @@ numpy
 scikit-learn
 twilio
 mitosheet
+flask
+authlib
+requests
+
