@@ -1347,27 +1347,16 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
-
-import streamlit as st
-from PIL import Image
-import requests
-from io import BytesIO
-from datetime import datetime
-
 def login_page():
-    """Página de login do aplicativo com teclado virtual único."""
+    """Página de login do aplicativo com teclado virtual único e detecção automática do campo ativo."""
     
-    # Inicializar session_state para campos de entrada e rastreamento de alterações
+    # Inicializar session_state para campos de entrada e active_field
     if 'username_input' not in st.session_state:
         st.session_state.username_input = ""
     if 'password_input' not in st.session_state:
         st.session_state.password_input = ""
     if 'active_field' not in st.session_state:
         st.session_state.active_field = "Username"  # Campo padrão ativo
-    if 'username_input_prev' not in st.session_state:
-        st.session_state.username_input_prev = ""
-    if 'password_input_prev' not in st.session_state:
-        st.session_state.password_input_prev = ""
 
     # Função para atualizar o campo de entrada específico
     def append_char(char):
@@ -1477,14 +1466,11 @@ def login_page():
         .virtual-keyboard button:hover {
             background-color: #e0e0e0;
         }
-        /* Botões de seleção de campo ativo */
-        .active-button {
-            background-color: #004a8f !important;
-            color: white !important;
-        }
-        .inactive-button {
-            background-color: #f0f0f0 !important;
-            color: black !important;
+        /* Indicador de campo ativo */
+        .active-indicator {
+            font-weight: bold;
+            color: #004a8f;
+            margin-bottom: 10px;
         }
         </style>
         """,
@@ -1508,48 +1494,40 @@ def login_page():
     st.title("")
 
     # ---------------------------------------------------------------------
-    # 3) Detectar qual campo foi modificado por último
-    # ---------------------------------------------------------------------
-    # Atualizar active_field baseado na última modificação
-    if st.session_state.username_input != st.session_state.username_input_prev:
-        st.session_state.active_field = "Username"
-    elif st.session_state.password_input != st.session_state.password_input_prev:
-        st.session_state.active_field = "Password"
-
-    # Atualizar os valores anteriores
-    st.session_state.username_input_prev = st.session_state.username_input
-    st.session_state.password_input_prev = st.session_state.password_input
-
-    # ---------------------------------------------------------------------
-    # 4) Formulário de login
+    # 3) Formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Campos de entrada com valores controlados por session_state
+        # Campos de entrada com callbacks para definir o campo ativo
         username_input = st.text_input(
             "Username",
             placeholder="Username",
             value=st.session_state.username_input,
-            key='username_display'
+            key='username_display',
+            on_change=lambda: set_active_field("Username")
         )
         password_input = st.text_input(
             "Password",
             type="password",
             placeholder="Password",
             value=st.session_state.password_input,
-            key='password_display'
+            key='password_display',
+            on_change=lambda: set_active_field("Password")
         )
 
         # Atualizar session_state com entradas diretas
         st.session_state.username_input = username_input
         st.session_state.password_input = password_input
 
+        # Indicador do campo ativo
+        st.markdown(f"<div class='active-indicator'>**Campo ativo: {st.session_state.active_field}**</div>", unsafe_allow_html=True)
+
         # Botão de login
         btn_login = st.form_submit_button("Log in")
 
     # ---------------------------------------------------------------------
-    # 5) Botão de login com Google (fora do formulário)
+    # 4) Botão de login com Google (fora do formulário)
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1559,7 +1537,7 @@ def login_page():
     )
 
     # ---------------------------------------------------------------------
-    # 6) Teclado Virtual Único (fora do formulário)
+    # 5) Teclado Virtual Único (fora do formulário)
     # ---------------------------------------------------------------------
     st.markdown("### Teclado Virtual")
 
@@ -1587,7 +1565,7 @@ def login_page():
                     append_char(key)
 
     # ---------------------------------------------------------------------
-    # 7) Ação: Login
+    # 6) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not st.session_state.username_input or not st.session_state.password_input:
@@ -1623,7 +1601,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 8) Rodapé / Footer
+    # 7) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1634,9 +1612,9 @@ def login_page():
         unsafe_allow_html=True
     )
 
-# Executar a página de login
-if __name__ == "__main__":
-    login_page()
+def set_active_field(field_name):
+    """Função para definir o campo ativo."""
+    st.session_state.active_field = field_name
 
 
 ###############################################################################
