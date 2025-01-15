@@ -1377,7 +1377,7 @@ def login_page():
         .css-1x8cf1d.edgvbvh10 {
             background-color: #004a8f !important;
             padding: 5px 10px !important;
-            font-size: 0.875rem !important;
+            font-size: 0.8rem !important;
         }
         /* Mensagem de rodapé */
         .footer {
@@ -1396,7 +1396,7 @@ def login_page():
             border: none;
             border-radius: 4px;
             padding: 8px 16px;
-            font-size: 0.9rem;
+            font-size: 0.8rem;
             font-weight: bold;
             cursor: pointer;
             text-align: center;
@@ -1406,6 +1406,22 @@ def login_page():
         }
         .gmail-login:hover {
             background-color: #c33d30;
+        }
+        .signup-button {
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            display: block;
+            width: 100%;
+        }
+        .signup-button:hover {
+            background-color: #218838;
         }
         </style>
         """,
@@ -1437,9 +1453,16 @@ def login_page():
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
 
-        col1, col2 = st.columns([1,1])
+        col1, col2 = st.columns([1, 1])
         with col1:
             btn_login = st.form_submit_button("Log in")
+        with col2:
+            st.markdown(
+                """
+                <button class='signup-button'>Sign up</button>
+                """,
+                unsafe_allow_html=True
+            )
 
         # Botão de login com Gmail
         st.markdown(
