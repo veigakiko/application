@@ -1347,7 +1347,6 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
-
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1412,6 +1411,12 @@ def login_page():
         .gsi-material-button-icon {
             margin-right: 8px;
         }
+        .form-container {
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1437,6 +1442,7 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
         st.write("keep the beach vibes flowing!🌴🎾")
 
         username_input = st.text_input("Username")
@@ -1468,6 +1474,7 @@ def login_page():
             """,
             unsafe_allow_html=True
         )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------------------------------------------------------------------
     # 4) Ação: Login
@@ -1511,6 +1518,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 
 ###############################################################################
