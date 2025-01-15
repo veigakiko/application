@@ -12,7 +12,6 @@ import os
 import uuid
 import calendar
 
-
 ###############################################################################
 #                                   UTILIDADES
 ###############################################################################
@@ -1057,6 +1056,47 @@ def loyalty_program_page():
             st.error("Pontos insuficientes.")
 
 
+###############################################################################
+#                    NOVA PÁGINA: ANALYTICS (Faturamento)
+###############################################################################
+def analytics_page():
+    st.title("Analytics")
+
+    # Executa a query na view vw_produto_total_faturado
+    query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
+    result = run_query(query)
+
+    if result:
+        # Converte para DataFrame
+        df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+
+        # Ordenar do maior para o menor faturado
+        df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
+
+        # Exibe a tabela
+        st.subheader("Tabela de Faturamento por Produto")
+        st.dataframe(df_faturado, use_container_width=True)
+
+        # Cria um gráfico de barras horizontal (exemplo com Altair)
+        import altair as alt
+        chart = (
+            alt.Chart(df_faturado)
+            .mark_bar()
+            .encode(
+                x=alt.X("total_faturado:Q", title="Total Faturado"),
+                y=alt.Y("Produto:N", sort="-x", title="Produto")
+            )
+            .properties(
+                title="Faturamento por Produto (Ordenado)",
+                width="container",
+                height=400
+            )
+        )
+        st.altair_chart(chart, use_container_width=True)
+
+    else:
+        st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+
 
 ###############################################################################
 #                                LOGIN PAGE
@@ -1167,12 +1207,14 @@ def sidebar_navigation():
             [
                 "Home","Orders","Products","Stock","Clients",
                 "Nota Fiscal","Backup","Cardápio",
-                "Configurações e Ajustes","Programa de Fidelidade",
-                "Calendário de Eventos"
+                "Analytics",                # Renomeado
+                "Programa de Fidelidade","Calendário de Eventos"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
-                "receipt","cloud-upload","list","gear","gift","calendar"
+                "receipt","cloud-upload","list",
+                "bar-chart-line",          # Mudamos o ícone
+                "gift","calendar"
             ],
             menu_icon="cast",
             default_index=0,
@@ -1278,22 +1320,6 @@ def menu_page():
                     st.experimental_rerun()
 
 
-def settings_page():
-    st.title("Configurações e Ajustes")
-    st.subheader("Ajustes de Conta")
-    if 'username' in st.session_state:
-        new_username = st.text_input("Nome de Usuário", st.session_state.username)
-        if st.button("Salvar Nome"):
-            st.session_state.username = new_username
-            st.success("Nome atualizado!")
-
-    st.subheader("Preferências do App")
-    theme_choice = st.radio("Escolha o tema", ("Claro","Escuro"))
-    if st.button("Salvar Preferências"):
-        st.session_state.theme = theme_choice
-        st.success("Preferências salvas!")
-
-
 ###############################################################################
 #                                     MAIN
 ###############################################################################
@@ -1329,8 +1355,8 @@ def main():
         admin_backup_section()
     elif selected_page == "Cardápio":
         menu_page()
-    elif selected_page == "Configurações e Ajustes":
-        settings_page()
+    elif selected_page == "Analytics":  # <-- Nova página
+        analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
     elif selected_page == "Calendário de Eventos":
