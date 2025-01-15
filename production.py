@@ -1060,19 +1060,66 @@ def loyalty_program_page():
 #                    NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
 def analytics_page():
-    st.title("Analytics")
+    import altair as alt
 
+    st.title("Analytics")
+    
     # 1) Consulta ao banco de dados
     query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
     result = run_query(query)
 
-    # 2) Se não vier nenhum resultado, avisamos e retornamos
     if not result:
         st.info("Nenhum dado encontrado na view vw_produto_total_faturado.")
         return
 
-    # 3) Converte o resultado em DataFrame
-    df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+    # 2) Converte o resultado em DataFrame
+    df = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+
+    # Debug opcional: veja o que chegou
+    # st.write("Dados brutos:", df.head())
+
+    # 3) Converter strings para float
+    # Remove pontos de milhar, substitui vírgulas por ponto decimal.
+    df["total_faturado"] = (
+        df["total_faturado"]
+        .astype(str)               # garante que é string
+        .str.strip()               # remove espaços extras
+        .str.replace(".", "", regex=False)   # remove pontos de milhar
+        .str.replace(",", ".", regex=False)  # troca vírgula decimal por ponto
+    )
+
+    # Em seguida, converte para float, transformando valores inválidos em NaN:
+    df["total_faturado"] = pd.to_numeric(df["total_faturado"], errors="coerce").fillna(0)
+
+    # 4) Ordena do maior para o menor
+    df.sort_values(by="total_faturado", ascending=False, inplace=True)
+
+    # 5) Exibe tabela
+    st.subheader("Tabela de Faturamento por Produto")
+    st.dataframe(df, use_container_width=True)
+
+    # 6) Gráfico de barras horizontal (Altair)
+    st.subheader("Gráfico de Faturamento (Barras Horizontais)")
+    chart = (
+        alt.Chart(df)
+        .mark_bar()
+        .encode(
+            x=alt.X("total_faturado:Q", title="Total Faturado", axis=alt.Axis(format=",.2f")),
+            y=alt.Y("Produto:N", sort="-x", title="Produto")
+        )
+        .properties(
+            title="Faturamento por Produto (Ordenado)",
+            width="container",
+            height=400
+        )
+    )
+
+    st.altair_chart(chart, use_container_width=True)
+
+    # (Opcional) caso deseje avisar se todos os valores forem zero:
+    if df["total_faturado"].max() <= 0:
+        st.warning("Todos os valores estão zerados ou inválidos. Verifique os dados no banco.")
+
 
 
 
