@@ -1099,49 +1099,7 @@ def analytics_page():
     df_faturado["total_faturado"] = df_faturado["total_faturado"].apply(br_to_float)
 
     # --------------------------------------------------------
-    # DEBUG: Mostrar dados após conversão (veja se ficaram em float corretamente)
-    st.write("### Debug - Dados Após Conversão para Float")
-    st.write(df_faturado.head(10))
-    st.write(df_faturado.dtypes)
-    # --------------------------------------------------------
-
-    # 5) Ordena do maior para o menor total_faturado
-    df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
-
-    # Exibe em tabela
-    st.subheader("Tabela de Faturamento por Produto")
-    st.dataframe(df_faturado, use_container_width=True)
-
-    # 6) Cria e exibe o gráfico de barras horizontal (Altair)
-    import altair as alt
-    st.subheader("Gráfico de Faturamento (Barras Horizontais)")
-
-    chart = (
-        alt.Chart(df_faturado)
-        .mark_bar()
-        .encode(
-            x=alt.X(
-                "total_faturado:Q",
-                title="Total Faturado",
-                # Formatando eixo X para duas casas decimais
-                axis=alt.Axis(format=",.2f")
-            ),
-            y=alt.Y("Produto:N", sort="-x", title="Produto"),
-        )
-        .properties(
-            title="Faturamento por Produto (Ordenado)",
-            width="container",
-            height=400
-        )
-    )
-
-    st.altair_chart(chart, use_container_width=True)
-
-    # 7) Mensagem opcional caso todos os valores estejam em zero
-    if df_faturado["total_faturado"].max() <= 0:
-        st.warning("Todos os valores de faturamento estão zero (ou inválidos). Verifique seus dados no banco.")
-
-
+   
 
 
 
