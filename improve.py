@@ -1429,7 +1429,7 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
+    logo_url = ""  # URL direto para a imagem
     placeholder_image_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL de imagem padrão
 
     try:
@@ -1459,8 +1459,8 @@ def login_page():
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
         # Campos de entrada
-        username_input = st.text_input("Username", placeholder="Username", key='username_input')
-        password_input = st.text_input("Password", type="password", placeholder="Password", key='password_input')
+        username_input = st.text_input("", placeholder="Username", key='username_input')
+        password_input = st.text_input("", type="password", placeholder="Password", key='password_input')
 
         # Botão de login
         btn_login = st.form_submit_button("Log in")
