@@ -1062,58 +1062,71 @@ def loyalty_program_page():
 def analytics_page():
     st.title("Analytics")
 
-    # Consulta a view com produto e faturamento
+    # 1) Consulta ao banco de dados
     query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
     result = run_query(query)
 
+    # 2) Se não vier nenhum resultado, avisamos e retornamos
     if not result:
-        st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+        st.info("Nenhum dado encontrado na view vw_produto_total_faturado.")
         return
 
-    # Converte o resultado em DataFrame
+    # 3) Converte o resultado em DataFrame
     df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-    # Exemplo de pré-processamento caso os valores venham no formato "1.234,56" (PT-BR):
-    # 1) Transforma em texto
-    # 2) Remove pontos (.) que servem apenas para separar milhar
-    # 3) Substitui vírgula (,) por ponto (.)
-    # 4) Converte para float
-    def br_to_float(valor):
-        """
-        Converte string como "1.234,56" para float 1234.56
-        Caso a string seja inválida, retorna 0.0
-        """
-        if pd.isna(valor):
+    # --------------------------------------------------------
+    # DEBUG: Mostrar dados brutos como chegaram do banco
+    st.write("### Debug - Dados Brutos do Banco")
+    st.write(df_faturado.head(10))  # primeiros 10 registros
+    st.write(df_faturado.dtypes)    # tipos de cada coluna
+    # --------------------------------------------------------
+
+    # 4) Função para converter string no formato "1.234,56" (BR) em float 1234.56
+    def br_to_float(x):
+        if pd.isna(x):
             return 0.0
-        val_str = str(valor)
-        val_str = val_str.replace(".", "")    # remove separador de milhar
-        val_str = val_str.replace(",", ".")   # troca vírgula decimal por ponto
+        s = str(x).strip()
+        # Remove separador de milhar (ponto) e substitui vírgula decimal por ponto
+        s = s.replace(".", "")
+        s = s.replace(",", ".")
         try:
-            return float(val_str)
+            return float(s)
         except ValueError:
             return 0.0
 
     # Aplica a função de conversão linha a linha
+    # Se o valor já vier em formato numérico (ex. 1234.56), essa conversão não prejudicará.
     df_faturado["total_faturado"] = df_faturado["total_faturado"].apply(br_to_float)
 
-    # Ordena do maior para o menor
+    # --------------------------------------------------------
+    # DEBUG: Mostrar dados após conversão (veja se ficaram em float corretamente)
+    st.write("### Debug - Dados Após Conversão para Float")
+    st.write(df_faturado.head(10))
+    st.write(df_faturado.dtypes)
+    # --------------------------------------------------------
+
+    # 5) Ordena do maior para o menor total_faturado
     df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
-    # Exibe a tabela de dados
+    # Exibe em tabela
     st.subheader("Tabela de Faturamento por Produto")
     st.dataframe(df_faturado, use_container_width=True)
 
-    # Cria e exibe o gráfico de barras horizontal (Altair)
+    # 6) Cria e exibe o gráfico de barras horizontal (Altair)
     import altair as alt
-
     st.subheader("Gráfico de Faturamento (Barras Horizontais)")
+
     chart = (
         alt.Chart(df_faturado)
         .mark_bar()
         .encode(
-            # Formata o eixo X, por exemplo, para 2 casas decimais
-            x=alt.X("total_faturado:Q", title="Total Faturado", axis=alt.Axis(format=",.2f")),
-            y=alt.Y("Produto:N", sort="-x", title="Produto")
+            x=alt.X(
+                "total_faturado:Q",
+                title="Total Faturado",
+                # Formatando eixo X para duas casas decimais
+                axis=alt.Axis(format=",.2f")
+            ),
+            y=alt.Y("Produto:N", sort="-x", title="Produto"),
         )
         .properties(
             title="Faturamento por Produto (Ordenado)",
@@ -1121,11 +1134,12 @@ def analytics_page():
             height=400
         )
     )
+
     st.altair_chart(chart, use_container_width=True)
 
-    # (Opcional) Exibir alerta caso todos os valores sejam zero
+    # 7) Mensagem opcional caso todos os valores estejam em zero
     if df_faturado["total_faturado"].max() <= 0:
-        st.warning("Observação: Todos os valores de faturamento estão zerados ou inválidos.")
+        st.warning("Todos os valores de faturamento estão zero (ou inválidos). Verifique seus dados no banco.")
 
 
 
