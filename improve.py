@@ -1374,10 +1374,21 @@ def login_page():
             text-align: center;
         }
         /* Botão customizado */
-        .css-1x8cf1d.edgvbvh10 {
+        .css-1x8cf1d.edgvbvh10, .signup-button {
             background-color: #004a8f !important;
-            padding: 5px 10px !important;
-            font-size: 0.8rem !important;
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+        }
+        .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
+            background-color: #003366 !important;
         }
         /* Mensagem de rodapé */
         .footer {
@@ -1396,7 +1407,7 @@ def login_page():
             border: none;
             border-radius: 4px;
             padding: 8px 16px;
-            font-size: 0.8rem;
+            font-size: 0.875rem;
             font-weight: bold;
             cursor: pointer;
             text-align: center;
@@ -1406,22 +1417,6 @@ def login_page():
         }
         .gmail-login:hover {
             background-color: #c33d30;
-        }
-        .signup-button {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 0.8rem;
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            display: block;
-            width: 100%;
-        }
-        .signup-button:hover {
-            background-color: #218838;
         }
         </style>
         """,
@@ -1514,7 +1509,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
