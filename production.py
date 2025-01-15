@@ -17,6 +17,10 @@ from sklearn.linear_model import LinearRegression
 import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+import warnings
+
+# Suppress SyntaxWarnings from external libraries
+warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -297,7 +301,7 @@ def home_page():
                     )
 
                     st.subheader("Enviar esse PDF via WhatsApp")
-                    phone_number = st.text_input("Número (ex: 5511999999999)")
+                    phone_number = st.text_input("Número (ex: 5511999999999)", label_visibility="visible")
                     if st.button("Upload e Enviar"):
                         link = upload_pdf_to_fileio(pdf_bytes)
                         if link and phone_number:
@@ -347,11 +351,11 @@ def orders_page():
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                customer_name = st.selectbox("Cliente", customer_list)
+                customer_name = st.selectbox("Cliente", customer_list, label_visibility="visible")
             with col2:
-                product = st.selectbox("Produto", product_list)
+                product = st.selectbox("Produto", product_list, label_visibility="visible")
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
 
             submit_button = st.form_submit_button("Registrar Pedido")
 
@@ -385,7 +389,7 @@ def orders_page():
                     axis=1
                 )
                 unique_keys = df_orders["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys)
+                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys, label_visibility="visible")
 
                 if selected_key:
                     match = df_orders[df_orders["unique_key"] == selected_key]
@@ -409,9 +413,9 @@ def orders_page():
                                     prod_index = product_list.index(original_product)
                                 else:
                                     prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
+                                edit_prod = st.selectbox("Produto", product_list, index=prod_index, label_visibility="visible")
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty), label_visibility="visible")
                             with col3:
                                 status_opts = [
                                     "em aberto", "Received - Debited", "Received - Credit",
@@ -421,7 +425,7 @@ def orders_page():
                                     s_index = status_opts.index(original_status)
                                 else:
                                     s_index = 0
-                                edit_status = st.selectbox("Status", status_opts, index=s_index)
+                                edit_status = st.selectbox("Status", status_opts, index=s_index, label_visibility="visible")
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -466,14 +470,14 @@ def products_page():
         with st.form(key='product_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                supplier = st.text_input("Fornecedor")
+                supplier = st.text_input("Fornecedor", label_visibility="visible")
             with col2:
-                product = st.text_input("Produto")
+                product = st.text_input("Produto", label_visibility="visible")
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
             with col4:
-                unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f")
-            creation_date = st.date_input("Data de Criação", value=date.today())
+                unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f", label_visibility="visible")
+            creation_date = st.date_input("Data de Criação", value=date.today(), label_visibility="visible")
             submit_prod = st.form_submit_button("Inserir Produto")
 
         if submit_prod:
@@ -508,7 +512,7 @@ def products_page():
                     axis=1
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
+                selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys, label_visibility="visible")
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -524,19 +528,19 @@ def products_page():
                         with st.form(key='edit_product_form'):
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
-                                edit_supplier = st.text_input("Fornecedor", value=original_supplier)
+                                edit_supplier = st.text_input("Fornecedor", value=original_supplier, label_visibility="visible")
                             with col2:
-                                edit_product = st.text_input("Produto", value=original_product)
+                                edit_product = st.text_input("Produto", value=original_product, label_visibility="visible")
                             with col3:
                                 edit_quantity = st.number_input(
-                                    "Quantidade", min_value=1, step=1, value=int(original_quantity)
+                                    "Quantidade", min_value=1, step=1, value=int(original_quantity), label_visibility="visible"
                                 )
                             with col4:
                                 edit_unit_val = st.number_input(
                                     "Valor Unitário", min_value=0.0, step=0.01, format="%.2f",
-                                    value=float(original_unit_value)
+                                    value=float(original_unit_value), label_visibility="visible"
                                 )
-                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date)
+                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date, label_visibility="visible")
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -560,7 +564,7 @@ def products_page():
                             refresh_data()
 
                         if delete_btn:
-                            confirm = st.checkbox("Confirma a exclusão deste produto?")
+                            confirm = st.checkbox("Confirma a exclusão deste produto?", key=f"confirm_del_{selected_key}")
                             if confirm:
                                 q_del = """
                                     DELETE FROM public.tb_products
@@ -589,13 +593,13 @@ def stock_page():
         with st.form(key='stock_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                product = st.selectbox("Produto", product_list)
+                product = st.selectbox("Produto", product_list, label_visibility="visible")
             with col2:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
             with col3:
-                transaction = st.selectbox("Tipo de Transação", ["Entrada","Saída"])
+                transaction = st.selectbox("Tipo de Transação", ["Entrada","Saída"], label_visibility="visible")
             with col4:
-                date_input = st.date_input("Data", value=datetime.now().date())
+                date_input = st.date_input("Data", value=datetime.now().date(), label_visibility="visible")
             submit_st = st.form_submit_button("Registrar")
 
         if submit_st:
@@ -628,7 +632,7 @@ def stock_page():
                     axis=1
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
+                selected_key = st.selectbox("Selecione Registro", [""] + unique_keys, label_visibility="visible")
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -650,17 +654,18 @@ def stock_page():
                                     prod_index = product_list.index(original_product)
                                 else:
                                     prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
+                                edit_prod = st.selectbox("Produto", product_list, index=prod_index, label_visibility="visible")
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty), label_visibility="visible")
                             with col3:
                                 edit_trans = st.selectbox(
                                     "Tipo", ["Entrada","Saída"],
                                     index=["Entrada","Saída"].index(original_trans)
-                                    if original_trans in ["Entrada","Saída"] else 0
+                                    if original_trans in ["Entrada","Saída"] else 0,
+                                    label_visibility="visible"
                                 )
                             with col4:
-                                edit_date = st.date_input("Data", value=original_date.date())
+                                edit_date = st.date_input("Data", value=original_date.date(), label_visibility="visible")
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -703,7 +708,7 @@ def clients_page():
     with tabs[0]:
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
-            nome_completo = st.text_input("Nome Completo")
+            nome_completo = st.text_input("Nome Completo", label_visibility="visible")
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
@@ -737,13 +742,13 @@ def clients_page():
             df_clients = pd.DataFrame(clients_data, columns=cols)
             # Exibir apenas a coluna Full Name
             st.dataframe(df_clients[["Full Name"]], use_container_width=True)
-            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
+            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clientes CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Cliente")
                 client_display = [""] + [f"{row['Full Name']} ({row['Email']})"
                                          for _, row in df_clients.iterrows()]
-                selected_display = st.selectbox("Selecione Cliente:", client_display)
+                selected_display = st.selectbox("Selecione Cliente:", client_display, label_visibility="visible")
                 if selected_display:
                     try:
                         original_name, original_email = selected_display.split(" (")
@@ -754,7 +759,7 @@ def clients_page():
 
                     sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                     with st.form(key='edit_client_form'):
-                        edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
+                        edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"], label_visibility="visible")
                         col_upd, col_del = st.columns(2)
                         with col_upd:
                             update_btn = st.form_submit_button("Atualizar Cliente")
@@ -809,7 +814,7 @@ def loyalty_program_page():
     if 'points' not in st.session_state:
         st.session_state.points = 0
 
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1, label_visibility="visible")
     if st.button("Adicionar Pontos"):
         st.session_state.points += points_earned
         st.success(f"Pontos adicionados! Total: {st.session_state.points}")
@@ -828,7 +833,7 @@ def invoice_page():
     open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
     open_clients = run_query(open_clients_query, ('em aberto',))
     client_list = [row[0] for row in open_clients] if open_clients else []
-    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
+    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list, label_visibility="visible")
 
     if selected_client:
         invoice_query = """
@@ -850,7 +855,7 @@ def invoice_page():
                 "DESCONTO15": 0.15,
             }
 
-            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            coupon_code = st.text_input("CUPOM (desconto opcional)", label_visibility="visible")
             desconto_aplicado = 0.0
             if coupon_code in cupons_validos:
                 desconto_aplicado = cupons_validos[coupon_code]
@@ -1050,11 +1055,11 @@ def events_calendar_page():
     with st.form(key="new_event_form"):
         col1, col2 = st.columns(2)
         with col1:
-            nome_evento = st.text_input("Nome do Evento")
-            data_evento = st.date_input("Data do Evento", value=date.today())
+            nome_evento = st.text_input("Nome do Evento", label_visibility="visible")
+            data_evento = st.date_input("Data do Evento", value=date.today(), label_visibility="visible")
         with col2:
-            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
-            descricao_evento = st.text_area("Descrição do Evento")
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True, label_visibility="visible")
+            descricao_evento = st.text_area("Descrição do Evento", label_visibility="visible")
         btn_cadastrar = st.form_submit_button("Agendar")
 
     if btn_cadastrar:
@@ -1083,7 +1088,8 @@ def events_calendar_page():
         ano_selecionado = st.selectbox(
             "Selecione o Ano",
             list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
-            index=2  # por padrão, seleciona o ano atual
+            index=2,  # por padrão, seleciona o ano atual
+            label_visibility="visible"
         )
 
     # ----------------------------------------------------------------------------
@@ -1209,7 +1215,7 @@ def events_calendar_page():
         axis=1
     )
     events_list = [""] + df_events["evento_label"].tolist()
-    selected_event = st.selectbox("Selecione um evento:", events_list)
+    selected_event = st.selectbox("Selecione um evento:", events_list, label_visibility="visible")
 
     if selected_event:
         # Extrair ID do formato "123 - Evento X (2025-01-01)"
@@ -1230,11 +1236,11 @@ def events_calendar_page():
         with st.expander("Editar Evento", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                new_nome = st.text_input("Nome do Evento", value=original_nome)
-                new_data = st.date_input("Data do Evento", value=original_data.date())
+                new_nome = st.text_input("Nome do Evento", value=original_nome, label_visibility="visible")
+                new_data = st.date_input("Data do Evento", value=original_data.date(), label_visibility="visible")
             with col2:
-                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
-                new_desc = st.text_area("Descrição do Evento", value=original_desc)
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc, label_visibility="visible")
+                new_desc = st.text_area("Descrição do Evento", value=original_desc, label_visibility="visible")
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
@@ -1547,9 +1553,9 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Campos de entrada
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
+        # Campos de entrada com labels
+        username_input = st.text_input("Username", placeholder="Digite seu usuário", label_visibility="visible")
+        password_input = st.text_input("Password", type="password", placeholder="Digite sua senha", label_visibility="visible")
 
         # Botão de login
         btn_login = st.form_submit_button("Log in")
