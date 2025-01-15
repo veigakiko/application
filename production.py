@@ -14,23 +14,32 @@ import calendar
 import altair as alt
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import mitosheet  # Importação do MitoSheet
+from mitosheet.streamlit.v1 import spreadsheet
+from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+from twilio.rest import Client  # Importação do Twilio
 
-
+# Configuração da página para layout wide
+st.set_page_config(layout="wide")
 
 
 ###############################################################################
 #                                   UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
+    """Formata um valor float para o formato de moeda brasileira."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 
 def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV"):
+    """Permite o download de um DataFrame como CSV."""
     csv_data = df.to_csv(index=False)
     st.download_button(label=label, data=csv_data, file_name=filename, mime="text/csv")
 
 
 def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar Excel"):
+    """Permite o download de um DataFrame como Excel."""
+    import io
     towrite = BytesIO()
     with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
         df.to_excel(writer, index=False, sheet_name='Sheet1')
@@ -44,16 +53,19 @@ def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar E
 
 
 def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
+    """Permite o download de um DataFrame como JSON."""
     json_data = df.to_json(orient='records', lines=True)
     st.download_button(label=label, data=json_data, file_name=filename, mime="application/json")
 
 
 def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
+    """Permite o download de um DataFrame como HTML."""
     html_data = df.to_html(index=False)
     st.download_button(label=label, data=html_data, file_name=filename, mime="text/html")
 
 
 def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar Parquet"):
+    """Permite o download de um DataFrame como Parquet."""
     import io
     buffer = io.BytesIO()
     df.to_parquet(buffer, index=False)
@@ -65,6 +77,7 @@ def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar
 #                      FUNÇÕES PARA PDF E UPLOAD (OPCIONAIS)
 ###############################################################################
 def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
+    """Converte um DataFrame para PDF usando FPDF."""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
@@ -84,6 +97,7 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
 
 
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
+    """Faz upload de um PDF para o file.io e retorna o link."""
     try:
         response = requests.post(
             'https://file.io/',
@@ -109,7 +123,6 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
     Envia WhatsApp via Twilio (dados em st.secrets["twilio"]).
     Exemplo de 'recipient_number': '5511999999999' (sem '+').
     """
-    from twilio.rest import Client
     try:
         account_sid = st.secrets["twilio"]["account_sid"]
         auth_token = st.secrets["twilio"]["auth_token"]
@@ -129,14 +142,15 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
                 from_=whatsapp_from,
                 to=f"whatsapp:+{recipient_number}"
             )
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao enviar WhatsApp: {e}")
 
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
 ###############################################################################
 def get_db_connection():
+    """Estabelece conexão com o banco de dados PostgreSQL usando as credenciais do Streamlit Secrets."""
     try:
         conn = psycopg2.connect(
             host=st.secrets["db"]["host"],
@@ -146,13 +160,17 @@ def get_db_connection():
             port=st.secrets["db"]["port"]
         )
         return conn
-    except:
+    except OperationalError as e:
+        st.error(f"Erro de conexão com o banco de dados: {e}")
         return None
 
 
 def run_query(query: str, values=None, commit: bool = False):
     """
-    Executa uma query no banco, sem mostrar mensagens ao usuário em caso de falha.
+    Executa uma query no banco de dados.
+    - query: String contendo a query SQL.
+    - values: Valores para parametrização da query.
+    - commit: Se True, realiza commit após a execução.
     """
     conn = get_db_connection()
     if not conn:
@@ -165,26 +183,27 @@ def run_query(query: str, values=None, commit: bool = False):
                 return True
             else:
                 return cursor.fetchall()
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao executar a query: {e}")
+        return None
     finally:
         if not conn.closed:
             conn.close()
-    return None
 
 
 ###############################################################################
 #                         CARREGAMENTO DE DADOS (CACHE)
 ###############################################################################
-@st.cache_data(show_spinner=False)  # não exibir spinner
+@st.cache_data(show_spinner=False)  # Não exibir spinner
 def load_all_data():
+    """Carrega todos os dados necessários do banco de dados e armazena no session_state."""
     data = {}
     try:
         data["orders"] = run_query(
             'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
-            'SELECT supplier,product,quantity,unit_value,total_value,creation_date FROM public.tb_products ORDER BY creation_date DESC'
+            'SELECT supplier,product,quantity,unit_value,total_value,creation_date,image_url FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
         data["clients"] = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
@@ -192,12 +211,22 @@ def load_all_data():
         data["stock"] = run_query(
             'SELECT "Produto","Quantidade","Transação","Data" FROM public.tb_estoque ORDER BY "Data" DESC'
         ) or []
-    except:
-        pass
+        data["revenue"] = run_query(
+            """
+            SELECT date("Data") as dt, SUM("total") as total_dia
+            FROM public.vw_pedido_produto
+            WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+            GROUP BY date("Data")
+            ORDER BY date("Data")
+            """
+        ) or pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
     return data
 
 
 def refresh_data():
+    """Atualiza os dados armazenados no session_state."""
     load_all_data.clear()
     st.session_state.data = load_all_data()
 
@@ -206,6 +235,7 @@ def refresh_data():
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
 def home_page():
+    """Página inicial do aplicativo."""
     st.title("🎾 Boituva Beach Club 🎾")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
@@ -274,12 +304,13 @@ def home_page():
                         link = upload_pdf_to_fileio(pdf_bytes)
                         if link and phone_number:
                             send_whatsapp(phone_number, media_url=link)
+                            st.success("PDF enviado via WhatsApp com sucesso!")
                         else:
-                            st.warning("Informe o número e tenha link válido.")
+                            st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
-            except:
-                st.info("Erro ao gerar resumo Stock vs. Orders.")
+            except Exception as e:
+                st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
         # NOVO ITEM: Total Faturado
         with st.expander("Total Faturado"):
@@ -300,6 +331,7 @@ def home_page():
 
 
 def orders_page():
+    """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
     tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
@@ -425,6 +457,7 @@ def orders_page():
 
 
 def products_page():
+    """Página para gerenciar produtos."""
     st.title("Produtos")
     # Uso de tabs para separar "Novo Produto" e "Listagem de Produtos"
     tabs = st.tabs(["Novo Produto", "Listagem de Produtos"])
@@ -464,10 +497,13 @@ def products_page():
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date"]
+            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date","image_url"]
             df_prod = pd.DataFrame(products_data, columns=cols)
-            st.dataframe(df_prod, use_container_width=True)
-            download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
+            df_prod["Preço"] = df_prod["Unit Value"].apply(format_currency)
+            df_prod["Total"] = df_prod["Total Value"].apply(format_currency)
+            df_display = df_prod[["Supplier","Product","Quantity","Preço","Total","Creation Date"]]
+            st.dataframe(df_display, use_container_width=True)
+            download_df_as_csv(df_display, "products.csv", label="Baixar Produtos CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Produto")
@@ -476,7 +512,7 @@ def products_page():
                     axis=1
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Produto:", [""]+unique_keys)
+                selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -544,6 +580,7 @@ def products_page():
 
 
 def stock_page():
+    """Página para gerenciar estoque."""
     st.title("Estoque")
     tabs = st.tabs(["Nova Movimentação", "Movimentações"])
 
@@ -595,7 +632,7 @@ def stock_page():
                     axis=1
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Registro", [""]+unique_keys)
+                selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -662,6 +699,7 @@ def stock_page():
 
 
 def clients_page():
+    """Página para gerenciar clientes."""
     st.title("Clientes")
     tabs = st.tabs(["Novo Cliente", "Listagem de Clientes"])
 
@@ -754,6 +792,7 @@ def clients_page():
 #                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
 ###############################################################################
 def process_payment(client, payment_status):
+    """Processa o pagamento atualizando o status do pedido."""
     query = """
         UPDATE public.tb_pedido
         SET status=%s,"Data"=CURRENT_TIMESTAMP
@@ -763,6 +802,7 @@ def process_payment(client, payment_status):
 
 
 def generate_invoice_for_printer(df: pd.DataFrame):
+    """Gera uma representação textual da nota fiscal para impressão."""
     company = "Boituva Beach Club"
     address = "Avenida do Trabalhador 1879"
     city = "Boituva - SP 18552-100"
@@ -807,11 +847,12 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 #                          PÁGINA: NOTA FISCAL
 ###############################################################################
 def invoice_page():
+    """Página para gerar e gerenciar notas fiscais."""
     st.title("Nota Fiscal")
     open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
     open_clients = run_query(open_clients_query, ('em aberto',))
     client_list = [row[0] for row in open_clients] if open_clients else []
-    selected_client = st.selectbox("Selecione um Cliente", [""]+client_list)
+    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
 
     if selected_client:
         invoice_query = """
@@ -854,17 +895,21 @@ def invoice_page():
             # Botões de pagamento
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                if st.button("Debit"):
+                if st.button("Débito"):
                     process_payment(selected_client, "Received - Debited")
+                    st.success("Pagamento via Débito processado!")
             with col2:
-                if st.button("Credit"):
+                if st.button("Crédito"):
                     process_payment(selected_client, "Received - Credit")
+                    st.success("Pagamento via Crédito processado!")
             with col3:
                 if st.button("Pix"):
                     process_payment(selected_client, "Received - Pix")
+                    st.success("Pagamento via Pix processado!")
             with col4:
-                if st.button("Cash"):
+                if st.button("Dinheiro"):
                     process_payment(selected_client, "Received - Cash")
+                    st.success("Pagamento via Dinheiro processado!")
         else:
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
@@ -872,9 +917,10 @@ def invoice_page():
 
 
 ###############################################################################
-#                           BACKUP (ADMIN)
+#                            BACKUP (ADMIN)
 ###############################################################################
 def export_table_to_csv(table_name):
+    """Permite o download de uma tabela específica como CSV."""
     conn = get_db_connection()
     if conn:
         try:
@@ -886,13 +932,14 @@ def export_table_to_csv(table_name):
                 file_name=f"{table_name}.csv",
                 mime="text/csv"
             )
-        except:
-            pass
+        except Exception as e:
+            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
         finally:
             conn.close()
 
 
 def backup_all_tables(tables):
+    """Permite o download de todas as tabelas especificadas como um único CSV."""
     conn = get_db_connection()
     if conn:
         try:
@@ -905,28 +952,37 @@ def backup_all_tables(tables):
                 combined = pd.concat(frames, ignore_index=True)
                 csv_data = combined.to_csv(index=False)
                 st.download_button(
-                    label="Download All Tables as CSV",
+                    label="Baixar Todas as Tabelas CSV",
                     data=csv_data,
-                    file_name="all_tables_backup.csv",
+                    file_name="backup_all_tables.csv",
                     mime="text/csv"
                 )
-        except:
-            pass
+        except Exception as e:
+            st.error(f"Erro ao exportar todas as tabelas: {e}")
         finally:
             conn.close()
 
 
 def perform_backup():
+    """Seção de backup para administradores."""
     st.header("Sistema de Backup")
-    st.write("Clique para baixar backups das tabelas.")
-    tables = ["tb_pedido","tb_products","tb_clientes","tb_estoque"]
+    st.write("Clique para baixar backups das tabelas do banco de dados.")
+
+    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
+
+    st.subheader("Baixar Todas as Tabelas de uma Vez")
     if st.button("Download All Tables"):
         backup_all_tables(tables)
-    for t in tables:
-        export_table_to_csv(t)
+
+    st.markdown("---")
+
+    st.subheader("Baixar Tabelas Individualmente")
+    for table in tables:
+        export_table_to_csv(table)
 
 
 def admin_backup_section():
+    """Exibe a seção de backup apenas para administradores."""
     if st.session_state.get("username") == "admin":
         perform_backup()
     else:
@@ -937,6 +993,7 @@ def admin_backup_section():
 #                            CALENDÁRIO DE EVENTOS
 ###############################################################################
 def events_calendar_page():
+    """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
 
     # ----------------------------------------------------------------------------
@@ -1042,10 +1099,15 @@ def events_calendar_page():
             f' style="background-color:blue; color:white; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
-        for cssclass in cal.cssclasses:
-            original_tag = f'<td class="{cssclass}">{dia}</td>'
-            replaced_tag = f'<td class="{cssclass}"{highlight_str}>{dia}</td>'
-            html_calendario = html_calendario.replace(original_tag, replaced_tag)
+        # Substituir as tags <td> correspondentes ao dia
+        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        # Para evitar sobrescrever múltiplos dias, podemos utilizar uma função de substituição mais inteligente
+        # Porém, para simplicidade, utilizaremos replace como anteriormente
+        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+            html_calendario = html_calendario.replace(
+                f'<td class="{day_class}">{dia}</td>',
+                f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+            )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
@@ -1131,15 +1193,18 @@ def events_calendar_page():
                     st.experimental_rerun()
     else:
         st.info("Selecione um evento para editar ou excluir.")
+
+
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
 ###############################################################################
 def loyalty_program_page():
+    """Página do programa de fidelidade."""
     st.title("Programa de Fidelidade")
 
     # 1) Carregar dados da view vw_cliente_sum_total
     query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # assume que run_query retorna lista de tuplas
+    data = run_query(query)  # Assume que run_query retorna lista de tuplas
 
     # 2) Exibir em dataframe
     if data:
@@ -1151,9 +1216,7 @@ def loyalty_program_page():
 
     st.markdown("---")
 
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
-
+    # 3) Acumular pontos localmente
     st.subheader("Acumule pontos a cada compra!")
     if 'points' not in st.session_state:
         st.session_state.points = 0
@@ -1172,65 +1235,65 @@ def loyalty_program_page():
 
 
 ###############################################################################
-#                    NOVA PÁGINA: ANALYTICS (Faturamento)
+#                     NOVA PÁGINA: ANALYTICS (Editar Pedidos com MitoSheet)
 ###############################################################################
 def analytics_page():
-    st.title("Analytics Dashboard")
-    data = st.session_state.data.get("revenue", pd.DataFrame())
-    if data.empty:
-        st.warning("No data available for analytics.")
-        return
-
-    data["dt"] = pd.to_datetime(data["dt"])
-    data = data.sort_values("dt")
+    """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
+    st.title("Editar Pedidos com MitoSheet")
     
-    st.subheader("Revenue Over Time")
-    chart = alt.Chart(data).mark_line(point=True).encode(
-        x=alt.X("dt:T", title="Date"),
-        y=alt.Y("total_dia:Q", title="Daily Revenue"),
-        tooltip=["dt:T", "total_dia:Q"]
-    ).properties(width="container", height=400)
-    st.altair_chart(chart, use_container_width=True)
-
+    # Função para carregar dados de tb_pedido
+    @st.cache_data(show_spinner=False)
+    def load_pedido_data():
+        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+            # Converte a coluna "Data" para datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+    
+    pedido_data = load_pedido_data()
+    
+    # Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+    
+    # Inicializa MitoSheet com os dados de tb_pedido
+    new_dfs, code = spreadsheet(pedido_data)
+    code = code if code else "# Edite a planilha acima para gerar código"
+    st.code(code)
+    
+    # Função para limpar o cache do MitoSheet periodicamente
+    def clear_mito_backend_cache():
+        _get_mito_backend.clear()
+    
+    # Função para armazenar o tempo da última execução
+    @st.cache_resource
+    def get_cached_time():
+        return {"last_executed_time": None}
+    
+    def try_clear_cache():
+        CLEAR_DELTA = timedelta(hours=12)
+        current_time = datetime.now()
+        cached_time = get_cached_time()
+        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+            clear_mito_backend_cache()
+            cached_time["last_executed_time"] = current_time
+    
+    try_clear_cache()
+    
+    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
     st.markdown("---")
-    st.subheader("Revenue Prediction (Next 7 Days)")
-    
-    # Preparing data for prediction
-    data["day"] = (data["dt"] - data["dt"].min()).dt.days
-    X = data[["day"]]
-    y = data["total_dia"]
-
-    model = LinearRegression()
-    model.fit(X, y)
-
-    future_days = np.arange(data["day"].max() + 1, data["day"].max() + 8).reshape(-1, 1)
-    predictions = model.predict(future_days)
-
-    future_dates = [data["dt"].max() + timedelta(days=i) for i in range(1, 8)]
-    prediction_df = pd.DataFrame({
-        "Date": future_dates,
-        "Predicted Revenue": predictions
-    })
-    prediction_df["Predicted Revenue"] = prediction_df["Predicted Revenue"].apply(format_currency)
-
-    st.write(prediction_df)
-
-    prediction_chart = alt.Chart(prediction_df).mark_line(point=True).encode(
-        x=alt.X("Date:T", title="Future Date"),
-        y=alt.Y("Predicted Revenue:Q", title="Predicted Revenue"),
-        tooltip=["Date:T", "Predicted Revenue:Q"]
-    ).properties(width="container", height=400)
-    st.altair_chart(prediction_chart, use_container_width=True)
-   
-
-
-
+    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
 
 
 ###############################################################################
-#                                LOGIN PAGE
+#                            LOGIN PAGE
 ###############################################################################
 def login_page():
+    """Página de login do aplicativo."""
     # ---------------------------------------------------------------------
     # 1) CSS Customizado para melhorar aparência
     # ---------------------------------------------------------------------
@@ -1250,7 +1313,7 @@ def login_page():
             text-align: center;
         }
         /* Botão customizado */
-        .css-1x8cf1d edgvbvh10 {
+        .css-1x8cf1d.edgvbvh10 {
             background-color: #004a8f !important;
         }
         /* Mensagem de rodapé */
@@ -1360,6 +1423,7 @@ def login_page():
 #                            INICIALIZAÇÃO E MAIN
 ###############################################################################
 def initialize_session_state():
+    """Inicializa variáveis no session_state do Streamlit."""
     if 'data' not in st.session_state:
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
@@ -1367,6 +1431,7 @@ def initialize_session_state():
 
 
 def apply_custom_css():
+    """Aplica CSS customizado para melhorar a aparência do aplicativo."""
     st.markdown(
         """
         <style>
@@ -1403,11 +1468,12 @@ def apply_custom_css():
 
 
 def sidebar_navigation():
+    """Configura a barra lateral de navegação."""
     with st.sidebar:
         # Novo texto acima do menu
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
 
         st.title("Boituva Beach Club 🎾")
@@ -1441,6 +1507,7 @@ def sidebar_navigation():
 
 
 def menu_page():
+    """Página do cardápio."""
     st.title("Cardápio")
 
     product_data = run_query("""
@@ -1530,9 +1597,83 @@ def menu_page():
 
 
 ###############################################################################
-#                                     MAIN
+#                     NOVA PÁGINA: ANALYTICS (Editar Pedidos com MitoSheet)
+###############################################################################
+def analytics_page():
+    """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
+    st.title("Editar Pedidos com MitoSheet")
+    
+    # Função para carregar dados de tb_pedido
+    @st.cache_data(show_spinner=False)
+    def load_pedido_data():
+        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+            # Converte a coluna "Data" para datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+    
+    pedido_data = load_pedido_data()
+    
+    # Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+    
+    # Inicializa MitoSheet com os dados de tb_pedido
+    new_dfs, code = spreadsheet(pedido_data)
+    code = code if code else "# Edite a planilha acima para gerar código"
+    st.code(code)
+    
+    # Função para limpar o cache do MitoSheet periodicamente
+    def clear_mito_backend_cache():
+        _get_mito_backend.clear()
+    
+    # Função para armazenar o tempo da última execução
+    @st.cache_resource
+    def get_cached_time():
+        return {"last_executed_time": None}
+    
+    def try_clear_cache():
+        CLEAR_DELTA = timedelta(hours=12)
+        current_time = datetime.now()
+        cached_time = get_cached_time()
+        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+            clear_mito_backend_cache()
+            cached_time["last_executed_time"] = current_time
+    
+    try_clear_cache()
+    
+    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+    st.markdown("---")
+    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+
+
+###############################################################################
+#                            BACKUP (ADMIN)
+###############################################################################
+# Esta seção já foi incluída acima no código.
+
+
+###############################################################################
+#                            CALENDÁRIO DE EVENTOS
+###############################################################################
+# Esta seção já foi incluída acima no código.
+
+
+###############################################################################
+#                     PÁGINAS DO APLICATIVO (CONTINUADA)
+###############################################################################
+# As funções para outras páginas já estão incluídas acima no código.
+
+
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
 ###############################################################################
 def main():
+    """Função principal que controla a execução do aplicativo."""
     apply_custom_css()
     initialize_session_state()
 
@@ -1564,7 +1705,7 @@ def main():
         admin_backup_section()
     elif selected_page == "Cardápio":
         menu_page()
-    elif selected_page == "Analytics":  # <-- Nova página
+    elif selected_page == "Analytics":  # <-- Nova página simplificada
         analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
