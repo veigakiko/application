@@ -1019,245 +1019,128 @@ def events_calendar_page():
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
 ###############################################################################
+def loyalty_program_page():
+    st.title("Programa de Fidelidade")
+
+    # 1) Carregar dados da view vw_cliente_sum_total
+    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
+    data = run_query(query)  # assume que run_query retorna lista de tuplas
+
+    # 2) Exibir em dataframe
+    if data:
+        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
+        st.subheader("Clientes - Fidelidade")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
+
+    st.markdown("---")
+
+    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
+    # basta deixar o bloco abaixo. Caso não precise, remova.
+
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
+
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado!")
+        else:
+            st.error("Pontos insuficientes.")
 
 
+###############################################################################
+#                    NOVA PÁGINA: ANALYTICS (Faturamento)
+###############################################################################
 def analytics_page():
-    import altair as alt
-
     st.title("Analytics")
 
-    ############################################################################
-    # 1) FATURAMENTO POR PRODUTO (EXISTENTE EM vw_produto_total_faturado)
-    ############################################################################
-    with st.expander("Faturamento por Produto", expanded=True):
-        query_prod_fat = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
-        result_prod_fat = run_query(query_prod_fat)
+    # 1) Consulta ao banco de dados
+    query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
+    result = run_query(query)
 
-        if result_prod_fat:
-            df_prod_fat = pd.DataFrame(result_prod_fat, columns=["Produto", "total_faturado"])
+    # 2) Se não vier nenhum resultado, avisamos e retornamos
+    if not result:
+        st.info("Nenhum dado encontrado na view vw_produto_total_faturado.")
+        return
 
-            # Conversão para numérico, caso venha em formato de texto
-            df_prod_fat["total_faturado"] = (
-                df_prod_fat["total_faturado"]
-                .apply(lambda x: str(x).replace(".", "").replace(",", "."))
-                .astype(float)
-                .fillna(0)
-            )
+    # 3) Converte o resultado em DataFrame
+    df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-            df_prod_fat.sort_values("total_faturado", ascending=False, inplace=True)
+    # --------------------------------------------------------
+    # DEBUG: Mostrar dados brutos como chegaram do banco
+    st.write("### Debug - Dados Brutos do Banco")
+    st.write(df_faturado.head(10))  # primeiros 10 registros
+    st.write(df_faturado.dtypes)    # tipos de cada coluna
+    # --------------------------------------------------------
 
-            st.subheader("Tabela de Faturamento por Produto")
-            st.dataframe(df_prod_fat, use_container_width=True)
+    # 4) Função para converter string no formato "1.234,56" (BR) em float 1234.56
+    def br_to_float(x):
+        if pd.isna(x):
+            return 0.0
+        s = str(x).strip()
+        # Remove separador de milhar (ponto) e substitui vírgula decimal por ponto
+        s = s.replace(".", "")
+        s = s.replace(",", ".")
+        try:
+            return float(s)
+        except ValueError:
+            return 0.0
 
-            chart_prod_fat = (
-                alt.Chart(df_prod_fat)
-                .mark_bar()
-                .encode(
-                    x=alt.X("total_faturado:Q", title="Total Faturado", axis=alt.Axis(format=",.2f")),
-                    y=alt.Y("Produto:N", sort="-x", title="Produto"),
-                )
-                .properties(
-                    title="Faturamento por Produto (Ordenado)",
-                    width="container",
-                    height=400
-                )
-            )
-            st.altair_chart(chart_prod_fat, use_container_width=True)
-        else:
-            st.info("Nenhum dado encontrado em 'vw_produto_total_faturado'.")
+    # Aplica a função de conversão linha a linha
+    # Se o valor já vier em formato numérico (ex. 1234.56), essa conversão não prejudicará.
+    df_faturado["total_faturado"] = df_faturado["total_faturado"].apply(br_to_float)
 
-    ############################################################################
-    # 2) FATURAMENTO MENSAL (EXEMPLO EM vw_pedido_produto)
-    ############################################################################
-    with st.expander("Faturamento Mensal", expanded=False):
-        # Ajuste a query conforme sua estrutura real
-        query_fat_mensal = """
-            SELECT date_trunc('month', "Data") AS mes, SUM("total") AS total_mensal
-            FROM public.vw_pedido_produto
-            WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-            GROUP BY 1
-            ORDER BY 1
-        """
-        result_fat_mensal = run_query(query_fat_mensal)
+    # --------------------------------------------------------
+    # DEBUG: Mostrar dados após conversão (veja se ficaram em float corretamente)
+    st.write("### Debug - Dados Após Conversão para Float")
+    st.write(df_faturado.head(10))
+    st.write(df_faturado.dtypes)
+    # --------------------------------------------------------
 
-        if result_fat_mensal:
-            df_fat_mensal = pd.DataFrame(result_fat_mensal, columns=["mes", "total_mensal"])
+    # 5) Ordena do maior para o menor total_faturado
+    df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
-            # Certifique-se de converter as colunas
-            df_fat_mensal["mes"] = pd.to_datetime(df_fat_mensal["mes"])
-            df_fat_mensal["total_mensal"] = pd.to_numeric(df_fat_mensal["total_mensal"], errors="coerce").fillna(0)
+    # Exibe em tabela
+    st.subheader("Tabela de Faturamento por Produto")
+    st.dataframe(df_faturado, use_container_width=True)
 
-            st.subheader("Tabela de Faturamento Mensal")
-            st.dataframe(df_fat_mensal, use_container_width=True)
+    # 6) Cria e exibe o gráfico de barras horizontal (Altair)
+    import altair as alt
+    st.subheader("Gráfico de Faturamento (Barras Horizontais)")
 
-            # Gráfico de linhas para ver evolução
-            chart_fat_mensal = (
-                alt.Chart(df_fat_mensal)
-                .mark_line(point=True)
-                .encode(
-                    x=alt.X("mes:T", title="Mês"),
-                    y=alt.Y("total_mensal:Q", title="Total Mensal", axis=alt.Axis(format=",.2f")),
-                )
-                .properties(
-                    title="Evolução do Faturamento Mensal",
-                    width="container",
-                    height=400
-                )
-            )
-            st.altair_chart(chart_fat_mensal, use_container_width=True)
-        else:
-            st.info("Nenhum dado encontrado para o Faturamento Mensal.")
+    chart = (
+        alt.Chart(df_faturado)
+        .mark_bar()
+        .encode(
+            x=alt.X(
+                "total_faturado:Q",
+                title="Total Faturado",
+                # Formatando eixo X para duas casas decimais
+                axis=alt.Axis(format=",.2f")
+            ),
+            y=alt.Y("Produto:N", sort="-x", title="Produto"),
+        )
+        .properties(
+            title="Faturamento por Produto (Ordenado)",
+            width="container",
+            height=400
+        )
+    )
 
-    ############################################################################
-    # 3) TOP 5 CLIENTES COM MAIOR FATURAMENTO (EXEMPLO)
-    ############################################################################
-    with st.expander("Top 5 Clientes (Maior Faturamento)", expanded=False):
-        # Ajuste a query conforme a lógica real do seu DB
-        query_top5_clientes = """
-            SELECT "Cliente", SUM("total") AS soma_total
-            FROM public.vw_pedido_produto
-            WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-            GROUP BY "Cliente"
-            ORDER BY soma_total DESC
-            LIMIT 5
-        """
-        result_top5 = run_query(query_top5_clientes)
+    st.altair_chart(chart, use_container_width=True)
 
-        if result_top5:
-            df_top5 = pd.DataFrame(result_top5, columns=["Cliente", "soma_total"])
-            df_top5["soma_total"] = pd.to_numeric(df_top5["soma_total"], errors="coerce").fillna(0)
+    # 7) Mensagem opcional caso todos os valores estejam em zero
+    if df_faturado["total_faturado"].max() <= 0:
+        st.warning("Todos os valores de faturamento estão zero (ou inválidos). Verifique seus dados no banco.")
 
-            st.subheader("Tabela: Top 5 Clientes em Faturamento")
-            st.dataframe(df_top5, use_container_width=True)
-
-            chart_top5 = (
-                alt.Chart(df_top5)
-                .mark_bar()
-                .encode(
-                    x=alt.X("soma_total:Q", title="Faturamento", axis=alt.Axis(format=",.2f")),
-                    y=alt.Y("Cliente:N", sort="-x", title="Cliente"),
-                )
-                .properties(
-                    title="Top 5 Clientes - Faturamento",
-                    width="container",
-                    height=300
-                )
-            )
-            st.altair_chart(chart_top5, use_container_width=True)
-        else:
-            st.info("Nenhum dado encontrado para Top 5 Clientes.")
-
-    ############################################################################
-    # 4) DISTRIBUIÇÃO DE PEDIDOS POR STATUS (EXEMPLO: Pizza Chart)
-    ############################################################################
-    with st.expander("Distribuição de Pedidos por Status", expanded=False):
-        query_pedidos_status = """
-            SELECT status, COUNT(*) AS qtde
-            FROM public.tb_pedido
-            GROUP BY status
-            ORDER BY qtde DESC
-        """
-        result_status = run_query(query_pedidos_status)
-
-        if result_status:
-            df_status = pd.DataFrame(result_status, columns=["status", "qtde"])
-            df_status["qtde"] = df_status["qtde"].astype(int)
-
-            st.subheader("Tabela: Pedidos Agrupados por Status")
-            st.dataframe(df_status, use_container_width=True)
-
-            # Gráfico de pizza com Altair (precisa de workaround, 
-            # pois Altair não tem nativo; faremos um "bar" + coord polar)
-            # Alternativamente, pode usar plotly express: px.pie(...).
-            
-            import math
-
-            # Exemplo simples de pizza chart com Altair
-            # (Fonte: https://altair-viz.github.io/gallery/pie_chart.html)
-            df_status["percent"] = df_status["qtde"] / df_status["qtde"].sum() * 100
-
-            chart_status = (
-                alt.Chart(df_status)
-                .mark_arc(outerRadius=100)
-                .encode(
-                    theta=alt.Theta("qtde:Q"),
-                    color=alt.Color("status:N", legend=alt.Legend(title="Status")),
-                    tooltip=[
-                        alt.Tooltip("status:N", title="Status"),
-                        alt.Tooltip("qtde:Q", title="Qtd Pedidos"),
-                        alt.Tooltip("percent:Q", title="%", format=".1f"),
-                    ]
-                )
-                .properties(
-                    title="Distribuição de Pedidos por Status",
-                    width=400,
-                    height=300
-                )
-            )
-            st.altair_chart(chart_status, use_container_width=False)
-        else:
-            st.info("Nenhum dado encontrado para distribuição de pedidos por status.")
-
-    ############################################################################
-    # 5) COMPARAÇÃO ESTOQUE X VENDAS (EXEMPLO: stock_vs_orders_summary)
-    ############################################################################
-    with st.expander("Comparação Estoque x Vendas", expanded=False):
-        # Ajuste a query à view ou tabela que você realmente tenha
-        query_stock_vs = """
-            SELECT product, stock_quantity, orders_quantity, total_in_stock
-            FROM public.vw_stock_vs_orders_summary
-        """
-        result_stock_vs = run_query(query_stock_vs)
-
-        if result_stock_vs:
-            df_svo = pd.DataFrame(result_stock_vs, columns=["product", "stock_quantity", "orders_quantity", "total_in_stock"])
-            # Convertemos para numeric
-            for col in ["stock_quantity", "orders_quantity", "total_in_stock"]:
-                df_svo[col] = pd.to_numeric(df_svo[col], errors="coerce").fillna(0)
-
-            st.subheader("Tabela: Estoque vs. Pedidos")
-            st.dataframe(df_svo, use_container_width=True)
-
-            # Exemplo de gráfico comparando Estoque e Pedidos em barras agrupadas
-            df_long = df_svo.melt(
-                id_vars="product",
-                value_vars=["stock_quantity", "orders_quantity"],
-                var_name="Tipo",
-                value_name="Quantidade"
-            )
-
-            # Ordena os produtos pelo total_in_stock decrescente (só para coerência visual)
-            df_long["product"] = pd.Categorical(df_long["product"],
-                                                categories=(df_svo
-                                                            .sort_values("total_in_stock", ascending=False)
-                                                            .product), 
-                                                ordered=True)
-
-            chart_svo = (
-                alt.Chart(df_long)
-                .mark_bar()
-                .encode(
-                    x=alt.X("Quantidade:Q", title="Quantidade"),
-                    y=alt.Y("product:N", sort="-x", title="Produto"),
-                    color="Tipo:N",
-                    tooltip=["product:N", "Tipo:N", "Quantidade:Q"]
-                )
-                .properties(
-                    title="Comparação Estoque x Pedidos",
-                    width="container",
-                    height=400
-                )
-            )
-            st.altair_chart(chart_svo, use_container_width=True)
-
-        else:
-            st.info("Nenhum dado encontrado para Estoque vs. Vendas.")
-    
-    ############################################################################
-    # FIM DA PÁGINA
-    ############################################################################
-    st.markdown("---")
-    st.write("**Observação:** Este é apenas um exemplo de como você pode juntar vários relatórios e gráficos em uma única página de Analytics. Ajuste as queries, tabelas e views de acordo com sua base de dados real.")
 
 
 
