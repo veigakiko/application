@@ -35,3 +35,4 @@ altair
 numpy
 scikit-learn
 twilio
+mitosheet
