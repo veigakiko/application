@@ -1413,9 +1413,7 @@ def login_page():
         col1, col2 = st.columns([1,1])
         with col1:
             btn_login = st.form_submit_button("Log in")
-        with col2:
-            btn_forgot = st.form_submit_button("Sign up", help="Exemplo simples de fluxo de recuperação")
-        st.write("Or log in with")
+
     # ---------------------------------------------------------------------
     # 4) Ação: Esqueci a senha (Exemplo Simples)
     # ---------------------------------------------------------------------
