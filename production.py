@@ -1062,49 +1062,55 @@ def loyalty_program_page():
 def analytics_page():
     st.title("Analytics")
 
-    # Executa a query na view vw_produto_total_faturado
+    # Query the database view
     query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
     result = run_query(query)
 
-    if result:
-        # Converte para DataFrame
-        df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
-
-        # Converte 'total_faturado' para numérico (float). 
-        # Se houver valores nulos ou inválidos, eles serão convertidos para NaN e depois preenchidos com 0.
-        df_faturado["total_faturado"] = pd.to_numeric(df_faturado["total_faturado"], errors="coerce").fillna(0)
-
-        # Ordenar do maior para o menor faturado
-        df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
-
-        # Exibe a tabela
-        st.subheader("Tabela de Faturamento por Produto")
-        st.dataframe(df_faturado, use_container_width=True)
-
-        # Verifica se há pelo menos algum valor > 0
-        if df_faturado["total_faturado"].sum() == 0:
-            st.info("Valores de faturamento estão zerados ou inválidos.")
-        else:
-            # Cria um gráfico de barras horizontal (exemplo com Altair)
-            import altair as alt
-
-            chart = (
-                alt.Chart(df_faturado)
-                .mark_bar()
-                .encode(
-                    x=alt.X("total_faturado:Q", title="Total Faturado"),
-                    y=alt.Y("Produto:N", sort="-x", title="Produto")
-                )
-                .properties(
-                    title="Faturamento por Produto (Ordenado)",
-                    width="container",
-                    height=400
-                )
-            )
-            st.altair_chart(chart, use_container_width=True)
-
-    else:
+    if not result:
         st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+        return
+
+    # Convert the query result to DataFrame
+    df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+
+    # Debug Info: show data and dtypes to confirm
+    st.write("**Raw Data**:")
+    st.write(df_faturado.head(10))
+    st.write("**dtypes**:", df_faturado.dtypes)
+
+    # Convert to numeric (any invalid text becomes NaN, then filled with 0)
+    df_faturado["total_faturado"] = pd.to_numeric(
+        df_faturado["total_faturado"], errors="coerce"
+    ).fillna(0)
+
+    # Sort descending
+    df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
+
+    # Display the table
+    st.subheader("Tabela de Faturamento por Produto")
+    st.dataframe(df_faturado, use_container_width=True)
+
+    # Check if there's at least one positive value
+    if df_faturado["total_faturado"].max() <= 0:
+        st.warning("Valores de faturamento estão zerados ou inválidos.")
+    else:
+        # Plot horizontal bar chart with Altair
+        import altair as alt
+
+        chart = (
+            alt.Chart(df_faturado)
+            .mark_bar()
+            .encode(
+                x=alt.X("total_faturado:Q", title="Total Faturado"),
+                y=alt.Y("Produto:N", sort="-x", title="Produto"),
+            )
+            .properties(
+                title="Faturamento por Produto (Ordenado)",
+                width="container",
+                height=400
+            )
+        )
+        st.altair_chart(chart, use_container_width=True)
 
 
 
