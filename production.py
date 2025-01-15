@@ -1070,6 +1070,10 @@ def analytics_page():
         # Converte para DataFrame
         df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
+        # Converte 'total_faturado' para numérico (float). 
+        # Se houver valores nulos ou inválidos, eles serão convertidos para NaN e depois preenchidos com 0.
+        df_faturado["total_faturado"] = pd.to_numeric(df_faturado["total_faturado"], errors="coerce").fillna(0)
+
         # Ordenar do maior para o menor faturado
         df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
@@ -1077,25 +1081,31 @@ def analytics_page():
         st.subheader("Tabela de Faturamento por Produto")
         st.dataframe(df_faturado, use_container_width=True)
 
-        # Cria um gráfico de barras horizontal (exemplo com Altair)
-        import altair as alt
-        chart = (
-            alt.Chart(df_faturado)
-            .mark_bar()
-            .encode(
-                x=alt.X("total_faturado:Q", title="Total Faturado"),
-                y=alt.Y("Produto:N", sort="-x", title="Produto")
+        # Verifica se há pelo menos algum valor > 0
+        if df_faturado["total_faturado"].sum() == 0:
+            st.info("Valores de faturamento estão zerados ou inválidos.")
+        else:
+            # Cria um gráfico de barras horizontal (exemplo com Altair)
+            import altair as alt
+
+            chart = (
+                alt.Chart(df_faturado)
+                .mark_bar()
+                .encode(
+                    x=alt.X("total_faturado:Q", title="Total Faturado"),
+                    y=alt.Y("Produto:N", sort="-x", title="Produto")
+                )
+                .properties(
+                    title="Faturamento por Produto (Ordenado)",
+                    width="container",
+                    height=400
+                )
             )
-            .properties(
-                title="Faturamento por Produto (Ordenado)",
-                width="container",
-                height=400
-            )
-        )
-        st.altair_chart(chart, use_container_width=True)
+            st.altair_chart(chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+
 
 
 ###############################################################################
