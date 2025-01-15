@@ -1347,6 +1347,7 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
+
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1487,9 +1488,6 @@ def login_page():
           <div class="text-center">
             <p>Not a member? <a href="#!">Register</a></p>
             <p>or sign up with:</p>
-            <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
-              <i class="fab fa-facebook-f"></i>
-            </button>
 
             <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
               <i class="fab fa-google"></i>
@@ -1524,7 +1522,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
