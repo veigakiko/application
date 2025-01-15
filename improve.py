@@ -1389,9 +1389,6 @@ def login_page():
         .btn:hover {
             background-color: #003366 !important;
         }
-        .signup-button {
-            margin-left: auto !important;
-        }
         /* Mensagem de rodapé */
         .footer {
             position: fixed;
@@ -1521,8 +1518,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
