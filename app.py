@@ -243,12 +243,7 @@ def home_page():
         FROM public.tb_pedido
         WHERE status=%s
     """
-    client_count = run_query(client_count_query, ('em aberto',))
-    if client_count and client_count[0][0] > 0:
-        notification_placeholder.success(f"Há {client_count[0][0]} clientes com pedidos em aberto!")
-    else:
-        notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
-
+    
     if st.session_state.get("username") == "admin":
         # Expander para agrupar relatórios administrativos
         with st.expander("Open Orders Summary"):
