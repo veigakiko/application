@@ -798,7 +798,6 @@ def invoice_page():
     selected_client = st.selectbox("Selecione um Cliente", [""]+client_list)
 
     if selected_client:
-        # Busca os itens do pedido em aberto para esse cliente
         invoice_query = """
             SELECT "Produto","Quantidade","total"
             FROM public.vw_pedido_produto
@@ -807,38 +806,11 @@ def invoice_page():
         invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
         if invoice_data:
             df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
-
-            # Aqui calculamos o total sem desconto
-            total_sem_desconto = df["total"].sum()
-
-            # ===== INSERIR LÓGICA DE CUPOM =====
-            # Exemplo de dicionário estático de cupons (cupom -> porcentagem de desconto)
-            cupons_validos = {
-                "DESCONTO10": 0.10,  # 10% de desconto
-                "DESCONTO15": 0.15,  # 15% de desconto
-            }
-
-            # Campo para o usuário digitar o cupom
-            coupon_code = st.text_input("CUPOM (desconto opcional)")
-
-            # Verificamos se o cupom está no dicionário
-            desconto_aplicado = 0.0
-            if coupon_code in cupons_validos:
-                desconto_aplicado = cupons_validos[coupon_code]
-                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
-
-            # Calcula o valor final com base no desconto
-            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
-
-            # Se quiser mostrar a nota fiscal do jeito "textual" que já existe:
-            # (mas, agora, com o total atualizado)
             generate_invoice_for_printer(df)
 
-            # Exibindo o resumo do total sem e com desconto
-            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
-            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
+            # NOVO CAMPO: Cupom de desconto
+            coupon_code = st.text_input("CUPOM (desconto opcional)")
 
-            # Botões de pagamento
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Debit"):
