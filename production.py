@@ -1074,19 +1074,20 @@ def analytics_page():
     # Converte o resultado em DataFrame
     df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-    # Converte para tipo numérico (float). Valores inválidos se tornam NaN e são preenchidos com 0.
+    # Converte 'total_faturado' para tipo numérico (float).
+    # Caso haja valores não-numéricos, eles se tornam NaN e depois são preenchidos com 0.
     df_faturado["total_faturado"] = pd.to_numeric(
         df_faturado["total_faturado"], errors="coerce"
     ).fillna(0)
 
-    # Ordena do maior para o menor
+    # Ordenar do maior para o menor
     df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
-    # Exibe a tabela
+    # Exibe a tabela de dados
     st.subheader("Tabela de Faturamento por Produto")
     st.dataframe(df_faturado, use_container_width=True)
 
-    # Cria o gráfico de barras horizontal (Altair)
+    # Plota gráfico de barras horizontal com Altair
     import altair as alt
 
     st.subheader("Gráfico de Faturamento (Barras Horizontais)")
@@ -1094,7 +1095,12 @@ def analytics_page():
         alt.Chart(df_faturado)
         .mark_bar()
         .encode(
-            x=alt.X("total_faturado:Q", title="Total Faturado"),
+            # Formata o eixo X com duas casas decimais
+            x=alt.X(
+                "total_faturado:Q",
+                title="Total Faturado",
+                axis=alt.Axis(format=",.2f")
+            ),
             y=alt.Y("Produto:N", sort="-x", title="Produto")
         )
         .properties(
@@ -1105,9 +1111,10 @@ def analytics_page():
     )
     st.altair_chart(chart, use_container_width=True)
 
-    # (Opcional) Se quiser avisar que todos os valores são zero/inválidos:
+    # (Opcional) Avisar se todos os valores são zero ou nulos
     if df_faturado["total_faturado"].max() <= 0:
         st.warning("Observação: Todos os valores de faturamento estão zerados ou inválidos.")
+
 
 
 
