@@ -1349,6 +1349,12 @@ def analytics_page():
 ###############################################################################
 def login_page():
     """Página de login do aplicativo."""
+    import streamlit as st
+    from PIL import Image
+    import requests
+    from io import BytesIO
+    from datetime import datetime
+
     # ---------------------------------------------------------------------
     # 1) CSS Customizado para melhorar aparência
     # ---------------------------------------------------------------------
@@ -1370,6 +1376,8 @@ def login_page():
         /* Botão customizado */
         .css-1x8cf1d.edgvbvh10 {
             background-color: #004a8f !important;
+            padding: 5px 10px !important;
+            font-size: 0.875rem !important;
         }
         /* Mensagem de rodapé */
         .footer {
@@ -1380,6 +1388,24 @@ def login_page():
             text-align: center;
             font-size: 12px;
             color: #999;
+        }
+        /* Botão de login com Gmail */
+        .gmail-login {
+            background-color: #db4437;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            margin-bottom: 10px;
+            display: block;
+            width: 100%;
+        }
+        .gmail-login:hover {
+            background-color: #c33d30;
         }
         </style>
         """,
@@ -1407,29 +1433,24 @@ def login_page():
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
         st.write("keep the beach vibes flowing!🌴🎾")
+
+        # Botão de login com Gmail
+        st.markdown(
+            "<button class='gmail-login'>Log in with Google</button>",
+            unsafe_allow_html=True
+        )
+
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
-        
+
         col1, col2 = st.columns([1,1])
         with col1:
             btn_login = st.form_submit_button("Log in")
 
     # ---------------------------------------------------------------------
-    # 4) Ação: Esqueci a senha (Exemplo Simples)
-    # ---------------------------------------------------------------------
-    
-    # ---------------------------------------------------------------------
-    # 5) Ação: Login
+    # 4) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
-        # Carrega as credenciais (ajuste seu secrets.toml ou variáveis de ambiente)
-        # Exemplo fictício:
-        # st.secrets["credentials"] = {
-        #   "admin_username": "admin",
-        #   "admin_password": "1234",
-        #   "caixa_username": "caixa",
-        #   "caixa_password": "7777"
-        # }
         try:
             creds = st.secrets["credentials"]
             admin_user   = creds["admin_username"]
@@ -1458,7 +1479,7 @@ def login_page():
             st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 6) Rodapé / Footer
+    # 5) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1468,7 +1489,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
