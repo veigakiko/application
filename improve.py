@@ -1361,71 +1361,111 @@ def login_page():
     st.markdown(
         """
         <style>
-        /* Centraliza o container */
-        .block-container {
-            max-width: 450px;
-            margin: 0 auto;
-            padding-top: 50px;
+        /* sign in FORM */
+        #logreg-forms{
+            width:412px;
+            margin:10vh auto;
+            background-color:#f3f3f3;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
+          transition: all 0.3s cubic-bezier(.25,.8,.25,1);
         }
-        /* Título maior e em negrito */
-        .css-18e3th9 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            text-align: center;
-        }
-        /* Form Outline */
-        .form-outline {
-            margin-bottom: 1rem;
-        }
-        .form-outline label {
-            margin-top: 5px;
-            font-size: 0.875rem;
-            color: #555;
-        }
-        .form-outline input {
-            display: block;
+        #logreg-forms form {
             width: 100%;
+            max-width: 410px;
+            padding: 15px;
+            margin: auto;
+        }
+        #logreg-forms .form-control {
+            position: relative;
+            box-sizing: border-box;
+            height: auto;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-top: 5px;
-            font-size: 0.875rem;
+            font-size: 16px;
         }
-        .form-outline input:focus {
-            border-color: #004a8f;
-            outline: none;
-            box-shadow: 0 0 5px rgba(0, 74, 143, 0.5);
+        #logreg-forms .form-control:focus { z-index: 2; }
+        #logreg-forms .form-signin input[type="email"] {
+            margin-bottom: -1px;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
         }
-        .form-check {
-            display: flex;
-            align-items: center;
+        #logreg-forms .form-signin input[type="password"] {
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
         }
-        .form-check input {
-            margin-right: 5px;
+
+        #logreg-forms .social-login{
+            width:390px;
+            margin:0 auto;
+            margin-bottom: 14px;
         }
-        .btn-primary {
-            background-color: #004a8f;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.875rem;
+        #logreg-forms .social-btn{
+            font-weight: 100;
+            color:white;
+            width:190px;
+            font-size: 0.9rem;
         }
-        .btn-primary:hover {
-            background-color: #003366;
+
+        #logreg-forms a{
+            display: block;
+            padding-top:10px;
+            color:lightseagreen;
         }
-        .btn-link {
-            color: #004a8f;
-            font-size: 0.875rem;
-            text-decoration: none;
-            cursor: pointer;
+
+        #logreg-form .lines{
+            width:200px;
+            border:1px solid red;
         }
-        .btn-link:hover {
-            text-decoration: underline;
+
+
+        #logreg-forms button[type="submit"]{ margin-top:10px; }
+
+        #logreg-forms .facebook-btn{  background-color:#3C589C; }
+
+        #logreg-forms .google-btn{ background-color: #DF4B3B; }
+
+        #logreg-forms .form-reset, #logreg-forms .form-signup{ display: none; }
+
+        #logreg-forms .form-signup .social-btn{ width:210px; }
+
+        #logreg-forms .form-signup input { margin-bottom: 2px;}
+
+        .form-signup .social-login{
+            width:210px !important;
+            margin: 0 auto;
         }
-        .text-center {
-            text-align: center;
+
+        /* Mobile */
+
+        @media screen and (max-width:500px){
+            #logreg-forms{
+                width:300px;
+            }
+            
+            #logreg-forms  .social-login{
+                width:200px;
+                margin:0 auto;
+                margin-bottom: 10px;
+            }
+            #logreg-forms  .social-btn{
+                font-size: 1.3rem;
+                font-weight: 100;
+                color:white;
+                width:200px;
+                height: 56px;
+            }
+            #logreg-forms .social-btn:nth-child(1){
+                margin-bottom: 5px;
+            }
+            #logreg-forms .social-btn span{
+                display: none;
+            }
+            #logreg-forms  .facebook-btn:after{
+                content:'Facebook';
+            }
+          
+            #logreg-forms  .google-btn:after{
+                content:'Google+';
+            }
         }
         </style>
         """,
@@ -1451,67 +1491,60 @@ def login_page():
     # ---------------------------------------------------------------------
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <form>
-          <!-- Email input -->
-          <div class="form-outline mb-4">
-            <input type="email" id="form2Example1" class="form-control" placeholder="Email address" />
-          </div>
+    with st.form("login_form", clear_on_submit=False):
+        st.markdown("<div id='logreg-forms'>", unsafe_allow_html=True)
 
-          <!-- Password input -->
-          <div class="form-outline mb-4">
-            <input type="password" id="form2Example2" class="form-control" placeholder="Password" />
-          </div>
+        st.write("### Sign in")
+        email = st.text_input("Email address")
+        password = st.text_input("Password", type="password")
 
-          <!-- 2 column grid layout for inline styling -->
-          <div class="row mb-4">
-            <div class="col d-flex justify-content-center">
-              <!-- Checkbox -->
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" value="" id="form2Example31" checked />
-                <label class="form-check-label" for="form2Example31"> Remember me </label>
-              </div>
+        remember_me = st.checkbox("Remember me")
+        login_btn = st.form_submit_button("Sign in")
+
+        if login_btn:
+            try:
+                creds = st.secrets["credentials"]
+                admin_user = creds["admin_username"]
+                admin_pass = creds["admin_password"]
+                caixa_user = creds["caixa_username"]
+                caixa_pass = creds["caixa_password"]
+            except KeyError:
+                st.error("Credentials not found in st.secrets['credentials']. Check the configuration.")
+                st.stop()
+
+            if email == admin_user and password == admin_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "admin"
+                st.session_state.login_time = datetime.now()
+                st.success("Successfully logged in as ADMIN!")
+                st.experimental_rerun()
+
+            elif email == caixa_user and password == caixa_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "caixa"
+                st.session_state.login_time = datetime.now()
+                st.success("Successfully logged in as CAIXA!")
+                st.experimental_rerun()
+
+            else:
+                st.error("Incorrect username or password.")
+
+        st.markdown(
+            """
+            <div class="social-login">
+                <button class="btn google-btn social-btn" type="button"> <span>Sign in with Google</span> </button>
+                <button class="btn facebook-btn social-btn" type="button"> <span>Sign in with Facebook</span> </button>
             </div>
+            <a href="#">Forgot password?</a>
+            <p>Not a member? <a href="#">Register</a></p>
+            """,
+            unsafe_allow_html=True
+        )
 
-            <div class="col">
-              <!-- Simple link -->
-              <a href="#!">Forgot password?</a>
-            </div>
-          </div>
-
-          <!-- Submit button -->
-          <button type="button" class="btn btn-primary btn-block mb-4">Sign in</button>
-
-          <!-- Register buttons -->
-          <div class="text-center">
-            <p>Not a member? <a href="#!">Register</a></p>
-            <p>or sign up with:</p>
-
-            <button type="button" class="btn btn-link btn-floating mx-1">
-              <i class="fab fa-google"></i>
-            </button>
-
-            <button type="button" class="btn btn-link btn-floating mx-1">
-              <i class="fab fa-twitter"></i>
-            </button>
-
-            <button type="button" class="btn btn-link btn-floating mx-1">
-              <i class="fab fa-github"></i>
-            </button>
-          </div>
-        </form>
-        """,
-        unsafe_allow_html=True
-    )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     # ---------------------------------------------------------------------
-    # 4) Ação: Login (Fictício - para exibição do layout)
-    # ---------------------------------------------------------------------
-    st.write("Demo form, no actual backend connected.")
-
-    # ---------------------------------------------------------------------
-    # 5) Rodapé / Footer
+    # 4) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
