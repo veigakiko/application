@@ -1428,7 +1428,7 @@ def login_page():
         }
         /* Reduz espaço entre os input boxes */
         .form-container input {
-            margin-bottom: 2px !important;
+            margin-bottom: 1px !important; /* Define o espaço entre os campos como 1px */
         }
         </style>
         """,
@@ -1524,6 +1524,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
