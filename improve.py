@@ -1417,8 +1417,6 @@ def login_page():
     # ---------------------------------------------------------------------
     # 4) Ação: Esqueci a senha (Exemplo Simples)
     # ---------------------------------------------------------------------
-    if btn_forgot:
-        st.info("Entre em contato com o administrador para cadastrar suporte@seusite.com.br.")
     
     # ---------------------------------------------------------------------
     # 5) Ação: Login
