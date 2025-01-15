@@ -21,7 +21,7 @@ from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
 
-###############################################################################
+#############################################################################
 #                                   UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
