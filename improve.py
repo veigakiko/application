@@ -1259,6 +1259,9 @@ def loyalty_program_page():
 ###############################################################################
 #                     NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
+import matplotlib.pyplot as plt
+import streamlit as st
+
 def analytics_page():
     """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
     st.title("Editar Pedidos com MitoSheet")
@@ -1277,6 +1280,32 @@ def analytics_page():
             return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
     
     pedido_data = load_pedido_data()
+    
+    # Adicionar o gráfico de Top 10 Produtos por Receita Total
+    st.subheader("Top 10 Produtos por Receita Total (em Reais)")
+    
+    if not pedido_data.empty:
+        # Adiciona uma coluna "Preço" simulada (substituir com valores reais, se disponíveis)
+        import numpy as np
+        np.random.seed(42)
+        pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
+
+        # Calcula a receita total por produto
+        product_revenue = pedido_data.groupby('Produto').apply(lambda x: (x['Quantidade'] * x['Preço']).sum()).reset_index()
+        product_revenue.columns = ['Produto', 'Receita_Total']
+        product_revenue = product_revenue.sort_values(by='Receita_Total', ascending=False).head(10)
+
+        # Cria o gráfico
+        fig, ax = plt.subplots(figsize=(10, 6))
+        product_revenue.sort_values(by='Receita_Total', ascending=True).plot(
+            kind='barh', x='Produto', y='Receita_Total', legend=False, ax=ax, color='skyblue'
+        )
+        ax.set_title('Top 10 Produtos por Receita Total (em Reais)')
+        ax.set_xlabel('Receita Total (R$)')
+        ax.set_ylabel('Produto')
+        st.pyplot(fig)
+    else:
+        st.warning("Nenhum dado disponível para gerar o gráfico.")
     
     # Seção MitoSheet para edição de dados de tb_pedido
     st.subheader("Editar Pedidos com MitoSheet")
