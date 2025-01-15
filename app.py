@@ -16,6 +16,7 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from bs4 import BeautifulSoup  # Necessário para manipulação do calendário HTML
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -393,24 +394,12 @@ def orders_page():
                         original_status = sel["Status"]
 
                         with st.form(key='edit_order_form'):
-                            col1, col2, col3 = st.columns(3)
-                            product_data = st.session_state.data.get("products", [])
-                            product_list = [row[1] for row in product_data] if product_data else ["No products"]
-
+                            col1, col2 = st.columns(2)
                             with col1:
-                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                                edit_prod = st.selectbox("Produto", [row[1] for row in st.session_state.data.get("products", [])], index=[row[1] for row in st.session_state.data.get("products", [])].index(original_product) if original_product in [row[1] for row in st.session_state.data.get("products", [])] else 0)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
-                            with col3:
-                                status_opts = [
-                                    "em aberto", "received - debited", "received - credit",
-                                    "received - pix", "received - cash"
-                                ]
-                                if original_status in status_opts:
-                                    s_index = status_opts.index(original_status)
-                                else:
-                                    s_index = 0
-                                edit_status = st.selectbox("Status", status_opts, index=s_index)
+                            edit_status = st.selectbox("Status", ["em aberto", "received - debited", "received - credit", "received - pix", "received - cash"], index=["em aberto", "received - debited", "received - credit", "received - pix", "received - cash"].index(original_status) if original_status in ["em aberto", "received - debited", "received - credit", "received - pix", "received - cash"] else 0)
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -536,12 +525,11 @@ def products_page():
                                 UPDATE public.tb_products
                                 SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
                                     total_value=%s, creation_date=%s
-                                WHERE id=%s
+                                WHERE product=%s
                             """
-                            # Assumindo que há uma coluna 'id' para identificação única
                             run_query(query_update, (
                                 edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
-                                edit_creation_date, sel.get("id")  # Ajuste conforme sua tabela
+                                edit_creation_date, original_product
                             ), commit=True)
                             st.success("Produto atualizado!")
                             refresh_data()
@@ -551,9 +539,9 @@ def products_page():
                             if confirm:
                                 query_delete = """
                                     DELETE FROM public.tb_products
-                                    WHERE id=%s
+                                    WHERE product=%s
                                 """
-                                run_query(query_delete, (sel.get("id"),), commit=True)
+                                run_query(query_delete, (original_product,), commit=True)
                                 st.success("Produto deletado!")
                                 refresh_data()
         else:
@@ -640,8 +628,7 @@ def stock_page():
                             with col3:
                                 edit_trans = st.selectbox(
                                     "Tipo", ["Entrada","Saída"],
-                                    index=["Entrada","Saída"].index(original_trans)
-                                    if original_trans in ["Entrada","Saída"] else 0
+                                    index=["Entrada","Saída"].index(original_trans) if original_trans in ["Entrada","Saída"] else 0
                                 )
                             with col4:
                                 edit_date = st.date_input("Data", value=original_date.date())
@@ -667,13 +654,15 @@ def stock_page():
                             refresh_data()
 
                         if delete_btn:
-                            query_delete = """
-                                DELETE FROM public.tb_estoque
-                                WHERE produto=%s AND transacao=%s AND data=%s
-                            """
-                            run_query(query_delete, (original_product, original_trans, original_date), commit=True)
-                            st.success("Registro deletado!")
-                            refresh_data()
+                            confirm = st.checkbox("Confirma a exclusão deste registro?")
+                            if confirm:
+                                query_delete = """
+                                    DELETE FROM public.tb_estoque
+                                    WHERE produto=%s AND transacao=%s AND data=%s
+                                """
+                                run_query(query_delete, (original_product, original_trans, original_date), commit=True)
+                                st.success("Registro deletado!")
+                                refresh_data()
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
 
@@ -1132,8 +1121,8 @@ def menu_page():
                     st.success("Imagem atualizada com sucesso!")
                     refresh_data()
                     st.experimental_rerun()
-    else:
-        st.warning("Nenhum produto selecionado para editar.")
+        else:
+            st.warning("Nenhum produto selecionado para editar.")
 
 def loyalty_program_page():
     """Página do programa de fidelidade."""
@@ -1269,27 +1258,16 @@ def events_calendar_page():
     cal = calendar.HTMLCalendar(firstweekday=0)
     html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
-    # Destacar dias com eventos
+    # Destacar dias com eventos usando BeautifulSoup
+    soup = BeautifulSoup(html_calendario, 'html.parser')
     for _, ev in df_filtrado.iterrows():
         dia = ev["data_evento"].day
-        # Ajustamos a cor de fundo para azul e o texto para branco
-        highlight_str = (
-            f' style="background-color:blue; color:white; font-weight:bold;" '
-            f'title="{ev["nome"]}: {ev["descricao"]}"'
-        )
-        # Substituir as tags <td> correspondentes ao dia
-        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
-        # Para evitar isso, utilizaremos o replace apenas uma vez por dia
-        # Vamos usar uma estratégia mais robusta utilizando BeautifulSoup
-
-        from bs4 import BeautifulSoup
-
-        soup = BeautifulSoup(html_calendario, 'html.parser')
+        # Encontrar todas as ocorrências do dia
         for day_cell in soup.find_all('td'):
             if day_cell.text.strip() == str(dia):
                 day_cell['style'] = "background-color:blue; color:white; font-weight:bold;"
                 day_cell['title'] = f"{ev['nome']}: {ev['descricao']}"
-        html_calendario = str(soup)
+    html_calendario = str(soup)
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
@@ -1398,13 +1376,13 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("--------------------------------------------------")
 
     # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
+    df["Total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','Total':'sum'}).reset_index()
     total_general = 0
     for _, row in grouped_df.iterrows():
         description = f"{row['Produto'][:20]:<20}"
         quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
+        total_item = row['Total']
         total_general += total_item
         total_formatted = format_currency(total_item)
         invoice.append(f"{description} {quantity} {total_formatted}")
