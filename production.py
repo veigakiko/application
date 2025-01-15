@@ -1071,8 +1071,7 @@ def analytics_page():
         st.info("Nenhum dado encontrado na view vw_produto_total_faturado.")
         return
 
-    # 3) Converte o resultado em DataFrame
-    df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+
 
     # --------------------------------------------------------
     # DEBUG: Mostrar dados brutos como chegaram do banco
