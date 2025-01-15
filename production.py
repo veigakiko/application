@@ -10,6 +10,7 @@ from io import BytesIO
 from fpdf import FPDF
 import os
 import uuid
+import calendar  # Para gerar o HTML do calendário
 
 ###############################################################################
 #                                   UTILIDADES
@@ -143,8 +144,10 @@ def get_db_connection():
         return None
 
 
-# AJUSTE: Removemos mensagens ao usuário e não exibimos erro ou sucesso.
 def run_query(query: str, values=None, commit: bool = False):
+    """
+    Executa uma query no banco, sem mostrar mensagens ao usuário em caso de falha.
+    """
     conn = get_db_connection()
     if not conn:
         return None
@@ -157,7 +160,6 @@ def run_query(query: str, values=None, commit: bool = False):
             else:
                 return cursor.fetchall()
     except:
-        # Sem mensagens para o usuário
         pass
     finally:
         if not conn.closed:
@@ -168,7 +170,7 @@ def run_query(query: str, values=None, commit: bool = False):
 ###############################################################################
 #                         CARREGAMENTO DE DADOS (CACHE)
 ###############################################################################
-@st.cache_data(show_spinner=False)  # AJUSTE: removemos spinner e mensagem
+@st.cache_data(show_spinner=False)  # não exibir spinner
 def load_all_data():
     data = {}
     try:
@@ -303,7 +305,7 @@ def orders_page():
         product_list = [""] + [row[1] for row in product_data] if product_data else ["No products"]
 
         with st.form(key='order_form'):
-            # Exemplo: recuperando clientes de tabela tb_clientes
+            # Recuperando clientes de tabela tb_clientes
             clientes = run_query('SELECT nome_completo FROM public.tb_clientes ORDER BY nome_completo')
             customer_list = [""] + [row[0] for row in clientes] if clientes else []
 
@@ -693,7 +695,7 @@ def clients_page():
         if clients_data:
             cols = ["Full Name","Email"]
             df_clients = pd.DataFrame(clients_data, columns=cols)
-            # AJUSTE: Exibir apenas "Full Name"
+            # Exibir apenas a coluna Full Name
             st.dataframe(df_clients[["Full Name"]], use_container_width=True)
             download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
 
@@ -742,6 +744,9 @@ def clients_page():
             st.info("Nenhum cliente encontrado.")
 
 
+###############################################################################
+#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
+###############################################################################
 def process_payment(client, payment_status):
     query = """
         UPDATE public.tb_pedido
@@ -771,6 +776,8 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("DESCRIÇÃO             QTD     TOTAL")
     invoice.append("--------------------------------------------------")
 
+    # Garante que df["total"] seja numérico
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
     grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
     total_general = 0
     for _, row in grouped_df.iterrows():
@@ -790,6 +797,9 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     st.text("\n".join(invoice))
 
 
+###############################################################################
+#                          PÁGINA: NOTA FISCAL
+###############################################################################
 def invoice_page():
     st.title("Nota Fiscal")
     open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
@@ -806,11 +816,36 @@ def invoice_page():
         invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
         if invoice_data:
             df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
+
+            # Converte para numeric
+            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+            total_sem_desconto = df["total"].sum()
+
+            # Cupom fixo de exemplo
+            cupons_validos = {
+                "DESCONTO10": 0.10,
+                "DESCONTO15": 0.15,
+            }
+
+            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            desconto_aplicado = 0.0
+            if coupon_code in cupons_validos:
+                desconto_aplicado = cupons_validos[coupon_code]
+                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+
+            # Cálculo final
+            total_sem_desconto = float(total_sem_desconto or 0)
+            desconto_aplicado = float(desconto_aplicado or 0)
+            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
+
+            # Gera a nota (ainda mostrando valores sem considerar item a item o desconto, mas no final exibimos total_com_desconto)
             generate_invoice_for_printer(df)
 
-            # NOVO CAMPO: Cupom de desconto
-            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
+            st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
+            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
 
+            # Botões de pagamento
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Debit"):
@@ -828,6 +863,302 @@ def invoice_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
+
+
+###############################################################################
+#                           BACKUP (ADMIN)
+###############################################################################
+def export_table_to_csv(table_name):
+    conn = get_db_connection()
+    if conn:
+        try:
+            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
+            csv_data = df.to_csv(index=False)
+            st.download_button(
+                label=f"Baixar {table_name} CSV",
+                data=csv_data,
+                file_name=f"{table_name}.csv",
+                mime="text/csv"
+            )
+        except:
+            pass
+        finally:
+            conn.close()
+
+
+def backup_all_tables(tables):
+    conn = get_db_connection()
+    if conn:
+        try:
+            frames = []
+            for table in tables:
+                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
+                df["table_name"] = table
+                frames.append(df)
+            if frames:
+                combined = pd.concat(frames, ignore_index=True)
+                csv_data = combined.to_csv(index=False)
+                st.download_button(
+                    label="Download All Tables as CSV",
+                    data=csv_data,
+                    file_name="all_tables_backup.csv",
+                    mime="text/csv"
+                )
+        except:
+            pass
+        finally:
+            conn.close()
+
+
+def perform_backup():
+    st.header("Sistema de Backup")
+    st.write("Clique para baixar backups das tabelas.")
+    tables = ["tb_pedido","tb_products","tb_clientes","tb_estoque"]
+    if st.button("Download All Tables"):
+        backup_all_tables(tables)
+    for t in tables:
+        export_table_to_csv(t)
+
+
+def admin_backup_section():
+    if st.session_state.get("username") == "admin":
+        perform_backup()
+    else:
+        st.warning("Acesso restrito para administradores.")
+
+
+###############################################################################
+#                           PÁGINA: CALENDÁRIO DE EVENTOS
+###############################################################################
+def events_calendar_page():
+    st.title("Calendário de Eventos")
+
+    # Inicializa st.session_state["my_events"] se não existir
+    if "my_events" not in st.session_state:
+        # Exemplo de eventos existentes
+        st.session_state["my_events"] = [
+            {
+                "nome": "Torneio Beach Tennis",
+                "data": date(2025, 1, 10),
+                "descricao": "Torneio aberto com premiação.",
+                "inscricao_aberta": True
+            },
+            {
+                "nome": "Noite Integração",
+                "data": date(2025, 1, 15),
+                "descricao": "Encontro social do clube.",
+                "inscricao_aberta": False
+            },
+        ]
+
+    # =================== Formulário para agendar novo evento ====================
+    with st.form(key="new_event"):
+        st.subheader("Agendar Novo Evento")
+        nome_evento = st.text_input("Nome do Evento")
+        data_evento = st.date_input("Data do Evento", value=date.today())
+        descricao_evento = st.text_area("Descrição do Evento")
+        inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
+
+        agendar = st.form_submit_button("Agendar Evento")
+
+    if agendar:
+        # Salva no st.session_state (ou você poderia salvar em BD)
+        st.session_state["my_events"].append({
+            "nome": nome_evento,
+            "data": data_evento,
+            "descricao": descricao_evento,
+            "inscricao_aberta": inscricao_aberta
+        })
+        st.success("Evento agendado com sucesso!")
+
+    st.markdown("---")
+
+    # ======================= Exibir Calendário do Mês Atual ======================
+    # Para simplificar, usando HTMLCalendar e destacando apenas dias que possuem evento.
+    today = date.today()
+    year = today.year
+    month = today.month
+
+    # Obter eventos do mês atual
+    events_this_month = [
+        ev for ev in st.session_state["my_events"]
+        if ev["data"].year == year and ev["data"].month == month
+    ]
+
+    # Gera o HTML do calendário base
+    cal = calendar.HTMLCalendar(firstweekday=0)
+    html_calendar = cal.formatmonth(year, month)
+
+    # Precisamos marcar os dias que têm evento com algum destaque
+    # Exemplo simples: inserir um <span> ou <div> custom no dia
+    for ev in events_this_month:
+        event_day = ev["data"].day
+        # Substitui no HTML do dia
+        day_str = f">{event_day}<"
+        # Por exemplo: <td class="event-day">event_day ...
+        highlight_str = f' style="background-color:yellow; font-weight:bold;" title="{ev["nome"]}: {ev["descricao"]}"'
+        # Vamos procurar no HTML a tag <td> que contenha esse dia e inserir highlight
+        # Observando que a string exata <td><span class="day">day</span> ...
+        html_calendar = html_calendar.replace(
+            f'<td class="{cal.cssclasses[0]}">{event_day}</td>', 
+            f'<td class="{cal.cssclasses[0]}"{highlight_str}>{event_day}</td>'
+        )
+        # Caso o dia seja domingo ou outro, a classe muda, precisamos checar
+        for cssclass in cal.cssclasses:
+            html_calendar = html_calendar.replace(
+                f'<td class="{cssclass}">{event_day}</td>', 
+                f'<td class="{cssclass}"{highlight_str}>{event_day}</td>'
+            )
+
+    st.subheader(f"Calendário {today.strftime('%B de %Y')}")
+    st.markdown(html_calendar, unsafe_allow_html=True)
+
+    # Lista de eventos do mês
+    if events_this_month:
+        st.subheader("Eventos deste mês")
+        df_month_events = pd.DataFrame(events_this_month)
+        # Ajustando a exibição das colunas
+        df_month_events["data"] = df_month_events["data"].astype(str)
+        df_month_events.rename(columns={
+            "nome": "Nome do Evento",
+            "data": "Data",
+            "descricao": "Descrição",
+            "inscricao_aberta": "Inscrição Aberta"
+        }, inplace=True)
+        st.dataframe(df_month_events, use_container_width=True)
+    else:
+        st.info("Nenhum evento agendado para este mês.")
+
+
+###############################################################################
+#                                LOGIN PAGE
+###############################################################################
+def login_page():
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            padding-top: 80px;
+            padding-bottom: 80px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    logo_url = "https://res.cloudinary.com/lptennis/image/upload/v1657233475/kyz4k7fcptxt7x7mu9qu.jpg"
+    try:
+        resp = requests.get(logo_url)
+        resp.raise_for_status()
+        logo = Image.open(BytesIO(resp.content))
+        st.image(logo, use_column_width=False)
+    except:
+        pass
+
+    st.title("Beach Club - Login")
+    with st.form(key='login_form'):
+        username = st.text_input("Usuário")
+        password = st.text_input("Senha", type="password")
+        subm = st.form_submit_button("Entrar")
+
+    if subm:
+        creds = st.secrets["credentials"]
+        if username == creds["admin_username"] and password == creds["admin_password"]:
+            st.session_state.logged_in = True
+            st.session_state.username = "admin"
+            st.session_state.login_time = datetime.now()
+            st.success("Login como administrador!")
+            st.experimental_rerun()
+        elif username == creds["caixa_username"] and password == creds["caixa_password"]:
+            st.session_state.logged_in = True
+            st.session_state.username = "caixa"
+            st.session_state.login_time = datetime.now()
+            st.success("Login como caixa!")
+            st.experimental_rerun()
+        else:
+            st.error("Usuário ou senha incorretos.")
+
+
+###############################################################################
+#                            INICIALIZAÇÃO E MAIN
+###############################################################################
+def initialize_session_state():
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+
+
+def apply_custom_css():
+    st.markdown(
+        """
+        <style>
+        .css-1d391kg {
+            font-size: 2em;
+            color: #1b4f72;
+        }
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .css-1aumxhk {
+            background-color: #1b4f72;
+            color: white;
+        }
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+        }
+        .css-1v3fvcr {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+        }
+        </style>
+        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def sidebar_navigation():
+    with st.sidebar:
+        # Novo texto acima do menu
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
+
+        st.title("Boituva Beach Club 🎾")
+        selected = option_menu(
+            "Menu Principal",
+            [
+                "Home","Orders","Products","Stock","Clients",
+                "Nota Fiscal","Backup","Cardápio",
+                "Configurações e Ajustes","Programa de Fidelidade",
+                "Calendário de Eventos"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt","cloud-upload","list","gear","gift","calendar"
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"background-color": "#1b4f72"},
+                "icon": {"color": "white","font-size":"18px"},
+                "nav-link": {
+                    "font-size": "14px","text-align":"left","margin":"0px",
+                    "color":"white","--hover-color":"#145a7c"
+                },
+                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
+            }
+        )
+    return selected
 
 
 def menu_page():
@@ -954,236 +1285,9 @@ def loyalty_program_page():
             st.error("Pontos insuficientes.")
 
 
-def events_calendar_page():
-    st.title("Calendário de Eventos")
-
-    def fetch_events(start_d, end_d):
-        return pd.DataFrame({
-            "Nome do Evento": ["Torneio Beach Tennis","Aula Estratégia","Noite Integração"],
-            "Data": [start_d + timedelta(days=i) for i in range(3)],
-            "Descrição": [
-                "Torneio aberto com premiação.",
-                "Aula focada em técnicas avançadas.",
-                "Encontro social do clube."
-            ],
-            "Inscrição Aberta": [True, True, False]
-        })
-
-    today = datetime.now().date()
-    start_date = st.date_input("De:", today)
-    end_date = st.date_input("Até:", today+timedelta(days=30))
-
-    if start_date > end_date:
-        st.error("Data inicial não pode ser maior que a final.")
-    else:
-        events = fetch_events(start_date, end_date)
-        if not events.empty:
-            for _, row in events.iterrows():
-                st.subheader(f"{row['Nome do Evento']} ({row['Data'].strftime('%d/%m/%Y')})")
-                st.write(f"Descrição: {row['Descrição']}")
-                if row['Inscrição Aberta']:
-                    if st.button(f"Inscrever-se: {row['Nome do Evento']}", key=row['Nome do Evento']):
-                        st.success(f"Inscrito em {row['Nome do Evento']}!")
-                else:
-                    st.info("Inscrições encerradas.")
-        else:
-            st.info("Nenhum evento no período.")
-
-
 ###############################################################################
-#                             BACKUP (ADMIN)
+#                                     MAIN
 ###############################################################################
-def export_table_to_csv(table_name):
-    conn = get_db_connection()
-    if conn:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-            csv_data = df.to_csv(index=False)
-            st.download_button(
-                label=f"Baixar {table_name} CSV",
-                data=csv_data,
-                file_name=f"{table_name}.csv",
-                mime="text/csv"
-            )
-        except:
-            pass
-        finally:
-            conn.close()
-
-
-def backup_all_tables(tables):
-    conn = get_db_connection()
-    if conn:
-        try:
-            frames = []
-            for table in tables:
-                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
-                df["table_name"] = table
-                frames.append(df)
-            if frames:
-                combined = pd.concat(frames, ignore_index=True)
-                csv_data = combined.to_csv(index=False)
-                st.download_button(
-                    label="Download All Tables as CSV",
-                    data=csv_data,
-                    file_name="all_tables_backup.csv",
-                    mime="text/csv"
-                )
-        except:
-            pass
-        finally:
-            conn.close()
-
-
-def perform_backup():
-    st.header("Sistema de Backup")
-    st.write("Clique para baixar backups das tabelas.")
-    tables = ["tb_pedido","tb_products","tb_clientes","tb_estoque"]
-    if st.button("Download All Tables"):
-        backup_all_tables(tables)
-    for t in tables:
-        export_table_to_csv(t)
-
-
-def admin_backup_section():
-    if st.session_state.get("username") == "admin":
-        perform_backup()
-    else:
-        st.warning("Acesso restrito para administradores.")
-
-
-###############################################################################
-#                                LOGIN PAGE
-###############################################################################
-def login_page():
-    st.markdown(
-        """
-        <style>
-        .block-container {
-            padding-top: 80px;
-            padding-bottom: 80px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-    logo_url = "https://res.cloudinary.com/lptennis/image/upload/v1657233475/kyz4k7fcptxt7x7mu9qu.jpg"
-    try:
-        resp = requests.get(logo_url)
-        resp.raise_for_status()
-        logo = Image.open(BytesIO(resp.content))
-        st.image(logo, use_column_width=False)
-    except:
-        pass
-
-    st.title("Beach Club - Login")
-    with st.form(key='login_form'):
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-        subm = st.form_submit_button("Entrar")
-
-    # AJUSTE para 1 único clique:
-    if subm:
-        creds = st.secrets["credentials"]
-        if username == creds["admin_username"] and password == creds["admin_password"]:
-            st.session_state.logged_in = True
-            st.session_state.username = "admin"
-            st.session_state.login_time = datetime.now()
-            st.success("Login como administrador!")
-            st.experimental_rerun()  # força recarregar e entrar direto
-        elif username == creds["caixa_username"] and password == creds["caixa_password"]:
-            st.session_state.logged_in = True
-            st.session_state.username = "caixa"
-            st.session_state.login_time = datetime.now()
-            st.success("Login como caixa!")
-            st.experimental_rerun()
-        else:
-            st.error("Usuário ou senha incorretos.")
-
-
-###############################################################################
-#                            INICIALIZAÇÃO E MAIN
-###############################################################################
-def initialize_session_state():
-    if 'data' not in st.session_state:
-        st.session_state.data = load_all_data()
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-
-
-def apply_custom_css():
-    st.markdown(
-        """
-        <style>
-        .css-1d391kg {
-            font-size: 2em;
-            color: #1b4f72;
-        }
-        .stDataFrame table {
-            width: 100%;
-            overflow-x: auto;
-        }
-        .css-1aumxhk {
-            background-color: #1b4f72;
-            color: white;
-        }
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-        }
-        .css-1v3fvcr {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-        }
-        </style>
-        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-def sidebar_navigation():
-    with st.sidebar:
-        # NOVO TEXTO ACIMA DO MENU
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
-            )
-
-        st.title("Boituva Beach Club 🎾")
-        selected = option_menu(
-            "Menu Principal",
-            [
-                "Home","Orders","Products","Stock","Clients",
-                "Nota Fiscal","Backup","Cardápio",
-                "Configurações e Ajustes","Programa de Fidelidade",
-                "Calendário de Eventos"
-            ],
-            icons=[
-                "house","file-text","box","list-task","layers",
-                "receipt","cloud-upload","list","gear","gift","calendar"
-            ],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white","font-size":"18px"},
-                "nav-link": {
-                    "font-size": "14px","text-align":"left","margin":"0px",
-                    "color":"white","--hover-color":"#145a7c"
-                },
-                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
-            }
-        )
-    return selected
-
-
 def main():
     apply_custom_css()
     initialize_session_state()
