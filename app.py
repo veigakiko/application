@@ -1608,10 +1608,7 @@ def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
         # Novo texto acima do menu
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
-            )
+        
 
        
         selected = option_menu(
@@ -1640,6 +1637,10 @@ def sidebar_navigation():
                 "nav-link-selected": {"background-color":"#145a7c","color":"white"},
             }
         )
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
     return selected
 
 
