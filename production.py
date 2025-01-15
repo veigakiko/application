@@ -1315,6 +1315,26 @@ def settings_page():
 
 def loyalty_program_page():
     st.title("Programa de Fidelidade")
+
+    # 1) Carrega e filtra dados da view
+    query = """
+        SELECT "Cliente", total_geral
+        FROM public.vw_cliente_sum_total
+        WHERE total_geral > 100
+          AND "Cliente" <> 'Professor Vinicius Bech Club Boituva'
+    """
+    data = run_query(query)
+    if data:
+        # 2) Converte em DataFrame e exibe
+        df = pd.DataFrame(data, columns=["Cliente","Total Geral"])
+        st.subheader("Clientes com Total Geral > 100")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Nenhum cliente com total_geral acima de 100 (ou com Professor Vinicius filtrado).")
+
+    st.markdown("---")
+
+    # 3) Lógica de pontos existente
     st.subheader("Acumule pontos a cada compra!")
     if 'points' not in st.session_state:
         st.session_state.points = 0
@@ -1330,6 +1350,7 @@ def loyalty_program_page():
             st.success("Prêmio resgatado!")
         else:
             st.error("Pontos insuficientes.")
+
 
 
 ###############################################################################
