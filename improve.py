@@ -1389,6 +1389,10 @@ def login_page():
         .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
             background-color: #003366 !important;
         }
+        .signup-button {
+            float: right;
+            margin-right: 0;
+        }
         /* Mensagem de rodapé */
         .footer {
             position: fixed;
@@ -1417,6 +1421,11 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #999;
+            font-size: 0.875rem;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1444,10 +1453,10 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.write("keep the beach vibes flowing!🌴🎾")
 
-        username_input = st.text_input("Username")
-        password_input = st.text_input("Password", type="password")
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
-        col1, col2 = st.columns([1, 1], gap="medium")
+        col1, col2 = st.columns([1, 1], gap="small")
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
@@ -1503,6 +1512,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
