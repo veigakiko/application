@@ -1426,6 +1426,10 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
+        /* Reduz espaço entre os input boxes */
+        .form-container input {
+            margin-bottom: 8px !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1463,6 +1467,7 @@ def login_page():
             btn_login = st.form_submit_button("Log in")
         with col2:
             btn_signup = st.form_submit_button("Sign up")
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Google
         st.markdown(
@@ -1519,7 +1524,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
