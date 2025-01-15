@@ -1260,7 +1260,6 @@ def loyalty_program_page():
 #                     NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
 import matplotlib.pyplot as plt
-import streamlit as st
 
 def analytics_page():
     """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
@@ -1291,18 +1290,23 @@ def analytics_page():
         pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
 
         # Calcula a receita total por produto
-        product_revenue = pedido_data.groupby('Produto').apply(lambda x: (x['Quantidade'] * x['Preço']).sum()).reset_index()
-        product_revenue.columns = ['Produto', 'Receita_Total']
-        product_revenue = product_revenue.sort_values(by='Receita_Total', ascending=False).head(10)
+        product_revenue = (
+            pedido_data
+            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
+            .groupby("Produto")["Receita"]
+            .sum()
+            .reset_index()
+            .sort_values(by="Receita", ascending=False)
+            .head(10)
+        )
 
         # Cria o gráfico
         fig, ax = plt.subplots(figsize=(10, 6))
-        product_revenue.sort_values(by='Receita_Total', ascending=True).plot(
-            kind='barh', x='Produto', y='Receita_Total', legend=False, ax=ax, color='skyblue'
-        )
-        ax.set_title('Top 10 Produtos por Receita Total (em Reais)')
-        ax.set_xlabel('Receita Total (R$)')
-        ax.set_ylabel('Produto')
+        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
+        ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
+        ax.set_xlabel("Receita Total (R$)", fontsize=12)
+        ax.set_ylabel("Produto", fontsize=12)
+        plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
         st.pyplot(fig)
     else:
         st.warning("Nenhum dado disponível para gerar o gráfico.")
