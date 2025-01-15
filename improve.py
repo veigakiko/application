@@ -1434,18 +1434,20 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.write("keep the beach vibes flowing!🌴🎾")
 
-        # Botão de login com Gmail
-        st.markdown(
-            "<button class='gmail-login'>Log in with Google</button>",
-            unsafe_allow_html=True
-        )
-
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
 
         col1, col2 = st.columns([1,1])
         with col1:
             btn_login = st.form_submit_button("Log in")
+
+        # Botão de login com Gmail
+        st.markdown(
+            """
+            <button class='gmail-login'>Log in with Google</button>
+            """,
+            unsafe_allow_html=True
+        )
 
     # ---------------------------------------------------------------------
     # 4) Ação: Login
@@ -1489,6 +1491,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
