@@ -1034,6 +1034,14 @@ def loyalty_program_page():
         else:
             st.error("Pontos insuficientes.")
 
+import streamlit as st
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+from mitosheet import spreadsheet  # Assegure-se de ter o MitoSheet instalado e configurado
+# Importe outras bibliotecas necessárias, como a função run_query
+
 def analytics_page():
     """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
     st.title("Editar Pedidos com MitoSheet")
@@ -1052,6 +1060,39 @@ def analytics_page():
             return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
     
     pedido_data = load_pedido_data()
+    
+    # Função para carregar dados de daily_revenue
+    @st.cache_data(show_spinner=False)
+    def load_daily_revenue_data():
+        query = 'SELECT order_date, daily_revenue FROM public.daily_revenue;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["order_date", "daily_revenue"])
+            # Converte a coluna "order_date" para datetime
+            df["order_date"] = pd.to_datetime(df["order_date"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["order_date", "daily_revenue"])
+    
+    daily_revenue_data = load_daily_revenue_data()
+    
+    # Adicionar o gráfico de Receita Diária
+    st.subheader("Receita Diária ao Longo do Tempo")
+    
+    if not daily_revenue_data.empty:
+        # Ordena os dados por data
+        daily_revenue_data = daily_revenue_data.sort_values(by="order_date")
+        
+        # Cria o gráfico
+        fig_revenue, ax_revenue = plt.subplots(figsize=(10, 6))
+        ax_revenue.plot(daily_revenue_data["order_date"], daily_revenue_data["daily_revenue"], marker='o', linestyle='-', color='green')
+        ax_revenue.set_title("Receita Diária ao Longo do Tempo", fontsize=16)
+        ax_revenue.set_xlabel("Data", fontsize=12)
+        ax_revenue.set_ylabel("Receita Diária (R$)", fontsize=12)
+        ax_revenue.grid(True)
+        st.pyplot(fig_revenue)
+    else:
+        st.warning("Nenhum dado disponível para gerar o gráfico de Receita Diária.")
     
     # Adicionar o gráfico de Top 10 Produtos por Receita Total
     st.subheader("Top 10 Produtos por Receita Total (em Reais)")
@@ -1081,7 +1122,7 @@ def analytics_page():
         plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
         st.pyplot(fig)
     else:
-        st.warning("Nenhum dado disponível para gerar o gráfico.")
+        st.warning("Nenhum dado disponível para gerar o gráfico de Top 10 Produtos.")
     
     # Seção MitoSheet para edição de dados de tb_pedido
     st.subheader("Editar Pedidos com MitoSheet")
@@ -1114,6 +1155,8 @@ def analytics_page():
     # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
     st.markdown("---")
     st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+
+# Assegure-se de chamar a função analytics_page no seu aplicativo Streamlit
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
