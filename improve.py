@@ -1217,7 +1217,6 @@ def loyalty_program_page():
 def analytics_page():
     st.title("Analytics Dashboard")
     
-    
     st.subheader("Editar Pedidos com MitoSheet")
     
     # Inicializa MitoSheet com os dados de tb_pedido
