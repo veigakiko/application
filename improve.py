@@ -1458,7 +1458,7 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
+        
         st.write("keep the beach vibes flowing!🌴🎾")
 
         username_input = st.text_input("", placeholder="Username")
