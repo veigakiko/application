@@ -1060,39 +1060,52 @@ def loyalty_program_page():
 #                    NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
 def analytics_page():
-    st.title("Analytics")
-
-    # 1) Consulta direta à view
-    query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
-    result = run_query(query)
-
-    # 2) Se não vier nenhum resultado
-    if not result:
-        st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+    st.title("Analytics Dashboard")
+    data = st.session_state.data.get("revenue", pd.DataFrame())
+    if data.empty:
+        st.warning("No data available for analytics.")
         return
 
-    # 3) Converte o resultado em DataFrame (assumindo total_faturado já é numérico)
-    df = pd.DataFrame(result, columns=["Produto", "total_faturado"])
-
-    # 4) Exibe a tabela como veio da view
-    st.subheader("Tabela: vw_produto_total_faturado")
-    st.dataframe(df, use_container_width=True)
-
-    # 5) Exibe um gráfico de barras horizontal (sem nenhuma transformação)
-    import altair as alt
-
-    st.subheader("Gráfico de Faturamento (Barras Horizontais)")
-    chart = (
-        alt.Chart(df)
-        .mark_bar()
-        .encode(
-            x=alt.X("total_faturado:Q", title="Total Faturado"),
-            y=alt.Y("Produto:N", title="Produto", sort="-x")
-        )
-        .properties(width="container", height=400)
-    )
+    data["dt"] = pd.to_datetime(data["dt"])
+    data = data.sort_values("dt")
+    
+    st.subheader("Revenue Over Time")
+    chart = alt.Chart(data).mark_line(point=True).encode(
+        x=alt.X("dt:T", title="Date"),
+        y=alt.Y("total_dia:Q", title="Daily Revenue"),
+        tooltip=["dt:T", "total_dia:Q"]
+    ).properties(width="container", height=400)
     st.altair_chart(chart, use_container_width=True)
 
+    st.markdown("---")
+    st.subheader("Revenue Prediction (Next 7 Days)")
+    
+    # Preparing data for prediction
+    data["day"] = (data["dt"] - data["dt"].min()).dt.days
+    X = data[["day"]]
+    y = data["total_dia"]
+
+    model = LinearRegression()
+    model.fit(X, y)
+
+    future_days = np.arange(data["day"].max() + 1, data["day"].max() + 8).reshape(-1, 1)
+    predictions = model.predict(future_days)
+
+    future_dates = [data["dt"].max() + timedelta(days=i) for i in range(1, 8)]
+    prediction_df = pd.DataFrame({
+        "Date": future_dates,
+        "Predicted Revenue": predictions
+    })
+    prediction_df["Predicted Revenue"] = prediction_df["Predicted Revenue"].apply(format_currency)
+
+    st.write(prediction_df)
+
+    prediction_chart = alt.Chart(prediction_df).mark_line(point=True).encode(
+        x=alt.X("Date:T", title="Future Date"),
+        y=alt.Y("Predicted Revenue:Q", title="Predicted Revenue"),
+        tooltip=["Date:T", "Predicted Revenue:Q"]
+    ).properties(width="container", height=400)
+    st.altair_chart(prediction_chart, use_container_width=True)
    
 
 
