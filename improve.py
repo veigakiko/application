@@ -1455,26 +1455,20 @@ def login_page():
 
     # ---------------------------------------------------------------------
     # 3) Sessão de formulário de login
+    # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
-    
-    username_input = st.text_input("", placeholder="Username")
-    password_input = st.text_input("", type="password", placeholder="Password")
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
+        st.write("<p style='text-align: center;'>keep the beach vibes flowing!🌴🎾</p>", unsafe_allow_html=True)
 
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        btn_login = st.form_submit_button("Log in")
-    with col2:
-        btn_signup = st.form_submit_button("Sign up")
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
-    # Form validation
-    if btn_login:
-        if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
-        else:
-            # Login logic here
-            pass
-
+        col1, col2 = st.columns([1, 1], gap="medium")
+        with col1:
+            btn_login = st.form_submit_button("Log in")
+        with col2:
+            btn_signup = st.form_submit_button("Sign up")
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Gmail
         st.markdown(
