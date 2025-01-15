@@ -1406,15 +1406,15 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        st.write("   Log in and keep the beach vibes flowing!")
-        username_input = st.text_input("Usuário")
-        password_input = st.text_input("Senha", type="password")
+        st.write("keep the beach vibes flowing!")
+        username_input = st.text_input("Username")
+        password_input = st.text_input("Password", type="password")
         
         col1, col2 = st.columns([1,1])
         with col1:
-            btn_login = st.form_submit_button("Entrar")
+            btn_login = st.form_submit_button("Log in")
         with col2:
-            btn_forgot = st.form_submit_button("Esqueci a senha", help="Exemplo simples de fluxo de recuperação")
+            btn_forgot = st.form_submit_button("reset password", help="Exemplo simples de fluxo de recuperação")
 
     # ---------------------------------------------------------------------
     # 4) Ação: Esqueci a senha (Exemplo Simples)
