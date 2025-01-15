@@ -1029,8 +1029,8 @@ def loyalty_program_page():
         SELECT "Cliente", total_geral
         FROM public.vw_cliente_sum_total
         WHERE "Cliente" <> 'Professor Vinicius Bech Club Boituva'
-          AND total_geral > 100
         ORDER BY total_geral DESC;
+
     """
     data = run_query(query)  # 'run_query' executa a consulta SQL e retorna lista de tuplas
 
