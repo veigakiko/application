@@ -892,6 +892,9 @@ def invoice_page():
         st.warning("Selecione um cliente.")
 
 
+###############################################################################
+#                            BACKUP (ADMIN)
+###############################################################################
 def backup_all_tables(tables):
     """Permite o download de todas as tabelas especificadas como um único CSV."""
     conn = get_db_connection()
@@ -962,6 +965,9 @@ def admin_backup_section():
         st.warning("Acesso restrito para administradores.")
 
 
+###############################################################################
+#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
+###############################################################################
 def process_payment(client, payment_status):
     """Processa o pagamento atualizando o status do pedido."""
     query = """
@@ -970,48 +976,6 @@ def process_payment(client, payment_status):
         WHERE "Cliente"=%s AND status='em aberto'
     """
     run_query(query, (payment_status, client), commit=True)
-
-
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """Gera uma representação textual da nota fiscal para impressão."""
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
-
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
 
 
 def generate_invoice_for_printer(df: pd.DataFrame):
@@ -1471,12 +1435,6 @@ def menu_page():
                 st.write(f"Preço: {price_text}")
 
             st.markdown("---")
-
-
-###############################################################################
-#                     NOVA PÁGINA: ANALYTICS (Faturamento)
-###############################################################################
-# (Already defined above; removed duplicate definitions)
 
 
 ###############################################################################
