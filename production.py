@@ -1282,7 +1282,7 @@ def login_page():
 
     if logo:
         st.image(logo, use_column_width=True)
-    st.title("Boituva Beach Club - Login")
+    st.title("")
 
     # ---------------------------------------------------------------------
     # 3) Sessão de formulário de login
