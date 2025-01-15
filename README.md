@@ -1,27 +1,41 @@
 # Guia de Implantação no Minikube
 
-Este guia fornece instruções detalhadas e passo a passo para criar, expor e gerenciar um deployment no Minikube usando o `kubectl`.
+Este guia fornece instruções detalhadas e passo a passo para criar, configurar, expor e gerenciar um deployment no Minikube usando o `kubectl`.
 
 ---
 
 ## Pré-requisitos
 
-1. O Minikube deve estar instalado no sistema.
-2. O Docker deve estar instalado (se você estiver usando o driver Docker).
-3. O `kubectl` deve estar instalado e configurado para funcionar com o Minikube.
+1. **Instalar o Minikube**: Certifique-se de que o Minikube está instalado no seu sistema.
+   - [Instruções oficiais de instalação](https://minikube.sigs.k8s.io/docs/start/).
+
+2. **Instalar o Docker**: Se você estiver usando o driver Docker, ele deve estar instalado e funcional.
+   - [Baixe e instale o Docker](https://www.docker.com/products/docker-desktop).
+
+3. **Instalar o kubectl**: O utilitário `kubectl` é necessário para gerenciar o Kubernetes.
+   - [Instruções oficiais de instalação](https://kubernetes.io/docs/tasks/tools/).
+
+4. **Verificar virtualização**: Certifique-se de que a virtualização está habilitada no BIOS do seu computador, especialmente se você estiver usando drivers como VirtualBox.
+
+5. **Recursos do Sistema**: Certifique-se de que o sistema possui pelo menos:
+   - 2 CPUs
+   - 2 GB de memória livre
+   - 20 GB de espaço em disco
 
 ---
 
 ## Etapas
 
-### Etapa 1: Iniciar o Minikube
-Inicie o cluster do Minikube.
-
-```bash
-minikube start --driver=docker
-```
-
-- **Explicação**: Este comando inicia o Minikube usando o driver Docker. Caso prefira outro driver, substitua `docker` pelo driver desejado (como `virtualbox`). Certifique-se de que o driver escolhido está instalado e funcional.
+### Etapa 1: Instalar o Minikube e Configurar
+1. Após a instalação, verifique se o Minikube está funcionando:
+   ```bash
+   minikube version
+   ```
+2. Inicie o cluster do Minikube:
+   ```bash
+   minikube start --driver=docker
+   ```
+   - **Explicação**: Este comando inicia o Minikube usando o driver Docker. Caso prefira outro driver, substitua `docker` pelo driver desejado (como `virtualbox`). Certifique-se de que o driver escolhido está instalado e funcional.
 
 ---
 
@@ -163,3 +177,5 @@ Se encontrar problemas:
    kubectl delete deployment hello-minikube
    kubectl delete service hello-minikube
    ```
+
+4. Certifique-se de que o driver escolhido está funcionando corretamente. Verifique as dependências do seu sistema e confirme que as configurações de virtualização estão habilitadas no BIOS (se aplicável).
