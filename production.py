@@ -1023,7 +1023,8 @@ def events_calendar_page():
 def loyalty_program_page():
     st.title("Programa de Fidelidade")
 
-    # 1) Carrega dados filtrando: total_geral > 100 e excluindo "Professor Vinicius..."
+    # 1) Carregar dados da view, filtrando por total_geral > 100
+    #    e excluindo "Professor Vinicius Bech Club Boituva".
     query = """
         SELECT "Cliente", total_geral
         FROM public.vw_cliente_sum_total
@@ -1031,14 +1032,13 @@ def loyalty_program_page():
           AND total_geral > 100
         ORDER BY total_geral DESC;
     """
-    data = run_query(query)  # retorna lista de tuplas
+    data = run_query(query)  # 'run_query' executa a consulta SQL e retorna lista de tuplas
 
-    # 2) Converte para DataFrame e formata coluna "Total Geral"
+    # 2) Exibir em dataframe, formatando 'total_geral'
     if data:
         df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
-        # Converte "Total Geral" para numérico, tratando problemas de parsing
-        df["Total Geral"] = pd.to_numeric(df["Total Geral"], errors="coerce").fillna(0)
-        # Aplica a formatação de moeda
+
+        # Se existir a função 'format_currency(value)' para converter em R$ ##,##...
         df["Total Geral"] = df["Total Geral"].apply(format_currency)
 
         st.subheader("Clientes - Fidelidade")
@@ -1048,7 +1048,9 @@ def loyalty_program_page():
 
     st.markdown("---")
 
-    # 3) (Opcional) Lógica local de pontos em session_state
+    # 3) (Opcional) Se ainda quiser manter a lógica de acumular pontos localmente,
+    # deixe o bloco abaixo. Caso não seja necessário, remova completamente.
+
     st.subheader("Acumule pontos a cada compra!")
     if 'points' not in st.session_state:
         st.session_state.points = 0
@@ -1064,6 +1066,9 @@ def loyalty_program_page():
             st.success("Prêmio resgatado!")
         else:
             st.error("Pontos insuficientes.")
+
+
+
 
 ###############################################################################
 #                                LOGIN PAGE
