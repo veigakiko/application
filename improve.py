@@ -1347,6 +1347,7 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
+
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1390,8 +1391,7 @@ def login_page():
             background-color: #003366 !important;
         }
         .signup-button {
-            float: right;
-            margin-right: 0;
+            margin-left: auto !important;
         }
         /* Mensagem de rodapé */
         .footer {
@@ -1458,16 +1458,16 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
         st.write("keep the beach vibes flowing!🌴🎾")
 
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
 
-        col1, col2,col3 = st.columns([1, 1], gap="small")
+        col1, col2 = st.columns([1, 1], gap="medium")
         with col1:
             btn_login = st.form_submit_button("Log in")
-        with col3:
+        with col2:
             btn_signup = st.form_submit_button("Sign up")
         st.markdown("</div>", unsafe_allow_html=True)
 
