@@ -1384,7 +1384,6 @@ def login_page():
             font-weight: bold;
             text-align: center;
             cursor: pointer;
-            display: block;
             width: 100%;
         }
         .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
@@ -1452,12 +1451,7 @@ def login_page():
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
-            st.markdown(
-                """
-                <button class='signup-button'>Sign up</button>
-                """,
-                unsafe_allow_html=True
-            )
+            btn_signup = st.form_submit_button("Sign up")
 
         # Botão de login com Gmail
         st.markdown(
