@@ -2320,16 +2320,27 @@ def apply_custom_css():
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
+        # Novo texto acima do menu
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
+
+       
         selected = option_menu(
-            "Menu",
-            ["Home","Orders","Products","Stock","Clients",
-             "Nota Fiscal","Backup","Cardápio",
-             "Analytics",
-             "Programa de Fidelidade","Calendário de Eventos"],
-            icons=["house","file-text","box","list-task","layers",
-                   "receipt","cloud-upload","list",
-                   "bar-chart-line",
-                   "gift","calendar"],
+            "Beach Menu",
+            [
+                "Home","Orders","Products","Stock","Clients",
+                "Nota Fiscal","Backup","Cardápio",
+                "Analytics",                # Renomeado
+                "Programa de Fidelidade","Calendário de Eventos"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt","cloud-upload","list",
+                "bar-chart-line",          # Mudamos o ícone
+                "gift","calendar"
+            ],
             menu_icon="cast",
             default_index=0,
             styles={
@@ -2342,22 +2353,8 @@ def sidebar_navigation():
                 "nav-link-selected": {"background-color":"#145a7c","color":"white"},
             }
         )
+    return selected
 
-        st.markdown("---")
-
-        # Logout button
-        if st.button("Logout"):
-            for key in ["data", "logged_in", "username", "login_time"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
-            st.experimental_rerun()
-
-        # Mostrar informação de login abaixo do logout
-        if st.session_state.get("username") and st.session_state.get("login_time"):
-            login_time_str = st.session_state.login_time.strftime("%I:%M %p")
-            st.write(f"{st.session_state.username.capitalize()} logado às {login_time_str}")
 
 
 def main():
