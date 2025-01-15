@@ -1062,41 +1062,39 @@ def loyalty_program_page():
 def analytics_page():
     st.title("Analytics")
 
-    # Query the database view
+    # Consulta a view com produto e faturamento
     query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
     result = run_query(query)
 
+    # Se não vier nenhum resultado
     if not result:
         st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
         return
 
-    # Convert the query result to DataFrame
+    # Converte o resultado em DataFrame
     df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-    # Debug Info: show data and dtypes to confirm
-    st.write("**Raw Data**:")
-    st.write(df_faturado.head(10))
-    st.write("**dtypes**:", df_faturado.dtypes)
-
-    # Convert to numeric (any invalid text becomes NaN, then filled with 0)
+    # Converte para tipo numérico (float). Valores inválidos se tornam NaN e são preenchidos com 0.
     df_faturado["total_faturado"] = pd.to_numeric(
         df_faturado["total_faturado"], errors="coerce"
     ).fillna(0)
 
-    # Sort descending
+    # Ordena do maior para o menor
     df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
-    # Display the table
+    # Exibe a tabela
     st.subheader("Tabela de Faturamento por Produto")
     st.dataframe(df_faturado, use_container_width=True)
 
-    # Check if there's at least one positive value
-    if df_faturado["total_faturado"].max() <= 0:
-        st.warning("Valores de faturamento estão zerados ou inválidos.")
+    # Verifica se há algum valor positivo
+    max_val = df_faturado["total_faturado"].max()
+    if max_val <= 0:
+        st.warning("Não há valores de faturamento maiores que zero.")
     else:
-        # Plot horizontal bar chart with Altair
+        # Caso haja valores positivos, plotamos o gráfico
         import altair as alt
 
+        st.subheader("Gráfico de Faturamento (Barras Horizontais)")
         chart = (
             alt.Chart(df_faturado)
             .mark_bar()
@@ -1111,6 +1109,7 @@ def analytics_page():
             )
         )
         st.altair_chart(chart, use_container_width=True)
+
 
 
 
