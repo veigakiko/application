@@ -16,6 +16,9 @@ import mitosheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 import warnings
+import calendar
+from datetime import datetime
+import pandas as pd
 
 # Suprimir SyntaxWarnings de bibliotecas externas
 warnings.filterwarnings("ignore", category=SyntaxWarning)
@@ -1025,6 +1028,8 @@ def admin_backup_section():
 #                         CALENDÁRIO DE EVENTOS
 ###############################################################################
 
+
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1108,7 +1113,140 @@ def events_calendar_page():
     df_filtrado = df_events[df_events["data_evento"].dt.year == ano_selecionado].copy()
 
     # ----------------------------------------------------------------------------
-    # 5) Montar o calendário para todos os meses do ano selecionado
+    # 5) Função para gerar HTML do calendário
+    # ----------------------------------------------------------------------------
+    def create_calendar_html(year, month, events):
+        """
+        Cria uma tabela HTML representando o calendário do mês com os eventos destacados.
+        """
+        cal = calendar.Calendar(firstweekday=0)  # Segunda-feira como primeiro dia da semana
+        month_name = calendar.month_name[month]
+        weeks = cal.monthdayscalendar(year, month)
+
+        # Mapeamento de dias para eventos
+        day_events = {}
+        for _, event in events.iterrows():
+            day = event['data_evento'].day
+            if day not in day_events:
+                day_events[day] = []
+            day_events[day].append(event)
+
+        # Início da tabela HTML
+        html = f"""
+        <table class="calendar-table">
+            <tr>
+                <th colspan="7" class="month-header">{month_name} {year}</th>
+            </tr>
+            <tr class="weekdays">
+        """
+
+        # Cabeçalhos dos dias da semana
+        weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+        for day in weekdays:
+            html += f"<th>{day}</th>"
+        html += "</tr>"
+
+        # Linhas das semanas
+        for week in weeks:
+            html += "<tr>"
+            for day in week:
+                if day == 0:
+                    html += "<td class='empty'></td>"
+                else:
+                    if day in day_events:
+                        # Listar todos os eventos no dia
+                        events_html = "<ul class='event-list'>"
+                        for event in day_events[day]:
+                            events_html += f"<li title='{event['nome']}: {event['descricao']}'>{event['nome']}</li>"
+                        events_html += "</ul>"
+                        html += f"""
+                        <td class='event-day'>
+                            <div class='day-number'>{day}</div>
+                            {events_html}
+                        </td>
+                        """
+                    else:
+                        html += f"""
+                        <td>
+                            <div class='day-number'>{day}</div>
+                        </td>
+                        """
+            html += "</tr>"
+        html += "</table>"
+
+        return html
+
+    # ----------------------------------------------------------------------------
+    # 6) Estilização CSS do Calendário
+    # ----------------------------------------------------------------------------
+    st.markdown(
+        """
+        <style>
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        .calendar-table th {
+            background-color: #1b4f72;
+            color: white;
+            padding: 10px;
+            text-align: center;
+        }
+        .calendar-table td {
+            border: 1px solid #1b4f72;
+            vertical-align: top;
+            height: 100px;
+            padding: 5px;
+            position: relative;
+        }
+        .empty {
+            background-color: #f0f0f0;
+        }
+        .day-number {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            font-weight: bold;
+            color: #1b4f72;
+        }
+        .event-day {
+            background-color: #e6f2ff;
+        }
+        .event-list {
+            list-style-type: none;
+            padding-left: 0;
+            margin-top: 20px;
+        }
+        .event-list li {
+            background-color: #1b4f72;
+            color: white;
+            padding: 2px 4px;
+            margin-bottom: 2px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .event-list li:hover {
+            background-color: #145a7c;
+        }
+        @media (max-width: 768px) {
+            .calendar-table th, .calendar-table td {
+                padding: 5px;
+            }
+            .day-number {
+                font-size: 0.8em;
+            }
+            .event-list li {
+                font-size: 0.8em;
+            }
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ----------------------------------------------------------------------------
+    # 7) Gerar e Exibir Calendários para Todos os Meses
     # ----------------------------------------------------------------------------
     st.subheader(f"Calendário de Eventos para {ano_selecionado}")
 
@@ -1119,73 +1257,11 @@ def events_calendar_page():
     for month in range(1, 13):
         col_index = (month - 1) % num_cols
         with cols[col_index]:
-            st.markdown(f"### {calendar.month_name[month]}")
-            cal = calendar.HTMLCalendar(firstweekday=0)
-            html_calendario = cal.formatmonth(ano_selecionado, month)
-
-            # Filtrar eventos para o mês atual
-            df_mes = df_filtrado[df_filtrado["data_evento"].dt.month == month]
-
-            # Destacar dias com eventos
-            for _, ev in df_mes.iterrows():
-                dia = ev["data_evento"].day
-                # Adicionar estilo inline para destacar o dia
-                # Usando font color and background color
-                highlight_str = (
-                    f' style="background-color:blue; color:white; font-weight:bold;" '
-                    f'title="{ev["nome"]}: {ev["descricao"]}"'
-                )
-                # Substituir as tags <td> correspondentes ao dia
-                # Esta abordagem pode sobrescrever múltiplos dias iguais se houver eventos no mesmo dia
-                for dia_sem_zero in [dia, int(dia)]:
-                    html_calendario = html_calendario.replace(
-                        f'<td class="mon">{dia_sem_zero}</td>',
-                        f'<td class="mon"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="tue">{dia_sem_zero}</td>',
-                        f'<td class="tue"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="wed">{dia_sem_zero}</td>',
-                        f'<td class="wed"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="thu">{dia_sem_zero}</td>',
-                        f'<td class="thu"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="fri">{dia_sem_zero}</td>',
-                        f'<td class="fri"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="sat">{dia_sem_zero}</td>',
-                        f'<td class="sat"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-                    html_calendario = html_calendario.replace(
-                        f'<td class="sun">{dia_sem_zero}</td>',
-                        f'<td class="sun"{highlight_str}>{dia_sem_zero}</td>'
-                    )
-
-            # Ajustar o tamanho do calendário via CSS
-            st.markdown(
-                f"""
-                <style>
-                table {{
-                    width: 100%;
-                    table-layout: fixed;
-                }}
-                td {{
-                    height: 60px;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            st.markdown(html_calendario, unsafe_allow_html=True)
+            html_calendar = create_calendar_html(ano_selecionado, month, df_filtrado[df_filtrado["data_evento"].dt.month == month])
+            st.markdown(html_calendar, unsafe_allow_html=True)
 
     # ----------------------------------------------------------------------------
-    # 6) Listagem dos eventos no ano selecionado
+    # 8) Listagem dos Eventos no Ano Selecionado
     # ----------------------------------------------------------------------------
     st.subheader(f"Eventos de {ano_selecionado}")
     if df_filtrado.empty:
@@ -1206,7 +1282,7 @@ def events_calendar_page():
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
+    # 9) Edição e Exclusão de Eventos
     # ----------------------------------------------------------------------------
     st.subheader("Editar / Excluir Eventos")
 
@@ -1219,10 +1295,10 @@ def events_calendar_page():
 
     if selected_event:
         # Extrair ID do formato "123 - Evento X (2025-01-01)"
-        event_id_str = selected_event.split(" - ")[0]
         try:
+            event_id_str = selected_event.split(" - ")[0]
             event_id = int(event_id_str)
-        except ValueError:
+        except (ValueError, IndexError):
             st.error("Falha ao interpretar ID do evento.")
             st.stop()
 
@@ -1260,17 +1336,18 @@ def events_calendar_page():
                         st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
-                # Exclusão imediata sem checkbox de confirmação
+                # Exclusão imediata com confirmação
                 if st.button("Excluir Evento"):
-                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    if run_query(q_delete, (event_id,), commit=True):
-                        st.success(f"Evento ID={event_id} excluído!")
-                        st.experimental_rerun()
-                    else:
-                        st.error("Falha ao excluir o evento.")
+                    confirm = st.checkbox("Confirma a exclusão deste evento?", key=f"confirm_del_{event_id}")
+                    if confirm:
+                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                        if run_query(q_delete, (event_id,), commit=True):
+                            st.success(f"Evento ID={event_id} excluído!")
+                            st.experimental_rerun()
+                        else:
+                            st.error("Falha ao excluir o evento.")
     else:
         st.info("Selecione um evento para editar ou excluir.")
-
 
 def analytics_page():
     """Página de Analytics contendo gráficos de faturamento."""
