@@ -952,7 +952,7 @@ def events_calendar_page():
             FROM public.tb_eventos
             ORDER BY data_evento;
         """
-        rows = run_query(query)
+        rows = run_query(query)  # Ajuste conforme suas funções de DB
         return rows if rows else []
 
     # ----------------------------------------------------------------------------
@@ -1037,8 +1037,9 @@ def events_calendar_page():
     # Destacar dias com eventos
     for _, ev in df_filtrado.iterrows():
         dia = ev["data_evento"].day
+        # Ajustamos a cor de fundo para azul e o texto para branco
         highlight_str = (
-            f' style="background-color:yellow; font-weight:bold;" '
+            f' style="background-color:blue; color:white; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
         for cssclass in cal.cssclasses:
@@ -1122,7 +1123,7 @@ def events_calendar_page():
                         st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
-                # Removida a confirmação com checkbox; a exclusão é imediata
+                # Exclusão imediata sem checkbox de confirmação
                 if st.button("Excluir Evento"):
                     q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
                     run_query(q_delete, (event_id,), commit=True)
@@ -1130,7 +1131,6 @@ def events_calendar_page():
                     st.experimental_rerun()
     else:
         st.info("Selecione um evento para editar ou excluir.")
-
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
 ###############################################################################
