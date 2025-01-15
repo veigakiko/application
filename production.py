@@ -198,10 +198,10 @@ def load_all_data():
     data = {}
     try:
         data["orders"] = run_query(
-            'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
+            'SELECT "Cliente","Produto","Quantidade","Data","status" FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
-            'SELECT supplier,product,quantity,unit_value,total_value,creation_date FROM public.tb_products ORDER BY creation_date DESC'
+            'SELECT supplier,product,quantity,unit_value,total_value,creation_date, image_url FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
         data["clients"] = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
@@ -495,8 +495,9 @@ def products_page():
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date"]
+            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date","image_url"]
             df_prod = pd.DataFrame(products_data, columns=cols)
+            df_prod["Preço"] = df_prod["Unit Value"].apply(format_currency)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
 
@@ -783,64 +784,44 @@ def clients_page():
             st.info("Nenhum cliente encontrado.")
 
 
-###############################################################################
-#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
-###############################################################################
-def process_payment(client, payment_status):
-    """Processa o pagamento atualizando o status do pedido."""
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s,"Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
-    """
-    run_query(query, (payment_status, client), commit=True)
+def loyalty_program_page():
+    """Página do programa de fidelidade."""
+    st.title("Programa de Fidelidade")
+
+    # 1) Carregar dados da view vw_cliente_sum_total
+    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
+    data = run_query(query)  # Assume que run_query retorna lista de tuplas
+
+    # 2) Exibir em dataframe
+    if data:
+        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
+        st.subheader("Clientes - Fidelidade")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
+
+    st.markdown("---")
+
+    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
+    # basta deixar o bloco abaixo. Caso não precise, remova.
+
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
+
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado!")
+        else:
+            st.error("Pontos insuficientes.")
 
 
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """Gera uma representação textual da nota fiscal para impressão."""
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
-
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
-
-
-###############################################################################
-#                          PÁGINA: NOTA FISCAL
-###############################################################################
 def invoice_page():
     """Página para gerar e gerenciar notas fiscais."""
     st.title("Nota Fiscal")
@@ -911,31 +892,6 @@ def invoice_page():
         st.warning("Selecione um cliente.")
 
 
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
-def export_table_to_csv(table_name):
-    """Permite o download de uma tabela específica como CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-            csv_data = df.to_csv(index=False)
-            st.download_button(
-                label=f"Baixar {table_name} CSV",
-                data=csv_data,
-                file_name=f"{table_name}.csv",
-                mime="text/csv"
-            )
-        except Exception as e:
-            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-        finally:
-            conn.close()
-
-
 def backup_all_tables(tables):
     """Permite o download de todas as tabelas especificadas como um único CSV."""
     conn = get_db_connection()
@@ -957,6 +913,25 @@ def backup_all_tables(tables):
                 )
         except Exception as e:
             st.error(f"Erro ao exportar todas as tabelas: {e}")
+        finally:
+            conn.close()
+
+
+def export_table_to_csv(table_name):
+    """Permite o download de uma tabela específica como CSV."""
+    conn = get_db_connection()
+    if conn:
+        try:
+            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
+            csv_data = df.to_csv(index=False)
+            st.download_button(
+                label=f"Baixar {table_name} CSV",
+                data=csv_data,
+                file_name=f"{table_name}.csv",
+                mime="text/csv"
+            )
+        except Exception as e:
+            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
         finally:
             conn.close()
 
@@ -986,6 +961,99 @@ def admin_backup_section():
     else:
         st.warning("Acesso restrito para administradores.")
 
+
+def process_payment(client, payment_status):
+    """Processa o pagamento atualizando o status do pedido."""
+    query = """
+        UPDATE public.tb_pedido
+        SET status=%s,"Data"=CURRENT_TIMESTAMP
+        WHERE "Cliente"=%s AND status='em aberto'
+    """
+    run_query(query, (payment_status, client), commit=True)
+
+
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """Gera uma representação textual da nota fiscal para impressão."""
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    # Garante que df["total"] seja numérico
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row['total']
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
+
+
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """Gera uma representação textual da nota fiscal para impressão."""
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    # Garante que df["total"] seja numérico
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row['total']
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
 
 
 ###############################################################################
@@ -1041,26 +1109,17 @@ def events_calendar_page():
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 3) Filtros de Mês/Ano
+    # 3) Seleção de Ano
     # ----------------------------------------------------------------------------
     current_date = date.today()
     ano_padrao = current_date.year
-    mes_padrao = current_date.month
 
-    col_ano, col_mes = st.columns(2)
+    col_ano = st.columns([1])[0]
     with col_ano:
         ano_selecionado = st.selectbox(
             "Selecione o Ano",
             list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
             index=2  # por padrão, seleciona o ano atual
-        )
-    with col_mes:
-        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
-        mes_selecionado = st.selectbox(
-            "Selecione o Mês",
-            options=list(range(1, 13)),
-            format_func=lambda x: meses_nomes[x-1],
-            index=mes_padrao - 1
         )
 
     # ----------------------------------------------------------------------------
@@ -1077,66 +1136,90 @@ def events_calendar_page():
     )
     df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
-    df_filtrado = df_events[
-        (df_events["data_evento"].dt.year == ano_selecionado) &
-        (df_events["data_evento"].dt.month == mes_selecionado)
-    ].copy()
+    df_filtrado = df_events[df_events["data_evento"].dt.year == ano_selecionado].copy()
 
     # ----------------------------------------------------------------------------
-    # 5) Montar o calendário
+    # 5) Montar o calendário para todos os meses do ano selecionado
     # ----------------------------------------------------------------------------
-    st.subheader("Visualização do Calendário")
+    st.subheader(f"Calendário de Eventos para {ano_selecionado}")
 
-    cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+    # Configurar número de colunas para exibir os calendários
+    num_cols = 3
+    cols = st.columns(num_cols)
 
-    # Destacar dias com eventos
-    for _, ev in df_filtrado.iterrows():
-        dia = ev["data_evento"].day
-        # Ajustamos a cor de fundo para azul e o texto para branco
-        highlight_str = (
-            f' style="background-color:blue; color:white; font-weight:bold;" '
-            f'title="{ev["nome"]}: {ev["descricao"]}"'
-        )
-        # Substituir as tags <td> correspondentes ao dia
-        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
-        html_calendario = html_calendario.replace(
-            f'<td class="mon">{dia}</td>',
-            f'<td class="mon"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="tue">{dia}</td>',
-            f'<td class="tue"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="wed">{dia}</td>',
-            f'<td class="wed"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="thu">{dia}</td>',
-            f'<td class="thu"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="fri">{dia}</td>',
-            f'<td class="fri"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="sat">{dia}</td>',
-            f'<td class="sat"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="sun">{dia}</td>',
-            f'<td class="sun"{highlight_str}>{dia}</td>'
-        )
+    for month in range(1, 13):
+        col_index = (month - 1) % num_cols
+        with cols[col_index]:
+            st.markdown(f"### {calendar.month_name[month]}")
+            cal = calendar.HTMLCalendar(firstweekday=0)
+            html_calendario = cal.formatmonth(ano_selecionado, month)
 
-    st.markdown(html_calendario, unsafe_allow_html=True)
+            # Filtrar eventos para o mês atual
+            df_mes = df_filtrado[df_filtrado["data_evento"].dt.month == month]
+
+            # Destacar dias com eventos
+            for _, ev in df_mes.iterrows():
+                dia = ev["data_evento"].day
+                # Adicionar estilo inline para destacar o dia
+                # Usando font color and background color
+                highlight_str = (
+                    f' style="background-color:blue; color:white; font-weight:bold;" '
+                    f'title="{ev["nome"]}: {ev["descricao"]}"'
+                )
+                # Substituir as tags <td> correspondentes ao dia
+                # Esta abordagem pode sobrescrever múltiplos dias iguais se houver eventos no mesmo dia
+                html_calendario = html_calendario.replace(
+                    f'<td class="mon">{dia}</td>',
+                    f'<td class="mon"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="tue">{dia}</td>',
+                    f'<td class="tue"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="wed">{dia}</td>',
+                    f'<td class="wed"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="thu">{dia}</td>',
+                    f'<td class="thu"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="fri">{dia}</td>',
+                    f'<td class="fri"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="sat">{dia}</td>',
+                    f'<td class="sat"{highlight_str}>{dia}</td>'
+                )
+                html_calendario = html_calendario.replace(
+                    f'<td class="sun">{dia}</td>',
+                    f'<td class="sun"{highlight_str}>{dia}</td>'
+                )
+
+            # Ajustar o tamanho do calendário via CSS
+            st.markdown(
+                f"""
+                <style>
+                table {{
+                    width: 100%;
+                    table-layout: fixed;
+                }}
+                td {{
+                    height: 60px;
+                }}
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(html_calendario, unsafe_allow_html=True)
 
     # ----------------------------------------------------------------------------
-    # 6) Listagem dos eventos no mês selecionado
+    # 6) Listagem dos eventos no ano selecionado
     # ----------------------------------------------------------------------------
-    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
-    if len(df_filtrado) == 0:
-        st.info("Nenhum evento neste mês.")
+    st.subheader(f"Eventos de {ano_selecionado}")
+    if df_filtrado.empty:
+        st.info("Nenhum evento neste ano.")
     else:
         df_display = df_filtrado.copy()
         df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
@@ -1215,56 +1298,88 @@ def events_calendar_page():
         st.info("Selecione um evento para editar ou excluir.")
 
 
-###############################################################################
-#                     PROGRAMA DE FIDELIDADE (AJUSTADO)
-###############################################################################
-def loyalty_program_page():
-    """Página do programa de fidelidade."""
-    st.title("Programa de Fidelidade")
+def analytics_page():
+    """Página de Analytics contendo gráficos de faturamento."""
+    st.title("Analytics")
 
-    # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # Assume que run_query retorna lista de tuplas
-
-    # 2) Exibir em dataframe
-    if data:
-        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
-        st.subheader("Clientes - Fidelidade")
-        st.dataframe(df, use_container_width=True)
+    # 1) Carregar dados de faturamento
+    faturamento_query = """
+        SELECT date("Data") as dt, SUM("total") as total_dia
+        FROM public.vw_pedido_produto
+        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+        GROUP BY date("Data")
+        ORDER BY date("Data")
+    """
+    faturamento_data = run_query(faturamento_query)
+    if faturamento_data:
+        df_faturamento = pd.DataFrame(faturamento_data, columns=["Data", "Total do Dia"])
+        df_faturamento["Data"] = pd.to_datetime(df_faturamento["Data"])
     else:
-        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
+        df_faturamento = pd.DataFrame(columns=["Data", "Total do Dia"])
+
+    # 2) Exibir gráfico de faturamento
+    st.subheader("Faturamento ao Longo do Tempo")
+    if not df_faturamento.empty:
+        chart = alt.Chart(df_faturamento).mark_line(point=True).encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', axis=alt.Axis(title='Total Faturado (R$)')),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para exibir.")
 
     st.markdown("---")
 
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
+    # 3) Gráfico de Previsão de Faturamento usando Regressão Linear
+    st.subheader("Previsão de Faturamento para os Próximos 30 Dias")
+    if not df_faturamento.empty:
+        df_faturamento = df_faturamento.sort_values("Data")
+        df_faturamento['Timestamp'] = df_faturamento['Data'].map(datetime.timestamp)
 
-    st.subheader("Acumule pontos a cada compra!")
-    if 'points' not in st.session_state:
-        st.session_state.points = 0
+        # Modelo de Regressão Linear
+        X = df_faturamento[['Timestamp']]
+        y = df_faturamento['Total do Dia']
+        model = LinearRegression()
+        model.fit(X, y)
 
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
-    if st.button("Adicionar Pontos"):
-        st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+        # Previsão para os próximos 30 dias
+        last_date = df_faturamento['Data'].max()
+        future_dates = [last_date + timedelta(days=i) for i in range(1, 31)]
+        future_timestamps = [[datetime.timestamp(d)] for d in future_dates]
+        predictions = model.predict(future_timestamps)
 
-    if st.button("Resgatar Prêmio"):
-        if st.session_state.points >= 100:
-            st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
-        else:
-            st.error("Pontos insuficientes.")
+        df_pred = pd.DataFrame({
+            "Data": future_dates,
+            "Previsão de Faturamento": predictions
+        })
 
+        # Gráfico
+        chart_pred = alt.Chart(pd.concat([df_faturamento, df_pred])).mark_line().encode(
+            x='Data:T',
+            y=alt.Y('Total do Dia:Q', title='Total Faturado (R$)'),
+            color=alt.condition(
+                alt.datum.Data <= last_date,
+                alt.value('steelblue'),  # cor para dados reais
+                alt.value('orange')      # cor para previsões
+            ),
+            tooltip=['Data:T', 'Total do Dia:Q']
+        ).properties(
+            width=800,
+            height=400
+        )
+        st.altair_chart(chart_pred, use_container_width=True)
+    else:
+        st.info("Nenhum dado de faturamento para realizar previsão.")
 
-###############################################################################
-#                     NOVA PÁGINA: ANALYTICS (Faturamento)
-###############################################################################
-import matplotlib.pyplot as plt
+    st.markdown("---")
 
-def analytics_page():
-    """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
-    st.title("Editar Pedidos com MitoSheet")
-    
+    # 4) Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+
     # Função para carregar dados de tb_pedido
     @st.cache_data(show_spinner=False)
     def load_pedido_data():
@@ -1277,71 +1392,91 @@ def analytics_page():
             return df
         else:
             return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-    
+
     pedido_data = load_pedido_data()
-    
-    # Adicionar o gráfico de Top 10 Produtos por Receita Total
-    st.subheader("Top 10 Produtos por Receita Total (em Reais)")
-    
+
     if not pedido_data.empty:
-        # Adiciona uma coluna "Preço" simulada (substituir com valores reais, se disponíveis)
-        import numpy as np
-        np.random.seed(42)
-        pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
+        # Inicializa MitoSheet com os dados de tb_pedido
+        new_dfs, code = spreadsheet(pedido_data)
+        code = code if code else "# Edite a planilha acima para gerar código"
+        st.code(code)
 
-        # Calcula a receita total por produto
-        product_revenue = (
-            pedido_data
-            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
-            .groupby("Produto")["Receita"]
-            .sum()
-            .reset_index()
-            .sort_values(by="Receita", ascending=False)
-            .head(10)
-        )
+        # Função para limpar o cache do MitoSheet periodicamente
+        def clear_mito_backend_cache():
+            _get_mito_backend.clear()
 
-        # Cria o gráfico
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
-        ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
-        ax.set_xlabel("Receita Total (R$)", fontsize=12)
-        ax.set_ylabel("Produto", fontsize=12)
-        plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
-        st.pyplot(fig)
+        # Função para armazenar o tempo da última execução
+        @st.cache_resource
+        def get_cached_time():
+            return {"last_executed_time": None}
+
+        def try_clear_cache():
+            CLEAR_DELTA = timedelta(hours=12)
+            current_time = datetime.now()
+            cached_time = get_cached_time()
+            if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+                clear_mito_backend_cache()
+                cached_time["last_executed_time"] = current_time
+
+        try_clear_cache()
+
+        # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+        # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+        st.markdown("---")
+        st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
     else:
-        st.warning("Nenhum dado disponível para gerar o gráfico.")
-    
-    # Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
-    
-    # Inicializa MitoSheet com os dados de tb_pedido
-    new_dfs, code = spreadsheet(pedido_data)
-    code = code if code else "# Edite a planilha acima para gerar código"
-    st.code(code)
-    
-    # Função para limpar o cache do MitoSheet periodicamente
-    def clear_mito_backend_cache():
-        _get_mito_backend.clear()
-    
-    # Função para armazenar o tempo da última execução
-    @st.cache_resource
-    def get_cached_time():
-        return {"last_executed_time": None}
-    
-    def try_clear_cache():
-        CLEAR_DELTA = timedelta(hours=12)
-        current_time = datetime.now()
-        cached_time = get_cached_time()
-        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-            clear_mito_backend_cache()
-            cached_time["last_executed_time"] = current_time
-    
-    try_clear_cache()
-    
-    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
-    st.markdown("---")
-    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+        st.info("Nenhum pedido encontrado para editar.")
+
+
+def menu_page():
+    """Página do cardápio."""
+    st.title("Cardápio")
+
+    product_data = run_query("""
+        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
+        FROM public.tb_products
+        ORDER BY creation_date DESC
+    """)
+    if not product_data:
+        st.warning("Nenhum produto encontrado no cardápio.")
+        return
+
+    df_products = pd.DataFrame(
+        product_data,
+        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
+    )
+    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
+
+    tabs = st.tabs(["Ver Cardápio"])
+
+    with tabs[0]:
+        st.subheader("Itens Disponíveis")
+        for idx, row in df_products.iterrows():
+            product_name = row["Product"]
+            price_text   = row["Preço"]
+            image_url    = row["image_url"] if row["image_url"] else ""
+
+            if not image_url:
+                image_url = "https://via.placeholder.com/120"
+
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                try:
+                    st.image(image_url, width=120)
+                except:
+                    st.image("https://via.placeholder.com/120", width=120)
+
+            with col2:
+                st.subheader(product_name)
+                st.write(f"Preço: {price_text}")
+
+            st.markdown("---")
+
+
+###############################################################################
+#                     NOVA PÁGINA: ANALYTICS (Faturamento)
+###############################################################################
+# (Already defined above; removed duplicate definitions)
 
 
 ###############################################################################
@@ -1421,6 +1556,12 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
+        /* Remove espaço entre os input boxes */
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important; /* Sem margem entre os campos */
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1429,27 +1570,17 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = ""  # URL direto para a imagem
-    placeholder_image_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL de imagem padrão
-
+    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL direto para a imagem
+    logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
         if resp.status_code == 200:
             logo = Image.open(BytesIO(resp.content))
-            st.image(logo, use_column_width=True)
-        else:
-            # Opcional: Exibir imagem padrão se o logo falhar ao carregar
-            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
-            st.image(logo_placeholder, use_column_width=True)
     except Exception:
-        # Opcional: Exibir imagem padrão em caso de exceção
-        try:
-            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
-            st.image(logo_placeholder, use_column_width=True)
-        except Exception:
-            # Se até a imagem padrão falhar, não exiba nada
-            pass
+        pass
 
+    if logo:
+        st.image(logo, use_column_width=True)
     st.title("")
 
     # ---------------------------------------------------------------------
@@ -1459,24 +1590,22 @@ def login_page():
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
         # Campos de entrada
-        username_input = st.text_input("", placeholder="Username", key='username_input')
-        password_input = st.text_input("", type="password", placeholder="Password", key='password_input')
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
         # Botão de login
         btn_login = st.form_submit_button("Log in")
 
-    # ---------------------------------------------------------------------
-    # 4) Botão de login com Google (fora do formulário)
-    # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
-        """,
-        unsafe_allow_html=True
-    )
+        # Botão de login com Google (fora do formulário)
+        st.markdown(
+            """
+            <button class='gmail-login'>Log in with Google</button>
+            """,
+            unsafe_allow_html=True
+        )
 
     # ---------------------------------------------------------------------
-    # 5) Ação: Login
+    # 4) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not username_input or not password_input:
@@ -1512,7 +1641,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 6) Rodapé / Footer
+    # 5) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1525,7 +1654,7 @@ def login_page():
 
 
 ###############################################################################
-#                            INICIALIZAÇÃO E MAIN
+#                     INICIALIZAÇÃO E MAIN
 ###############################################################################
 def initialize_session_state():
     """Inicializa variáveis no session_state do Streamlit."""
@@ -1533,6 +1662,10 @@ def initialize_session_state():
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
+    if 'username' not in st.session_state:
+        st.session_state.username = ""
+    if 'login_time' not in st.session_state:
+        st.session_state.login_time = ""
 
 
 def apply_custom_css():
@@ -1575,25 +1708,18 @@ def apply_custom_css():
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
-        # Novo texto acima do menu
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
-            )
-
-        st.title("Boituva Beach Club 🎾")
         selected = option_menu(
-            "Menu Principal",
+            "Beach Menu",
             [
                 "Home","Orders","Products","Stock","Clients",
                 "Nota Fiscal","Backup","Cardápio",
-                "Analytics",                # Renomeado
+                "Analytics",
                 "Programa de Fidelidade","Calendário de Eventos"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
                 "receipt","cloud-upload","list",
-                "bar-chart-line",          # Mudamos o ícone
+                "bar-chart-line",
                 "gift","calendar"
             ],
             menu_icon="cast",
@@ -1608,175 +1734,24 @@ def sidebar_navigation():
                 "nav-link-selected": {"background-color":"#145a7c","color":"white"},
             }
         )
-    return selected
+
+        st.markdown("---")
+
+        # Logout button
+        if st.button("Logout"):
+            for key in ["data", "logged_in", "username", "login_time"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.logged_in = False
+            st.success("Desconectado com sucesso!")
+            st.experimental_rerun()
+
+        # Mostrar informação de login abaixo do logout
+        if st.session_state.get("username") and st.session_state.get("login_time"):
+            login_time_str = st.session_state.login_time.strftime("%I:%M %p")
+            st.write(f"{st.session_state.username.capitalize()} logado às {login_time_str}")
 
 
-def menu_page():
-    """Página do cardápio."""
-    st.title("Cardápio")
-
-    product_data = run_query("""
-        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
-        FROM public.tb_products
-        ORDER BY creation_date DESC
-    """)
-    if not product_data:
-        st.warning("Nenhum produto encontrado no cardápio.")
-        return
-
-    df_products = pd.DataFrame(
-        product_data,
-        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
-    )
-    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
-
-    tabs = st.tabs(["Ver Cardápio", "Gerenciar Imagens"])
-
-    with tabs[0]:
-        st.subheader("Itens Disponíveis")
-        for idx, row in df_products.iterrows():
-            product_name = row["Product"]
-            price_text   = row["Preço"]
-            image_url    = row["image_url"] if row["image_url"] else ""
-
-            if not image_url:
-                image_url = "https://via.placeholder.com/120"
-
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                try:
-                    st.image(image_url, width=120)
-                except:
-                    st.image("https://via.placeholder.com/120", width=120)
-
-            with col2:
-                st.subheader(product_name)
-                st.write(f"Preço: {price_text}")
-
-            st.markdown("---")
-
-    with tabs[1]:
-        st.subheader("Fazer upload/editar imagem de cada produto")
-
-        product_names = df_products["Product"].unique().tolist()
-        chosen_product = st.selectbox("Selecione o produto", options=[""] + product_names)
-
-        if chosen_product:
-            df_sel = df_products[df_products["Product"] == chosen_product].head(1)
-            if not df_sel.empty:
-                current_image = df_sel.iloc[0]["image_url"] or ""
-            else:
-                current_image = ""
-
-            st.write("Imagem atual:")
-            if current_image:
-                try:
-                    st.image(current_image, width=200)
-                except:
-                    st.image("https://via.placeholder.com/200", width=200)
-            else:
-                st.image("https://via.placeholder.com/200", width=200)
-
-            uploaded_file = st.file_uploader("Carregar nova imagem do produto (PNG/JPG)", type=["png", "jpg", "jpeg"])
-
-            if st.button("Salvar Imagem"):
-                if not uploaded_file:
-                    st.warning("Selecione um arquivo antes de salvar.")
-                else:
-                    file_ext = os.path.splitext(uploaded_file.name)[1]
-                    new_filename = f"{uuid.uuid4()}{file_ext}"
-                    os.makedirs("uploaded_images", exist_ok=True)
-                    save_path = os.path.join("uploaded_images", new_filename)
-                    with open(save_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-
-                    update_query = """
-                        UPDATE public.tb_products
-                        SET image_url=%s
-                        WHERE product=%s
-                    """
-                    run_query(update_query, (save_path, chosen_product), commit=True)
-                    st.success("Imagem atualizada com sucesso!")
-                    refresh_data()
-                    st.experimental_rerun()
-
-
-###############################################################################
-#                     NOVA PÁGINA: ANALYTICS (Faturamento)
-###############################################################################
-def analytics_page():
-    """Página de Analytics simplificada contendo apenas a edição de pedidos com MitoSheet."""
-    st.title("Editar Pedidos com MitoSheet")
-    
-    # Função para carregar dados de tb_pedido
-    @st.cache_data(show_spinner=False)
-    def load_pedido_data():
-        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
-        results = run_query(query)
-        if results:
-            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-            # Converte a coluna "Data" para datetime
-            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
-            return df
-        else:
-            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-    
-    pedido_data = load_pedido_data()
-    
-    # Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
-    
-    # Inicializa MitoSheet com os dados de tb_pedido
-    new_dfs, code = spreadsheet(pedido_data)
-    code = code if code else "# Edite a planilha acima para gerar código"
-    st.code(code)
-    
-    # Função para limpar o cache do MitoSheet periodicamente
-    def clear_mito_backend_cache():
-        _get_mito_backend.clear()
-    
-    # Função para armazenar o tempo da última execução
-    @st.cache_resource
-    def get_cached_time():
-        return {"last_executed_time": None}
-    
-    def try_clear_cache():
-        CLEAR_DELTA = timedelta(hours=12)
-        current_time = datetime.now()
-        cached_time = get_cached_time()
-        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-            clear_mito_backend_cache()
-            cached_time["last_executed_time"] = current_time
-    
-    try_clear_cache()
-    
-    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
-    st.markdown("---")
-    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
-
-
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
-# (Esta seção já está incluída acima e não precisa ser duplicada)
-
-
-###############################################################################
-#                            CALENDÁRIO DE EVENTOS
-###############################################################################
-# (Esta seção já está incluída acima e não precisa ser duplicada)
-
-
-###############################################################################
-#                     PÁGINAS DO APLICATIVO (CONTINUADA)
-###############################################################################
-# (As funções para outras páginas já estão incluídas acima e não precisam ser duplicadas)
-
-
-###############################################################################
-#                     INICIALIZAÇÃO E MAIN
-###############################################################################
 def main():
     """Função principal que controla a execução do aplicativo."""
     apply_custom_css()
@@ -1810,21 +1785,12 @@ def main():
         admin_backup_section()
     elif selected_page == "Cardápio":
         menu_page()
-    elif selected_page == "Analytics":  # <-- Nova página simplificada
+    elif selected_page == "Analytics":
         analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
     elif selected_page == "Calendário de Eventos":
         events_calendar_page()
-
-    with st.sidebar:
-        if st.button("Logout"):
-            for key in ["home_page_initialized"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
-            st.experimental_rerun()
 
 
 if __name__ == "__main__":
