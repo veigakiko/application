@@ -1428,7 +1428,7 @@ def login_page():
         }
         /* Reduz espaçamento entre os elementos */
         .form-container input {
-            margin-bottom: 10px !important;
+            margin-bottom: 5px !important;
         }
         .form-container p {
             margin-bottom: 10px !important;
@@ -1458,7 +1458,7 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
         st.write("keep the beach vibes flowing!🌴🎾")
 
         username_input = st.text_input("", placeholder="Username")
@@ -1521,7 +1521,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
