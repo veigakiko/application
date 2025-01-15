@@ -1415,7 +1415,7 @@ def login_page():
             btn_login = st.form_submit_button("Log in")
         with col2:
             btn_forgot = st.form_submit_button("reset password", help="Exemplo simples de fluxo de recuperação")
-
+        st.write("Or log in with")
     # ---------------------------------------------------------------------
     # 4) Ação: Esqueci a senha (Exemplo Simples)
     # ---------------------------------------------------------------------
