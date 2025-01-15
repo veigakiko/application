@@ -1066,7 +1066,6 @@ def analytics_page():
     query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
     result = run_query(query)
 
-    # Se não vier nenhum resultado
     if not result:
         st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
         return
@@ -1074,20 +1073,37 @@ def analytics_page():
     # Converte o resultado em DataFrame
     df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-    # Converte 'total_faturado' para tipo numérico (float).
-    # Caso haja valores não-numéricos, eles se tornam NaN e depois são preenchidos com 0.
-    df_faturado["total_faturado"] = pd.to_numeric(
-        df_faturado["total_faturado"], errors="coerce"
-    ).fillna(0)
+    # Exemplo de pré-processamento caso os valores venham no formato "1.234,56" (PT-BR):
+    # 1) Transforma em texto
+    # 2) Remove pontos (.) que servem apenas para separar milhar
+    # 3) Substitui vírgula (,) por ponto (.)
+    # 4) Converte para float
+    def br_to_float(valor):
+        """
+        Converte string como "1.234,56" para float 1234.56
+        Caso a string seja inválida, retorna 0.0
+        """
+        if pd.isna(valor):
+            return 0.0
+        val_str = str(valor)
+        val_str = val_str.replace(".", "")    # remove separador de milhar
+        val_str = val_str.replace(",", ".")   # troca vírgula decimal por ponto
+        try:
+            return float(val_str)
+        except ValueError:
+            return 0.0
 
-    # Ordenar do maior para o menor
+    # Aplica a função de conversão linha a linha
+    df_faturado["total_faturado"] = df_faturado["total_faturado"].apply(br_to_float)
+
+    # Ordena do maior para o menor
     df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
 
     # Exibe a tabela de dados
     st.subheader("Tabela de Faturamento por Produto")
     st.dataframe(df_faturado, use_container_width=True)
 
-    # Plota gráfico de barras horizontal com Altair
+    # Cria e exibe o gráfico de barras horizontal (Altair)
     import altair as alt
 
     st.subheader("Gráfico de Faturamento (Barras Horizontais)")
@@ -1095,12 +1111,8 @@ def analytics_page():
         alt.Chart(df_faturado)
         .mark_bar()
         .encode(
-            # Formata o eixo X com duas casas decimais
-            x=alt.X(
-                "total_faturado:Q",
-                title="Total Faturado",
-                axis=alt.Axis(format=",.2f")
-            ),
+            # Formata o eixo X, por exemplo, para 2 casas decimais
+            x=alt.X("total_faturado:Q", title="Total Faturado", axis=alt.Axis(format=",.2f")),
             y=alt.Y("Produto:N", sort="-x", title="Produto")
         )
         .properties(
@@ -1111,9 +1123,10 @@ def analytics_page():
     )
     st.altair_chart(chart, use_container_width=True)
 
-    # (Opcional) Avisar se todos os valores são zero ou nulos
+    # (Opcional) Exibir alerta caso todos os valores sejam zero
     if df_faturado["total_faturado"].max() <= 0:
         st.warning("Observação: Todos os valores de faturamento estão zerados ou inválidos.")
+
 
 
 
