@@ -1422,9 +1422,9 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
-        /* Reduz espaço entre os input boxes */
+        /* Remove espaço entre os input boxes */
         .form-container input {
-            margin-bottom: 1px !important; /* Define o espaço entre os campos como 1px */
+            margin-bottom: 0 !important; /* Remove qualquer espaço entre os campos */
         }
         </style>
         """,
