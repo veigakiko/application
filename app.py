@@ -14,10 +14,9 @@ import calendar
 import altair as alt
 import numpy as np
 from sklearn.linear_model import LinearRegression
-import mitosheet  # Importação do MitoSheet
-from mitosheet.streamlit.v1 import spreadsheet
-from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 import matplotlib.pyplot as plt
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
+from st_aggrid.shared import JsCode
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -103,7 +102,8 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
                 return ""
         else:
             return ""
-    except:
+    except Exception as e:
+        st.error(f"Erro ao fazer upload do PDF: {e}")
         return ""
 
 ###############################################################################
@@ -134,8 +134,8 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
                 from_=whatsapp_from,
                 to=f"whatsapp:+{recipient_number}"
             )
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao enviar WhatsApp: {e}")
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
@@ -151,7 +151,8 @@ def get_db_connection():
             port=st.secrets["db"]["port"]
         )
         return conn
-    except:
+    except Exception as e:
+        st.error(f"Erro ao conectar ao banco de dados: {e}")
         return None
 
 def run_query(query: str, values=None, commit: bool = False):
@@ -392,11 +393,7 @@ def orders_page():
                             product_list = [row[1] for row in product_data] if product_data else ["No products"]
 
                             with col1:
-                                if original_product in product_list:
-                                    prod_index = product_list.index(original_product)
-                                else:
-                                    prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
+                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
@@ -843,7 +840,7 @@ def invoice_page():
         st.warning("Selecione um cliente.")
 
 def analytics_page():
-    """Página de Analytics contendo gráficos e edição de pedidos com MitoSheet."""
+    """Página de Analytics contendo gráficos e edição de pedidos com st_aggrid."""
     st.title("Analytics")
 
     # Função para carregar dados de tb_pedido
@@ -924,37 +921,56 @@ def analytics_page():
     else:
         st.warning("Nenhum dado disponível para gerar o gráfico de Top 10 Produtos.")
 
-    # Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
+    # Seção para edição de pedidos usando st_aggrid
+    st.subheader("Editar Pedidos")
 
-    # Inicializa MitoSheet com os dados de tb_pedido
-    new_dfs, code = spreadsheet(pedido_data)
-    code = code if code else "# Edite a planilha acima para gerar código"
-    st.code(code)
+    if st.session_state.get("username") == "admin":
+        gb = GridOptionsBuilder.from_dataframe(pedido_data)
+        gb.configure_pagination(paginationAutoPageSize=True)  # Add pagination
+        gb.configure_side_bar()  # Add a sidebar
+        gb.configure_selection('single')  # Allow single row selection
+        gb.configure_default_column(editable=True)  # Make all columns editable
+        grid_options = gb.build()
 
-    # Função para limpar o cache do MitoSheet periodicamente
-    def clear_mito_backend_cache():
-        _get_mito_backend.clear()
+        grid_response = AgGrid(
+            pedido_data,
+            gridOptions=grid_options,
+            update_mode=GridUpdateMode.MODEL_CHANGED,
+            enable_enterprise_modules=True,
+            height=400,
+            width='100%',
+            reload_data=False
+        )
 
-    # Função para armazenar o tempo da última execução
-    @st.cache_resource
-    def get_cached_time():
-        return {"last_executed_time": None}
+        updated_df = grid_response['data']
+        selected = grid_response['selected_rows']
+        selected_df = pd.DataFrame(selected)
 
-    def try_clear_cache():
-        CLEAR_DELTA = timedelta(hours=12)
-        current_time = datetime.now()
-        cached_time = get_cached_time()
-        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-            clear_mito_backend_cache()
-            cached_time["last_executed_time"] = current_time
+        if st.button("Salvar Alterações"):
+            if not updated_df.equals(pedido_data):
+                # Exemplo de como salvar as alterações no banco de dados
+                try:
+                    for index, row in updated_df.iterrows():
+                        q_upd = """
+                            UPDATE public.tb_pedido
+                            SET "Cliente"=%s, "Produto"=%s, "Quantidade"=%s, "Data"=%s, "Status"=%s
+                            WHERE id=%s
+                        """
+                        run_query(q_upd, (
+                            row["Cliente"], row["Produto"], row["Quantidade"],
+                            row["Data"], row["Status"], row["ID"]
+                        ), commit=True)
+                    st.success("Alterações salvas com sucesso!")
+                    refresh_data()
+                except Exception as e:
+                    st.error(f"Erro ao salvar alterações: {e}")
+            else:
+                st.info("Nenhuma alteração detectada.")
+    else:
+        st.info("Você não tem permissão para editar pedidos.")
 
-    try_clear_cache()
-
-    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
     st.markdown("---")
-    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+    st.info("**Nota:** Para implementar funcionalidades avançadas de edição, como detecção de mudanças e atualizações parciais, você pode precisar aprimorar a lógica de atualização.")
 
 def admin_backup_section():
     """Seção de backup para administradores."""
@@ -1260,14 +1276,20 @@ def events_calendar_page():
         )
         # Substituir as tags <td> correspondentes ao dia
         # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
-        for dia_sem_zero in [dia]:
-            tags = [f'<td class="{day.lower()}"'>{dia_sem_zero}</td>' for day in ['mon','tue','wed','thu','fri','sat','sun']]
-            for tag in tags:
-                if tag in html_calendario:
-                    html_calendario = html_calendario.replace(
-                        tag,
-                        f'<td class="{tag.split(" ")[1]}"{highlight_str}>{dia_sem_zero}</td>'
-                    )
+        # Para evitar isso, utilizaremos o JsCode para destacar os dias com eventos
+
+    # Usando AgGrid para renderizar um calendário interativo seria mais adequado,
+    # mas para simplificação, vamos apenas exibir o calendário HTML com os dias destacados.
+
+    # Ajuste do HTML do calendário para destacar os dias com eventos
+    for _, ev in df_filtrado.iterrows():
+        dia = ev["data_evento"].day
+        # Criar uma expressão regular para substituir as tags <td> contendo o dia específico
+        # Isto pode não ser perfeito, mas serve para fins ilustrativos
+        html_calendario = html_calendario.replace(
+            f'<td>{dia}</td>',
+            f'<td{highlight_str}>{dia}</td>'
+        )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
@@ -1672,8 +1694,383 @@ def login_page():
         unsafe_allow_html=True
     )
 
+def loyalty_program_page():
+    """Página do programa de fidelidade."""
+    st.title("Programa de Fidelidade")
+
+    # 1) Carregar dados da view vw_cliente_sum_total
+    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
+    data = run_query(query)  # Assume que run_query retorna lista de tuplas
+
+    # 2) Exibir em dataframe
+    if data:
+        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
+        st.subheader("Clientes - Fidelidade")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
+
+    st.markdown("---")
+
+    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
+    # basta deixar o bloco abaixo. Caso não precise, remova.
+
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
+
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado!")
+        else:
+            st.error("Pontos insuficientes.")
+
 ###############################################################################
-#                     INICIALIZAÇÃO E MAIN
+#                           CALENDÁRIO DE EVENTOS
+###############################################################################
+def events_calendar_page():
+    """Página para gerenciar o calendário de eventos."""
+    st.title("Calendário de Eventos")
+
+    # ----------------------------------------------------------------------------
+    # 1) Helper: Ler eventos do banco
+    # ----------------------------------------------------------------------------
+    def get_events_from_db():
+        """
+        Retorna lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
+        ordenadas pela data_evento.
+        """
+        query = """
+            SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
+            FROM public.tb_eventos
+            ORDER BY data_evento;
+        """
+        rows = run_query(query)  # Ajuste conforme suas funções de DB
+        return rows if rows else []
+
+    # ----------------------------------------------------------------------------
+    # 2) Cadastro de novo evento
+    # ----------------------------------------------------------------------------
+    st.subheader("Agendar Novo Evento")
+    with st.form(key="new_event_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            nome_evento = st.text_input("Nome do Evento")
+            data_evento = st.date_input("Data do Evento", value=date.today())
+        with col2:
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
+            descricao_evento = st.text_area("Descrição do Evento")
+        btn_cadastrar = st.form_submit_button("Agendar")
+
+    if btn_cadastrar:
+        if nome_evento.strip():
+            q_insert = """
+                INSERT INTO public.tb_eventos
+                    (nome, descricao, data_evento, inscricao_aberta, data_criacao)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """
+            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            st.success("Evento cadastrado com sucesso!")
+            st.experimental_rerun()
+        else:
+            st.warning("Informe ao menos o nome do evento.")
+
+    st.markdown("---")
+
+    # ----------------------------------------------------------------------------
+    # 3) Filtros de Mês/Ano
+    # ----------------------------------------------------------------------------
+    current_date = date.today()
+    ano_padrao = current_date.year
+    mes_padrao = current_date.month
+
+    col_ano, col_mes = st.columns(2)
+    with col_ano:
+        ano_selecionado = st.selectbox(
+            "Selecione o Ano",
+            list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
+            index=2  # por padrão, seleciona o ano atual
+        )
+    with col_mes:
+        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
+        mes_selecionado = st.selectbox(
+            "Selecione o Mês",
+            options=list(range(1, 13)),
+            format_func=lambda x: meses_nomes[x-1],
+            index=mes_padrao - 1
+        )
+
+    # ----------------------------------------------------------------------------
+    # 4) Ler dados e filtrar
+    # ----------------------------------------------------------------------------
+    event_rows = get_events_from_db()
+    if not event_rows:
+        st.info("Nenhum evento cadastrado.")
+        return
+
+    df_events = pd.DataFrame(
+        event_rows,
+        columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
+    )
+    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
+
+    df_filtrado = df_events[
+        (df_events["data_evento"].dt.year == ano_selecionado) &
+        (df_events["data_evento"].dt.month == mes_selecionado)
+    ].copy()
+
+    # ----------------------------------------------------------------------------
+    # 5) Montar o calendário
+    # ----------------------------------------------------------------------------
+    st.subheader("Visualização do Calendário")
+
+    cal = calendar.HTMLCalendar(firstweekday=0)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+
+    # Destacar dias com eventos
+    for _, ev in df_filtrado.iterrows():
+        dia = ev["data_evento"].day
+        # Ajustamos a cor de fundo para azul e o texto para branco
+        highlight_str = (
+            f' style="background-color:blue; color:white; font-weight:bold;" '
+            f'title="{ev["nome"]}: {ev["descricao"]}"'
+        )
+        # Substituir as tags <td> correspondentes ao dia
+        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        # Para evitar isso, utilizaremos o JsCode para destacar os dias com eventos
+
+        # Usando replace direto
+        html_calendario = html_calendario.replace(
+            f'<td>{dia}</td>',
+            f'<td{highlight_str}>{dia}</td>'
+        )
+
+    st.markdown(html_calendario, unsafe_allow_html=True)
+
+    # ----------------------------------------------------------------------------
+    # 6) Listagem dos eventos no mês selecionado
+    # ----------------------------------------------------------------------------
+    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
+    if len(df_filtrado) == 0:
+        st.info("Nenhum evento neste mês.")
+    else:
+        df_display = df_filtrado.copy()
+        df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
+        df_display.rename(columns={
+            "id": "ID",
+            "nome": "Nome do Evento",
+            "descricao": "Descrição",
+            "data_evento": "Data",
+            "inscricao_aberta": "Inscrição Aberta",
+            "data_criacao": "Data Criação"
+        }, inplace=True)
+        st.dataframe(df_display, use_container_width=True)
+
+    st.markdown("---")
+
+    # ----------------------------------------------------------------------------
+    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
+    # ----------------------------------------------------------------------------
+    st.subheader("Editar / Excluir Eventos")
+
+    df_events["evento_label"] = df_events.apply(
+        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
+        axis=1
+    )
+    events_list = [""] + df_events["evento_label"].tolist()
+    selected_event = st.selectbox("Selecione um evento:", events_list)
+
+    if selected_event:
+        # Extrair ID do formato "123 - Evento X (2025-01-01)"
+        event_id_str = selected_event.split(" - ")[0]
+        try:
+            event_id = int(event_id_str)
+        except ValueError:
+            st.error("Falha ao interpretar ID do evento.")
+            return
+
+        # Carrega dados do evento selecionado
+        ev_row = df_events[df_events["id"] == event_id].iloc[0]
+        original_nome = ev_row["nome"]
+        original_desc = ev_row["descricao"]
+        original_data = ev_row["data_evento"]
+        original_insc = ev_row["inscricao_aberta"]
+
+        with st.expander("Editar Evento", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_nome = st.text_input("Nome do Evento", value=original_nome)
+                new_data = st.date_input("Data do Evento", value=original_data.date())
+            with col2:
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
+                new_desc = st.text_area("Descrição do Evento", value=original_desc)
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("Atualizar Evento"):
+                    if new_nome.strip():
+                        q_update = """
+                            UPDATE public.tb_eventos
+                            SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
+                            WHERE id=%s
+                        """
+                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        st.success("Evento atualizado com sucesso!")
+                        st.experimental_rerun()
+                    else:
+                        st.warning("O campo Nome do Evento não pode ficar vazio.")
+
+            with col_btn2:
+                # Exclusão imediata sem checkbox de confirmação
+                if st.button("Excluir Evento"):
+                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                    run_query(q_delete, (event_id,), commit=True)
+                    st.success(f"Evento ID={event_id} excluído!")
+                    st.experimental_rerun()
+    else:
+        st.info("Selecione um evento para editar ou excluir.")
+
+def analytics_page():
+    """Página de Analytics contendo gráficos e edição de pedidos com st_aggrid."""
+    st.title("Analytics")
+
+    # Função para carregar dados de tb_pedido
+    @st.cache_data(show_spinner=False)
+    def load_pedido_data():
+        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", "Status", id FROM public.tb_pedido;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+            # Converte a coluna "Data" para datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+
+    pedido_data = load_pedido_data()
+
+    # Função para carregar dados de daily_revenue
+    @st.cache_data(show_spinner=False)
+    def load_daily_revenue_data():
+        query = 'SELECT order_date, daily_revenue FROM public.daily_revenue;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["order_date", "daily_revenue"])
+            # Converte a coluna "order_date" para datetime
+            df["order_date"] = pd.to_datetime(df["order_date"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["order_date", "daily_revenue"])
+
+    daily_revenue_data = load_daily_revenue_data()
+
+    # Adicionar o gráfico de Receita Diária
+    st.subheader("Receita Diária ao Longo do Tempo")
+
+    if not daily_revenue_data.empty:
+        # Ordena os dados por data
+        daily_revenue_data = daily_revenue_data.sort_values(by="order_date")
+
+        # Cria o gráfico
+        fig_revenue, ax_revenue = plt.subplots(figsize=(10, 6))
+        ax_revenue.plot(daily_revenue_data["order_date"], daily_revenue_data["daily_revenue"], marker='o', linestyle='-', color='green')
+        ax_revenue.set_title("Receita Diária ao Longo do Tempo", fontsize=16)
+        ax_revenue.set_xlabel("Data", fontsize=12)
+        ax_revenue.set_ylabel("Receita Diária (R$)", fontsize=12)
+        ax_revenue.grid(True)
+        st.pyplot(fig_revenue)
+    else:
+        st.warning("Nenhum dado disponível para gerar o gráfico de Receita Diária.")
+
+    # Adicionar o gráfico de Top 10 Produtos por Receita Total
+    st.subheader("Top 10 Produtos por Receita Total (em Reais)")
+
+    if not pedido_data.empty:
+        # Adiciona uma coluna "Preço" simulada (substituir com valores reais, se disponíveis)
+        np.random.seed(42)
+        pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
+
+        # Calcula a receita total por produto
+        product_revenue = (
+            pedido_data
+            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
+            .groupby("Produto")["Receita"]
+            .sum()
+            .reset_index()
+            .sort_values(by="Receita", ascending=False)
+            .head(10)
+        )
+
+        # Cria o gráfico
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
+        ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
+        ax.set_xlabel("Receita Total (R$)", fontsize=12)
+        ax.set_ylabel("Produto", fontsize=12)
+        plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
+        st.pyplot(fig)
+    else:
+        st.warning("Nenhum dado disponível para gerar o gráfico de Top 10 Produtos.")
+
+    # Seção para edição de pedidos usando st_aggrid
+    st.subheader("Editar Pedidos")
+
+    if st.session_state.get("username") == "admin":
+        gb = GridOptionsBuilder.from_dataframe(pedido_data)
+        gb.configure_pagination(paginationAutoPageSize=True)  # Add pagination
+        gb.configure_side_bar()  # Add a sidebar
+        gb.configure_selection('single')  # Allow single row selection
+        gb.configure_default_column(editable=True)  # Make all columns editable
+        grid_options = gb.build()
+
+        grid_response = AgGrid(
+            pedido_data,
+            gridOptions=grid_options,
+            update_mode=GridUpdateMode.MODEL_CHANGED,
+            enable_enterprise_modules=True,
+            height=400,
+            width='100%',
+            reload_data=False
+        )
+
+        updated_df = grid_response['data']
+        selected = grid_response['selected_rows']
+        selected_df = pd.DataFrame(selected)
+
+        if st.button("Salvar Alterações"):
+            if not updated_df.equals(pedido_data):
+                # Exemplo de como salvar as alterações no banco de dados
+                try:
+                    for index, row in updated_df.iterrows():
+                        q_upd = """
+                            UPDATE public.tb_pedido
+                            SET "Cliente"=%s, "Produto"=%s, "Quantidade"=%s, "Data"=%s, "Status"=%s
+                            WHERE id=%s
+                        """
+                        run_query(q_upd, (
+                            row["Cliente"], row["Produto"], row["Quantidade"],
+                            row["Data"], row["Status"], row["ID"]
+                        ), commit=True)
+                    st.success("Alterações salvas com sucesso!")
+                    refresh_data()
+                except Exception as e:
+                    st.error(f"Erro ao salvar alterações: {e}")
+            else:
+                st.info("Nenhuma alteração detectada.")
+    else:
+        st.info("Você não tem permissão para editar pedidos.")
+
+    st.markdown("---")
+    st.info("**Nota:** Para implementar funcionalidades avançadas de edição, como detecção de mudanças e atualizações parciais, você pode precisar aprimorar a lógica de atualização.")
+
+###############################################################################
+#                             MENU PRINCIPAL
 ###############################################################################
 def main():
     """Função principal que controla a execução do aplicativo."""
@@ -1724,5 +2121,8 @@ def main():
             st.success("Desconectado com sucesso!")
             st.experimental_rerun()
 
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
+###############################################################################
 if __name__ == "__main__":
     main()
