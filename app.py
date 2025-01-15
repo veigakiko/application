@@ -1642,7 +1642,7 @@ def login_page():
             # Se até a imagem padrão falhar, não exiba nada
             pass
 
-    st.title("")
+    
 
     # ---------------------------------------------------------------------
     # 3) Formulário de login
