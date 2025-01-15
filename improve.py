@@ -1452,12 +1452,7 @@ def login_page():
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
-            st.markdown(
-                """
-                <button class='signup-button'>Sign up</button>
-                """,
-                unsafe_allow_html=True
-            )
+            st.form_submit_button("Sign up")
 
         # Botão de login com Gmail
         st.markdown(
