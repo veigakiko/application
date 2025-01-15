@@ -1348,7 +1348,6 @@ def analytics_page():
 #                            LOGIN PAGE
 ###############################################################################
 
-
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1519,18 +1518,8 @@ def login_page():
     st.session_state.password_input = st.session_state.get('password_input', '')
 
     # ---------------------------------------------------------------------
-    # 4) Teclados Virtuais
+    # 4) Função para Renderizar o Teclado Virtual
     # ---------------------------------------------------------------------
-    st.markdown("### Teclado Virtual para Username")
-    cols_username = st.columns(10)
-    keys_username = [
-        '1','2','3','4','5','6','7','8','9','0',
-        'Q','W','E','R','T','Y','U','I','O','P',
-        'A','S','D','F','G','H','J','K','L',
-        'Z','X','C','V','B','N','M','⌫','C'
-    ]
-
-    # Função para mapear teclas para Username
     def render_keyboard(field, keys, cols):
         num_cols = 10  # Número de colunas por linha
         for i, key in enumerate(keys):
@@ -1539,25 +1528,42 @@ def login_page():
                 if key == '⌫':
                     if st.button('⌫', key=f'back_{field}'):
                         backspace(field)
-                elif key == 'C':
-                    if st.button('C', key=f'clear_{field}'):
+                elif key == 'Clear':
+                    if st.button('Clear', key=f'clear_{field}'):
                         clear_field(field)
                 else:
                     if st.button(key, key=f'key_{field}_{key}'):
                         append_char(field, key)
+
+    # ---------------------------------------------------------------------
+    # 5) Teclados Virtuais
+    # ---------------------------------------------------------------------
+    st.markdown("### Teclado Virtual para Username")
+    cols_username = st.columns(10)
+    keys_username = [
+        '1','2','3','4','5','6','7','8','9','0',
+        'Q','W','E','R','T','Y','U','I','O','P',
+        'A','S','D','F','G','H','J','K','L',
+        'Z','X','C','V','B','N','M','⌫','Clear'  # Removido o 'C' duplicado e substituído por 'Clear'
+    ]
 
     # Teclado para Username
     render_keyboard("Username", keys_username, cols_username)
 
     st.markdown("### Teclado Virtual para Password")
     cols_password = st.columns(10)
-    keys_password = keys_username  # Mesmas teclas para simplificação
+    keys_password = [
+        '1','2','3','4','5','6','7','8','9','0',
+        'Q','W','E','R','T','Y','U','I','O','P',
+        'A','S','D','F','G','H','J','K','L',
+        'Z','X','C','V','B','N','M','⌫','Clear'  # Removido o 'C' duplicado e substituído por 'Clear'
+    ]
 
     # Teclado para Password
     render_keyboard("Password", keys_password, cols_password)
 
     # ---------------------------------------------------------------------
-    # 5) Ação: Login
+    # 6) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not st.session_state.username_input or not st.session_state.password_input:
@@ -1593,7 +1599,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 6) Rodapé / Footer
+    # 7) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1603,6 +1609,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
