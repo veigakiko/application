@@ -945,6 +945,7 @@ def events_calendar_page():
     def get_events_from_db():
         """
         Retorna lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
+        ordenadas pela data_evento.
         """
         query = """
             SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
@@ -977,7 +978,7 @@ def events_calendar_page():
             """
             run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
             st.success("Evento cadastrado com sucesso!")
-            st.experimental_rerun()  # Forçar reload
+            st.experimental_rerun()
         else:
             st.warning("Informe ao menos o nome do evento.")
 
@@ -990,22 +991,20 @@ def events_calendar_page():
     ano_padrao = current_date.year
     mes_padrao = current_date.month
 
-    # Seletores de ano e mês
     col_ano, col_mes = st.columns(2)
     with col_ano:
         ano_selecionado = st.selectbox(
             "Selecione o Ano",
             list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
-            index=2  # Por padrão, seleciona o ano atual
+            index=2  # por padrão, seleciona o ano atual
         )
     with col_mes:
-        # Lista de meses com nomes
         meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
         mes_selecionado = st.selectbox(
             "Selecione o Mês",
             options=list(range(1, 13)),
             format_func=lambda x: meses_nomes[x-1],
-            index=mes_padrao - 1  # Seleciona o mês atual
+            index=mes_padrao - 1
         )
 
     # ----------------------------------------------------------------------------
@@ -1020,10 +1019,8 @@ def events_calendar_page():
         event_rows,
         columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
     )
-
     df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
-    # Filtra para o ano/mês selecionados
     df_filtrado = df_events[
         (df_events["data_evento"].dt.year == ano_selecionado) &
         (df_events["data_evento"].dt.month == mes_selecionado)
@@ -1044,7 +1041,6 @@ def events_calendar_page():
             f' style="background-color:yellow; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
-
         for cssclass in cal.cssclasses:
             original_tag = f'<td class="{cssclass}">{dia}</td>'
             replaced_tag = f'<td class="{cssclass}"{highlight_str}>{dia}</td>'
@@ -1074,10 +1070,10 @@ def events_calendar_page():
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 7) Edição e Exclusão de Eventos
+    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
     # ----------------------------------------------------------------------------
     st.subheader("Editar / Excluir Eventos")
-    # Opções: "ID - Nome (YYYY-MM-DD)"
+
     df_events["evento_label"] = df_events.apply(
         lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
         axis=1
@@ -1086,7 +1082,7 @@ def events_calendar_page():
     selected_event = st.selectbox("Selecione um evento:", events_list)
 
     if selected_event:
-        # Extrair ID (antes do " - ")
+        # Extrair ID do formato "123 - Evento X (2025-01-01)"
         event_id_str = selected_event.split(" - ")[0]
         try:
             event_id = int(event_id_str)
@@ -1126,16 +1122,12 @@ def events_calendar_page():
                         st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
-                if st.button("Excluir Evento", key=f"del_{event_id}"):
-                    confirm = st.checkbox("Confirmo que desejo excluir este evento.")
-                    if confirm:
-                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                        run_query(q_delete, (event_id,), commit=True)
-                        st.success(f"Evento ID={event_id} excluído!")
-                        st.experimental_rerun()
-                    else:
-                        st.warning("Marque o checkbox de confirmação para excluir.")
-
+                # Removida a confirmação com checkbox; a exclusão é imediata
+                if st.button("Excluir Evento"):
+                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                    run_query(q_delete, (event_id,), commit=True)
+                    st.success(f"Evento ID={event_id} excluído!")
+                    st.experimental_rerun()
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
