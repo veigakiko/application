@@ -1348,21 +1348,26 @@ def analytics_page():
 #                            LOGIN PAGE
 ###############################################################################
 
+import streamlit as st
+from PIL import Image
+import requests
+from io import BytesIO
+from datetime import datetime
+
 def login_page():
     """Página de login do aplicativo com teclado virtual único."""
-    import streamlit as st
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    from datetime import datetime
-
-    # Inicializar session_state para campos de entrada se não existirem
+    
+    # Inicializar session_state para campos de entrada e rastreamento de alterações
     if 'username_input' not in st.session_state:
         st.session_state.username_input = ""
     if 'password_input' not in st.session_state:
         st.session_state.password_input = ""
     if 'active_field' not in st.session_state:
         st.session_state.active_field = "Username"  # Campo padrão ativo
+    if 'username_input_prev' not in st.session_state:
+        st.session_state.username_input_prev = ""
+    if 'password_input_prev' not in st.session_state:
+        st.session_state.password_input_prev = ""
 
     # Função para atualizar o campo de entrada específico
     def append_char(char):
@@ -1503,21 +1508,17 @@ def login_page():
     st.title("")
 
     # ---------------------------------------------------------------------
-    # 3) Botões para selecionar o campo ativo
+    # 3) Detectar qual campo foi modificado por último
     # ---------------------------------------------------------------------
-    st.markdown("### Selecionar Campo para Inserir")
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("Username", key='select_username', 
-                     help="Clique para selecionar o campo Username"):
-            st.session_state.active_field = "Username"
-    with col2:
-        if st.button("Password", key='select_password', 
-                     help="Clique para selecionar o campo Password"):
-            st.session_state.active_field = "Password"
+    # Atualizar active_field baseado na última modificação
+    if st.session_state.username_input != st.session_state.username_input_prev:
+        st.session_state.active_field = "Username"
+    elif st.session_state.password_input != st.session_state.password_input_prev:
+        st.session_state.active_field = "Password"
 
-    # Indicador do campo ativo
-    st.markdown(f"**Campo ativo: {st.session_state.active_field}**")
+    # Atualizar os valores anteriores
+    st.session_state.username_input_prev = st.session_state.username_input
+    st.session_state.password_input_prev = st.session_state.password_input
 
     # ---------------------------------------------------------------------
     # 4) Formulário de login
@@ -1547,16 +1548,18 @@ def login_page():
         # Botão de login
         btn_login = st.form_submit_button("Log in")
 
-        # Botão de login com Google
-        st.markdown(
-            """
-            <button class='gmail-login'>Log in with Google</button>
-            """,
-            unsafe_allow_html=True
-        )
+    # ---------------------------------------------------------------------
+    # 5) Botão de login com Google (fora do formulário)
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ---------------------------------------------------------------------
-    # 5) Teclado Virtual Único
+    # 6) Teclado Virtual Único (fora do formulário)
     # ---------------------------------------------------------------------
     st.markdown("### Teclado Virtual")
 
@@ -1584,7 +1587,7 @@ def login_page():
                     append_char(key)
 
     # ---------------------------------------------------------------------
-    # 6) Ação: Login
+    # 7) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not st.session_state.username_input or not st.session_state.password_input:
@@ -1620,7 +1623,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 7) Rodapé / Footer
+    # 8) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1630,6 +1633,11 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
+# Executar a página de login
+if __name__ == "__main__":
+    login_page()
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
