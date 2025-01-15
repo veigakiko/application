@@ -1347,7 +1347,6 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
-
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1428,10 +1427,10 @@ def login_page():
         }
         /* Reduz espaçamento entre os elementos */
         .form-container input {
-            margin-bottom: 5px !important;
+            margin-bottom: 10px !important;
         }
         .form-container p {
-            margin-bottom: 10px !important;
+            margin-bottom: 15px !important;
         }
         </style>
         """,
@@ -1459,7 +1458,7 @@ def login_page():
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<div class='form-container'>", unsafe_allow_html=True)
-        st.write("keep the beach vibes flowing!🌴🎾")
+        st.write("<p style='text-align: center;'>keep the beach vibes flowing!🌴🎾</p>", unsafe_allow_html=True)
 
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
@@ -1521,6 +1520,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
