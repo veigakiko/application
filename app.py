@@ -21,7 +21,7 @@ from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
 
-#############################################################################
+###############################################################################
 #                                   UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
@@ -836,66 +836,66 @@ def invoice_page():
 
 def admin_backup_section():
     """Seção de backup para administradores."""
-    def export_table_to_csv(table_name):
-        """Permite o download de uma tabela específica como CSV."""
-        conn = get_db_connection()
-        if conn:
-            try:
-                df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-                csv_data = df.to_csv(index=False)
-                st.download_button(
-                    label=f"Baixar {table_name} CSV",
-                    data=csv_data,
-                    file_name=f"{table_name}.csv",
-                    mime="text/csv"
-                )
-            except Exception as e:
-                st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-            finally:
-                conn.close()
-
-    def backup_all_tables(tables):
-        """Permite o download de todas as tabelas especificadas como um único CSV."""
-        conn = get_db_connection()
-        if conn:
-            try:
-                frames = []
-                for table in tables:
-                    df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
-                    df["table_name"] = table
-                    frames.append(df)
-                if frames:
-                    combined = pd.concat(frames, ignore_index=True)
-                    csv_data = combined.to_csv(index=False)
+    if st.session_state.get("username") == "admin":
+        def export_table_to_csv(table_name):
+            """Permite o download de uma tabela específica como CSV."""
+            conn = get_db_connection()
+            if conn:
+                try:
+                    df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
+                    csv_data = df.to_csv(index=False)
                     st.download_button(
-                        label="Baixar Todas as Tabelas CSV",
+                        label=f"Baixar {table_name} CSV",
                         data=csv_data,
-                        file_name="backup_all_tables.csv",
+                        file_name=f"{table_name}.csv",
                         mime="text/csv"
                     )
-            except Exception as e:
-                st.error(f"Erro ao exportar todas as tabelas: {e}")
-            finally:
-                conn.close()
+                except Exception as e:
+                    st.error(f"Erro ao exportar a tabela {table_name}: {e}")
+                finally:
+                    conn.close()
 
-    def perform_backup():
-        """Executa as funcionalidades de backup."""
-        st.header("Sistema de Backup")
-        st.write("Clique para baixar backups das tabelas do banco de dados.")
+        def backup_all_tables(tables):
+            """Permite o download de todas as tabelas especificadas como um único CSV."""
+            conn = get_db_connection()
+            if conn:
+                try:
+                    frames = []
+                    for table in tables:
+                        df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
+                        df["table_name"] = table
+                        frames.append(df)
+                    if frames:
+                        combined = pd.concat(frames, ignore_index=True)
+                        csv_data = combined.to_csv(index=False)
+                        st.download_button(
+                            label="Baixar Todas as Tabelas CSV",
+                            data=csv_data,
+                            file_name="backup_all_tables.csv",
+                            mime="text/csv"
+                        )
+                except Exception as e:
+                    st.error(f"Erro ao exportar todas as tabelas: {e}")
+                finally:
+                    conn.close()
 
-        tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
+        def perform_backup():
+            """Executa as funcionalidades de backup."""
+            st.header("Sistema de Backup")
+            st.write("Clique para baixar backups das tabelas do banco de dados.")
 
-        st.subheader("Baixar Todas as Tabelas de uma Vez")
-        if st.button("Download All Tables"):
-            backup_all_tables(tables)
+            tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
 
-        st.markdown("---")
+            st.subheader("Baixar Todas as Tabelas de uma Vez")
+            if st.button("Download All Tables"):
+                backup_all_tables(tables)
 
-        st.subheader("Baixar Tabelas Individualmente")
-        for table in tables:
-            export_table_to_csv(table)
+            st.markdown("---")
 
-    if st.session_state.get("username") == "admin":
+            st.subheader("Baixar Tabelas Individualmente")
+            for table in tables:
+                export_table_to_csv(table)
+
         perform_backup()
     else:
         st.warning("Acesso restrito para administradores.")
@@ -1397,11 +1397,6 @@ def admin_backup_section():
         st.warning("Acesso restrito para administradores.")
 
 ###############################################################################
-#                           CALENDÁRIO DE EVENTOS
-###############################################################################
-# (Esta seção já está incluída acima e não precisa ser duplicada)
-
-###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
 def initialize_session_state():
@@ -1459,7 +1454,7 @@ def sidebar_navigation():
         # Novo texto acima do menu
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado as {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
 
         st.title("Boituva Beach Club 🎾")
@@ -1618,32 +1613,6 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
-        /* Remove qualquer espaço entre os input boxes */
-        .form-container input {
-            margin-bottom: 0 !important; /* Sem margem entre os campos */
-        }
-        /* Estilo para os teclados virtuais */
-        .virtual-keyboard button {
-            margin: 1px;
-            padding: 8px 10px;
-            font-size: 0.875rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            cursor: pointer;
-            background-color: #f9f9f9;
-            min-width: 35px;
-            min-height: 35px;
-            text-align: center;
-        }
-        .virtual-keyboard button:hover {
-            background-color: #e0e0e0;
-        }
-        /* Indicador de campo ativo */
-        .active-indicator {
-            font-weight: bold;
-            color: #004a8f;
-            margin-bottom: 10px;
-        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1653,16 +1622,14 @@ def login_page():
     # 2) Carregar logo
     # ---------------------------------------------------------------------
     logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
-    logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
         if resp.status_code == 200:
             logo = Image.open(BytesIO(resp.content))
+            st.image(logo, use_column_width=True)
     except Exception:
-        pass
+        st.error("Não foi possível carregar o logo.")
 
-    if logo:
-        st.image(logo, use_column_width=True)
     st.title("")
 
     # ---------------------------------------------------------------------
@@ -1672,28 +1639,8 @@ def login_page():
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
         # Campos de entrada
-        username_input = st.text_input(
-            "Username",
-            placeholder="Username",
-            value=st.session_state.get('username_input', ''),
-            key='username_display',
-            on_change=lambda: st.session_state.update({'active_field': 'Username'})
-        )
-        password_input = st.text_input(
-            "Password",
-            type="password",
-            placeholder="Password",
-            value=st.session_state.get('password_input', ''),
-            key='password_display',
-            on_change=lambda: st.session_state.update({'active_field': 'Password'})
-        )
-
-        # Atualizar session_state com entradas diretas
-        st.session_state['username_input'] = username_input
-        st.session_state['password_input'] = password_input
-
-        # Indicador do campo ativo
-        st.markdown(f"<div class='active-indicator'>**Campo ativo: {st.session_state.get('active_field', 'Username')}**</div>", unsafe_allow_html=True)
+        username_input = st.text_input("Username", placeholder="Username", key='username_input')
+        password_input = st.text_input("Password", type="password", placeholder="Password", key='password_input')
 
         # Botão de login
         btn_login = st.form_submit_button("Log in")
@@ -1759,6 +1706,605 @@ def login_page():
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
 ###############################################################################
+def initialize_session_state():
+    """Inicializa variáveis no session_state do Streamlit."""
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'username_input' not in st.session_state:
+        st.session_state.username_input = ""
+    if 'password_input' not in st.session_state:
+        st.session_state.password_input = ""
+    if 'active_field' not in st.session_state:
+        st.session_state.active_field = "Username"  # Campo padrão
+
+def apply_custom_css():
+    """Aplica CSS customizado para melhorar a aparência do aplicativo."""
+    st.markdown(
+        """
+        <style>
+        .css-1d391kg {
+            font-size: 2em;
+            color: #1b4f72;
+        }
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .css-1aumxhk {
+            background-color: #1b4f72;
+            color: white;
+        }
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+        }
+        .css-1v3fvcr {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+        }
+        </style>
+        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def sidebar_navigation():
+    """Configura a barra lateral de navegação."""
+    with st.sidebar:
+        # Novo texto acima do menu
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
+
+        st.title("Boituva Beach Club 🎾")
+        selected = option_menu(
+            "Menu Principal",
+            [
+                "Home","Orders","Products","Stock","Clients",
+                "Nota Fiscal","Backup","Cardápio",
+                "Analytics",                # Renomeado
+                "Programa de Fidelidade","Calendário de Eventos"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt","cloud-upload","list",
+                "bar-chart-line",          # Mudamos o ícone
+                "gift","calendar"
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"background-color": "#1b4f72"},
+                "icon": {"color": "white","font-size":"18px"},
+                "nav-link": {
+                    "font-size": "14px","text-align":"left","margin":"0px",
+                    "color":"white","--hover-color":"#145a7c"
+                },
+                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
+            }
+        )
+    return selected
+
+def process_payment(client, payment_status):
+    """Processa o pagamento atualizando o status do pedido."""
+    query = """
+        UPDATE public.tb_pedido
+        SET status=%s,"Data"=CURRENT_TIMESTAMP
+        WHERE "Cliente"=%s AND status='em aberto'
+    """
+    run_query(query, (payment_status, client), commit=True)
+
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """Gera uma representação textual da nota fiscal para impressão."""
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    # Garante que df["total"] seja numérico
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row['total']
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
+
+###############################################################################
+#                            LOGIN PAGE
+###############################################################################
+def login_page():
+    """Página de login do aplicativo."""
+    from PIL import Image
+    import requests
+    from io import BytesIO
+    from datetime import datetime
+
+    # ---------------------------------------------------------------------
+    # 1) CSS Customizado para melhorar aparência
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <style>
+        /* Centraliza o container */
+        .block-container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding-top: 40px;
+        }
+        /* Título maior e em negrito */
+        .css-18e3th9 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        /* Botão customizado */
+        .btn {
+            background-color: #004a8f !important;
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #003366 !important;
+        }
+        /* Mensagem de rodapé */
+        .footer {
+            position: fixed;
+            left: 0; 
+            bottom: 0; 
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        /* Google login button */
+        .gmail-login {
+            background-color: #db4437;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            margin-top: 10px;
+            display: block;
+            width: 100%;
+        }
+        .gmail-login:hover {
+            background-color: #c33d30;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ---------------------------------------------------------------------
+    # 2) Carregar logo
+    # ---------------------------------------------------------------------
+    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
+    try:
+        resp = requests.get(logo_url, timeout=5)
+        if resp.status_code == 200:
+            logo = Image.open(BytesIO(resp.content))
+            st.image(logo, use_column_width=True)
+    except Exception:
+        st.error("Não foi possível carregar o logo.")
+
+    st.title("")
+
+    # ---------------------------------------------------------------------
+    # 3) Formulário de login
+    # ---------------------------------------------------------------------
+    with st.form("login_form", clear_on_submit=False):
+        st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
+
+        # Campos de entrada
+        username_input = st.text_input("Username", placeholder="Username", key='username_input')
+        password_input = st.text_input("Password", type="password", placeholder="Password", key='password_input')
+
+        # Botão de login
+        btn_login = st.form_submit_button("Log in")
+
+    # ---------------------------------------------------------------------
+    # 4) Botão de login com Google (fora do formulário)
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ---------------------------------------------------------------------
+    # 5) Ação: Login
+    # ---------------------------------------------------------------------
+    if btn_login:
+        if not username_input or not password_input:
+            st.error("Por favor, preencha todos os campos.")
+        else:
+            try:
+                # Credenciais de exemplo
+                creds = st.secrets["credentials"]
+                admin_user = creds["admin_username"]
+                admin_pass = creds["admin_password"]
+                caixa_user = creds["caixa_username"]
+                caixa_pass = creds["caixa_password"]
+            except KeyError:
+                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+                st.stop()
+
+            # Verificação de login
+            if username_input == admin_user and password_input == admin_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "admin"
+                st.session_state.login_time = datetime.now()
+                st.success("Login bem-sucedido como ADMIN!")
+                st.experimental_rerun()
+
+            elif username_input == caixa_user and password_input == caixa_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "caixa"
+                st.session_state.login_time = datetime.now()
+                st.success("Login bem-sucedido como CAIXA!")
+                st.experimental_rerun()
+
+            else:
+                st.error("Usuário ou senha incorretos.")
+
+    # ---------------------------------------------------------------------
+    # 6) Rodapé / Footer
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <div class='footer'>
+            © 2025 | Todos os direitos reservados | Boituva Beach Club
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+###############################################################################
+#                            BACKUP (ADMIN)
+###############################################################################
+def backup_all_tables(tables):
+    """Permite o download de todas as tabelas especificadas como um único CSV."""
+    conn = get_db_connection()
+    if conn:
+        try:
+            frames = []
+            for table in tables:
+                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
+                df["table_name"] = table
+                frames.append(df)
+            if frames:
+                combined = pd.concat(frames, ignore_index=True)
+                csv_data = combined.to_csv(index=False)
+                st.download_button(
+                    label="Baixar Todas as Tabelas CSV",
+                    data=csv_data,
+                    file_name="backup_all_tables.csv",
+                    mime="text/csv"
+                )
+        except Exception as e:
+            st.error(f"Erro ao exportar todas as tabelas: {e}")
+        finally:
+            conn.close()
+
+def export_table_to_csv(table_name):
+    """Permite o download de uma tabela específica como CSV."""
+    conn = get_db_connection()
+    if conn:
+        try:
+            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
+            csv_data = df.to_csv(index=False)
+            st.download_button(
+                label=f"Baixar {table_name} CSV",
+                data=csv_data,
+                file_name=f"{table_name}.csv",
+                mime="text/csv"
+            )
+        except Exception as e:
+            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
+        finally:
+            conn.close()
+
+def perform_backup():
+    """Executa as funcionalidades de backup."""
+    st.header("Sistema de Backup")
+    st.write("Clique para baixar backups das tabelas do banco de dados.")
+
+    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
+
+    st.subheader("Baixar Todas as Tabelas de uma Vez")
+    if st.button("Download All Tables"):
+        backup_all_tables(tables)
+
+    st.markdown("---")
+
+    st.subheader("Baixar Tabelas Individualmente")
+    for table in tables:
+        export_table_to_csv(table)
+
+def admin_backup_section():
+    """Seção de backup para administradores."""
+    if st.session_state.get("username") == "admin":
+        perform_backup()
+    else:
+        st.warning("Acesso restrito para administradores.")
+
+###############################################################################
+#                           CALENDÁRIO DE EVENTOS
+###############################################################################
+def events_calendar_page():
+    """Página para gerenciar o calendário de eventos."""
+    st.title("Calendário de Eventos")
+
+    # ----------------------------------------------------------------------------
+    # 1) Helper: Ler eventos do banco
+    # ----------------------------------------------------------------------------
+    def get_events_from_db():
+        """
+        Retorna lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
+        ordenadas pela data_evento.
+        """
+        query = """
+            SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
+            FROM public.tb_eventos
+            ORDER BY data_evento;
+        """
+        rows = run_query(query)  # Ajuste conforme suas funções de DB
+        return rows if rows else []
+
+    # ----------------------------------------------------------------------------
+    # 2) Cadastro de novo evento
+    # ----------------------------------------------------------------------------
+    st.subheader("Agendar Novo Evento")
+    with st.form(key="new_event_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            nome_evento = st.text_input("Nome do Evento")
+            data_evento = st.date_input("Data do Evento", value=date.today())
+        with col2:
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
+            descricao_evento = st.text_area("Descrição do Evento")
+        btn_cadastrar = st.form_submit_button("Agendar")
+
+    if btn_cadastrar:
+        if nome_evento.strip():
+            q_insert = """
+                INSERT INTO public.tb_eventos
+                    (nome, descricao, data_evento, inscricao_aberta, data_criacao)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+            """
+            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            st.success("Evento cadastrado com sucesso!")
+            st.experimental_rerun()
+        else:
+            st.warning("Informe ao menos o nome do evento.")
+
+    st.markdown("---")
+
+    # ----------------------------------------------------------------------------
+    # 3) Filtros de Mês/Ano
+    # ----------------------------------------------------------------------------
+    current_date = date.today()
+    ano_padrao = current_date.year
+    mes_padrao = current_date.month
+
+    col_ano, col_mes = st.columns(2)
+    with col_ano:
+        ano_selecionado = st.selectbox(
+            "Selecione o Ano",
+            list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
+            index=2  # por padrão, seleciona o ano atual
+        )
+    with col_mes:
+        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
+        mes_selecionado = st.selectbox(
+            "Selecione o Mês",
+            options=list(range(1, 13)),
+            format_func=lambda x: meses_nomes[x-1],
+            index=mes_padrao - 1
+        )
+
+    # ----------------------------------------------------------------------------
+    # 4) Ler dados e filtrar
+    # ----------------------------------------------------------------------------
+    event_rows = get_events_from_db()
+    if not event_rows:
+        st.info("Nenhum evento cadastrado.")
+        return
+
+    df_events = pd.DataFrame(
+        event_rows,
+        columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
+    )
+    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
+
+    df_filtrado = df_events[
+        (df_events["data_evento"].dt.year == ano_selecionado) &
+        (df_events["data_evento"].dt.month == mes_selecionado)
+    ].copy()
+
+    # ----------------------------------------------------------------------------
+    # 5) Montar o calendário
+    # ----------------------------------------------------------------------------
+    st.subheader("Visualização do Calendário")
+
+    cal = calendar.HTMLCalendar(firstweekday=0)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+
+    # Destacar dias com eventos
+    for _, ev in df_filtrado.iterrows():
+        dia = ev["data_evento"].day
+        # Ajustamos a cor de fundo para azul e o texto para branco
+        highlight_str = (
+            f' style="background-color:blue; color:white; font-weight:bold;" '
+            f'title="{ev["nome"]}: {ev["descricao"]}"'
+        )
+        # Substituir as tags <td> correspondentes ao dia
+        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        html_calendario = html_calendario.replace(
+            f'<td class="mon">{dia}</td>',
+            f'<td class="mon"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="tue">{dia}</td>',
+            f'<td class="tue"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="wed">{dia}</td>',
+            f'<td class="wed"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="thu">{dia}</td>',
+            f'<td class="thu"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="fri">{dia}</td>',
+            f'<td class="fri"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sat">{dia}</td>',
+            f'<td class="sat"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sun">{dia}</td>',
+            f'<td class="sun"{highlight_str}>{dia}</td>'
+        )
+
+    st.markdown(html_calendario, unsafe_allow_html=True)
+
+    # ----------------------------------------------------------------------------
+    # 6) Listagem dos eventos no mês selecionado
+    # ----------------------------------------------------------------------------
+    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
+    if len(df_filtrado) == 0:
+        st.info("Nenhum evento neste mês.")
+    else:
+        df_display = df_filtrado.copy()
+        df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
+        df_display.rename(columns={
+            "id": "ID",
+            "nome": "Nome do Evento",
+            "descricao": "Descrição",
+            "data_evento": "Data",
+            "inscricao_aberta": "Inscrição Aberta",
+            "data_criacao": "Data Criação"
+        }, inplace=True)
+        st.dataframe(df_display, use_container_width=True)
+
+    st.markdown("---")
+
+    # ----------------------------------------------------------------------------
+    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
+    # ----------------------------------------------------------------------------
+    st.subheader("Editar / Excluir Eventos")
+
+    df_events["evento_label"] = df_events.apply(
+        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
+        axis=1
+    )
+    events_list = [""] + df_events["evento_label"].tolist()
+    selected_event = st.selectbox("Selecione um evento:", events_list)
+
+    if selected_event:
+        # Extrair ID do formato "123 - Evento X (2025-01-01)"
+        event_id_str = selected_event.split(" - ")[0]
+        try:
+            event_id = int(event_id_str)
+        except ValueError:
+            st.error("Falha ao interpretar ID do evento.")
+            return
+
+        # Carrega dados do evento selecionado
+        ev_row = df_events[df_events["id"] == event_id].iloc[0]
+        original_nome = ev_row["nome"]
+        original_desc = ev_row["descricao"]
+        original_data = ev_row["data_evento"]
+        original_insc = ev_row["inscricao_aberta"]
+
+        with st.expander("Editar Evento", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_nome = st.text_input("Nome do Evento", value=original_nome)
+                new_data = st.date_input("Data do Evento", value=original_data.date())
+            with col2:
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
+                new_desc = st.text_area("Descrição do Evento", value=original_desc)
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("Atualizar Evento"):
+                    if new_nome.strip():
+                        q_update = """
+                            UPDATE public.tb_eventos
+                            SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
+                            WHERE id=%s
+                        """
+                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        st.success("Evento atualizado com sucesso!")
+                        st.experimental_rerun()
+                    else:
+                        st.warning("O campo Nome do Evento não pode ficar vazio.")
+
+            with col_btn2:
+                # Exclusão imediata sem checkbox de confirmação
+                if st.button("Excluir Evento"):
+                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                    run_query(q_delete, (event_id,), commit=True)
+                    st.success(f"Evento ID={event_id} excluído!")
+                    st.experimental_rerun()
+    else:
+        st.info("Selecione um evento para editar ou excluir.")
+
 def main():
     """Função principal que controla a execução do aplicativo."""
     apply_custom_css()
