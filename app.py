@@ -1503,22 +1503,27 @@ def login_page():
     st.title("")
 
     # ---------------------------------------------------------------------
-    # 3) Formulário de login
+    # 3) Botões para selecionar o campo ativo
+    # ---------------------------------------------------------------------
+    st.markdown("### Selecionar Campo para Inserir")
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Username", key='select_username', 
+                     help="Clique para selecionar o campo Username"):
+            st.session_state.active_field = "Username"
+    with col2:
+        if st.button("Password", key='select_password', 
+                     help="Clique para selecionar o campo Password"):
+            st.session_state.active_field = "Password"
+
+    # Indicador do campo ativo
+    st.markdown(f"**Campo ativo: {st.session_state.active_field}**")
+
+    # ---------------------------------------------------------------------
+    # 4) Formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
-
-        # Botões para selecionar o campo ativo
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            if st.button("Username", key='select_username'):
-                st.session_state.active_field = "Username"
-        with col2:
-            if st.button("Password", key='select_password'):
-                st.session_state.active_field = "Password"
-
-        # Indicador do campo ativo
-        st.markdown(f"**Campo ativo: {st.session_state.active_field}**")
 
         # Campos de entrada com valores controlados por session_state
         username_input = st.text_input(
@@ -1551,7 +1556,7 @@ def login_page():
         )
 
     # ---------------------------------------------------------------------
-    # 4) Teclado Virtual Único
+    # 5) Teclado Virtual Único
     # ---------------------------------------------------------------------
     st.markdown("### Teclado Virtual")
 
@@ -1562,23 +1567,24 @@ def login_page():
         'Z','X','C','V','B','N','M','⌫','Clear'
     ]
 
+    # Organizar teclas em linhas de 10 colunas
     cols = st.columns(10)  # 10 colunas para alinhamento similar a teclado real
 
     for i, key in enumerate(keys):
         col = cols[i % 10]
         with col:
             if key == '⌫':
-                if st.button('⌫', key='backspace'):
+                if st.button('⌫', key=f'backspace_{i}'):
                     backspace()
             elif key == 'Clear':
-                if st.button('Clear', key='clear_field'):
+                if st.button('Clear', key=f'clear_{i}'):
                     clear_field()
             else:
-                if st.button(key, key=f'key_{key}'):
+                if st.button(key, key=f'key_{key}_{i}'):
                     append_char(key)
 
     # ---------------------------------------------------------------------
-    # 5) Ação: Login
+    # 6) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not st.session_state.username_input or not st.session_state.password_input:
@@ -1614,7 +1620,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 6) Rodapé / Footer
+    # 7) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1624,7 +1630,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
