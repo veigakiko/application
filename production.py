@@ -1074,12 +1074,7 @@ def analytics_page():
     # 3) Converte o resultado em DataFrame
     df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
 
-    # --------------------------------------------------------
-    # DEBUG: Mostrar dados brutos como chegaram do banco
-    st.write("### Debug - Dados Brutos do Banco")
-    st.write(df_faturado.head(10))  # primeiros 10 registros
-    st.write(df_faturado.dtypes)    # tipos de cada coluna
-    # --------------------------------------------------------
+
 
    
 
