@@ -1086,29 +1086,29 @@ def analytics_page():
     st.subheader("Tabela de Faturamento por Produto")
     st.dataframe(df_faturado, use_container_width=True)
 
-    # Verifica se há algum valor positivo
-    max_val = df_faturado["total_faturado"].max()
-    if max_val <= 0:
-        st.warning("Não há valores de faturamento maiores que zero.")
-    else:
-        # Caso haja valores positivos, plotamos o gráfico
-        import altair as alt
+    # Cria o gráfico de barras horizontal (Altair)
+    import altair as alt
 
-        st.subheader("Gráfico de Faturamento (Barras Horizontais)")
-        chart = (
-            alt.Chart(df_faturado)
-            .mark_bar()
-            .encode(
-                x=alt.X("total_faturado:Q", title="Total Faturado"),
-                y=alt.Y("Produto:N", sort="-x", title="Produto"),
-            )
-            .properties(
-                title="Faturamento por Produto (Ordenado)",
-                width="container",
-                height=400
-            )
+    st.subheader("Gráfico de Faturamento (Barras Horizontais)")
+    chart = (
+        alt.Chart(df_faturado)
+        .mark_bar()
+        .encode(
+            x=alt.X("total_faturado:Q", title="Total Faturado"),
+            y=alt.Y("Produto:N", sort="-x", title="Produto")
         )
-        st.altair_chart(chart, use_container_width=True)
+        .properties(
+            title="Faturamento por Produto (Ordenado)",
+            width="container",
+            height=400
+        )
+    )
+    st.altair_chart(chart, use_container_width=True)
+
+    # (Opcional) Se quiser avisar que todos os valores são zero/inválidos:
+    if df_faturado["total_faturado"].max() <= 0:
+        st.warning("Observação: Todos os valores de faturamento estão zerados ou inválidos.")
+
 
 
 
