@@ -17,6 +17,7 @@ from sklearn.linear_model import LinearRegression
 import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+import matplotlib.pyplot as plt
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -85,7 +86,7 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
             pdf.cell(40, 10, str(item), border=1)
         pdf.ln()
 
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin-1')  # Codificação para evitar problemas de caracteres
 
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     """Faz upload de um PDF para o file.io e retorna o link."""
@@ -686,14 +687,14 @@ def clients_page():
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
             nome_completo = st.text_input("Nome Completo")
+            data_nasc = st.date_input("Data de Nascimento", value=date(2000,1,1))
+            genero = st.selectbox("Gênero", ["Masculino", "Feminino", "Outro"])
+            telefone = st.text_input("Telefone")
+            endereco = st.text_area("Endereço")
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
-            if nome_completo:
-                data_nasc = date(2000,1,1)
-                genero = "Other"
-                telefone = "0000-0000"
-                endereco = "Endereço padrão"
+            if nome_completo and telefone and endereco:
                 unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
                 email = f"{nome_completo.replace(' ','_').lower()}_{unique_id}@example.com"
 
@@ -708,7 +709,7 @@ def clients_page():
                 st.success("Cliente registrado!")
                 refresh_data()
             else:
-                st.warning("Informe o nome completo.")
+                st.warning("Preencha todos os campos obrigatórios (Nome Completo, Telefone e Endereço).")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
@@ -719,7 +720,7 @@ def clients_page():
             df_clients = pd.DataFrame(clients_data, columns=cols)
             # Exibir apenas a coluna Full Name
             st.dataframe(df_clients[["Full Name"]], use_container_width=True)
-            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
+            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clientes CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Cliente")
@@ -737,6 +738,10 @@ def clients_page():
                     sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                     with st.form(key='edit_client_form'):
                         edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
+                        edit_data_nasc = st.date_input("Data de Nascimento", value=date.today())
+                        edit_genero = st.selectbox("Gênero", ["Masculino", "Feminino", "Outro"], index=0)
+                        edit_telefone = st.text_input("Telefone", value="0000-0000")
+                        edit_endereco = st.text_area("Endereço", value="Endereço padrão")
                         col_upd, col_del = st.columns(2)
                         with col_upd:
                             update_btn = st.form_submit_button("Atualizar Cliente")
@@ -744,24 +749,29 @@ def clients_page():
                             delete_btn = st.form_submit_button("Deletar Cliente")
 
                     if update_btn:
-                        if edit_name:
+                        if edit_name and edit_telefone and edit_endereco:
                             q_upd = """
                                 UPDATE public.tb_clientes
-                                SET nome_completo=%s
+                                SET nome_completo=%s, data_nascimento=%s, genero=%s, telefone=%s,
+                                    endereco=%s
                                 WHERE email=%s
                             """
-                            run_query(q_upd, (edit_name, original_email), commit=True)
+                            run_query(q_upd, (
+                                edit_name, edit_data_nasc, edit_genero, edit_telefone,
+                                edit_endereco, original_email
+                            ), commit=True)
                             st.success("Cliente atualizado!")
                             refresh_data()
                         else:
-                            st.warning("Informe o nome completo.")
+                            st.warning("Preencha todos os campos obrigatórios (Nome Completo, Telefone e Endereço).")
 
                     if delete_btn:
-                        q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
-                        run_query(q_del, (original_email,), commit=True)
-                        st.success("Cliente deletado!")
-                        refresh_data()
-                        st.experimental_rerun()
+                        confirm = st.checkbox("Confirma a exclusão deste cliente?")
+                        if confirm:
+                            q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
+                            run_query(q_del, (original_email,), commit=True)
+                            st.success("Cliente deletado!")
+                            refresh_data()
         else:
             st.info("Nenhum cliente encontrado.")
 
@@ -800,8 +810,6 @@ def invoice_page():
                 st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
 
             # Cálculo final
-            total_sem_desconto = float(total_sem_desconto or 0)
-            desconto_aplicado = float(desconto_aplicado or 0)
             total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
 
             # Gera a nota (ainda mostrando valores sem considerar item a item o desconto, mas no final exibimos total_com_desconto)
@@ -1330,72 +1338,6 @@ def events_calendar_page():
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
-def backup_all_tables(tables):
-    """Permite o download de todas as tabelas especificadas como um único CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            frames = []
-            for table in tables:
-                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
-                df["table_name"] = table
-                frames.append(df)
-            if frames:
-                combined = pd.concat(frames, ignore_index=True)
-                csv_data = combined.to_csv(index=False)
-                st.download_button(
-                    label="Baixar Todas as Tabelas CSV",
-                    data=csv_data,
-                    file_name="backup_all_tables.csv",
-                    mime="text/csv"
-                )
-        except Exception as e:
-            st.error(f"Erro ao exportar todas as tabelas: {e}")
-        finally:
-            conn.close()
-
-def export_table_to_csv(table_name):
-    """Permite o download de uma tabela específica como CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-            csv_data = df.to_csv(index=False)
-            st.download_button(
-                label=f"Baixar {table_name} CSV",
-                data=csv_data,
-                file_name=f"{table_name}.csv",
-                mime="text/csv"
-            )
-        except Exception as e:
-            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-        finally:
-            conn.close()
-
-def perform_backup():
-    """Executa as funcionalidades de backup."""
-    st.header("Sistema de Backup")
-    st.write("Clique para baixar backups das tabelas do banco de dados.")
-
-    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
-
-    st.subheader("Baixar Todas as Tabelas de uma Vez")
-    if st.button("Download All Tables"):
-        backup_all_tables(tables)
-
-    st.markdown("---")
-
-    st.subheader("Baixar Tabelas Individualmente")
-    for table in tables:
-        export_table_to_csv(table)
-
-def admin_backup_section():
-    """Seção de backup para administradores."""
-    if st.session_state.get("username") == "admin":
-        perform_backup()
-    else:
-        st.warning("Acesso restrito para administradores.")
-
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
@@ -1411,6 +1353,8 @@ def initialize_session_state():
         st.session_state.password_input = ""
     if 'active_field' not in st.session_state:
         st.session_state.active_field = "Username"  # Campo padrão
+    if 'points' not in st.session_state:
+        st.session_state.points = 0  # Inicializa pontos para o programa de fidelidade
 
 def apply_custom_css():
     """Aplica CSS customizado para melhorar a aparência do aplicativo."""
@@ -1443,7 +1387,7 @@ def apply_custom_css():
             font-size: 12px;
         }
         </style>
-        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
+        <div class='css-1v3fvcr'>© 2025 - kiko Technologies</div>
         """,
         unsafe_allow_html=True
     )
@@ -1463,13 +1407,13 @@ def sidebar_navigation():
             [
                 "Home","Orders","Products","Stock","Clients",
                 "Nota Fiscal","Backup","Cardápio",
-                "Analytics",                # Renomeado
+                "Analytics",
                 "Programa de Fidelidade","Calendário de Eventos"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
                 "receipt","cloud-upload","list",
-                "bar-chart-line",          # Mudamos o ícone
+                "bar-chart-line",
                 "gift","calendar"
             ],
             menu_icon="cast",
@@ -1642,314 +1586,6 @@ def login_page():
             # Se até a imagem padrão falhar, não exiba nada
             pass
 
-    
-
-    # ---------------------------------------------------------------------
-    # 3) Formulário de login
-    # ---------------------------------------------------------------------
-    with st.form("login_form", clear_on_submit=False):
-        st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
-
-        # Campos de entrada
-        username_input = st.text_input("Username", placeholder="Username", key='username_input')
-        password_input = st.text_input("Password", type="password", placeholder="Password", key='password_input')
-
-        # Botão de login
-        btn_login = st.form_submit_button("Log in")
-
-    # ---------------------------------------------------------------------
-    # 4) Botão de login com Google (fora do formulário)
-    # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # ---------------------------------------------------------------------
-    # 5) Ação: Login
-    # ---------------------------------------------------------------------
-    if btn_login:
-        if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
-        else:
-            try:
-                # Credenciais de exemplo
-                creds = st.secrets["credentials"]
-                admin_user = creds["admin_username"]
-                admin_pass = creds["admin_password"]
-                caixa_user = creds["caixa_username"]
-                caixa_pass = creds["caixa_password"]
-            except KeyError:
-                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-                st.stop()
-
-            # Verificação de login
-            if username_input == admin_user and password_input == admin_pass:
-                st.session_state.logged_in = True
-                st.session_state.username = "admin"
-                st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como ADMIN!")
-                st.experimental_rerun()
-
-            elif username_input == caixa_user and password_input == caixa_pass:
-                st.session_state.logged_in = True
-                st.session_state.username = "caixa"
-                st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como CAIXA!")
-                st.experimental_rerun()
-
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    # ---------------------------------------------------------------------
-    # 6) Rodapé / Footer
-    # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <div class='footer'>
-            © 2025 | Todos os direitos reservados | Boituva Beach Club
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-###############################################################################
-#                            INICIALIZAÇÃO E MAIN
-###############################################################################
-def initialize_session_state():
-    """Inicializa variáveis no session_state do Streamlit."""
-    if 'data' not in st.session_state:
-        st.session_state.data = load_all_data()
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    if 'username_input' not in st.session_state:
-        st.session_state.username_input = ""
-    if 'password_input' not in st.session_state:
-        st.session_state.password_input = ""
-    if 'active_field' not in st.session_state:
-        st.session_state.active_field = "Username"  # Campo padrão
-
-def apply_custom_css():
-    """Aplica CSS customizado para melhorar a aparência do aplicativo."""
-    st.markdown(
-        """
-        <style>
-        .css-1d391kg {
-            font-size: 2em;
-            color: #1b4f72;
-        }
-        .stDataFrame table {
-            width: 100%;
-            overflow-x: auto;
-        }
-        .css-1aumxhk {
-            background-color: #1b4f72;
-            color: white;
-        }
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-        }
-        .css-1v3fvcr {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-        }
-        </style>
-        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def sidebar_navigation():
-    """Configura a barra lateral de navegação."""
-    with st.sidebar:
-        # Novo texto acima do menu
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
-            )
-
-        st.title("Boituva Beach Club 🎾")
-        selected = option_menu(
-            "Menu Principal",
-            [
-                "Home","Orders","Products","Stock","Clients",
-                "Nota Fiscal","Backup","Cardápio",
-                "Analytics",                # Renomeado
-                "Programa de Fidelidade","Calendário de Eventos"
-            ],
-            icons=[
-                "house","file-text","box","list-task","layers",
-                "receipt","cloud-upload","list",
-                "bar-chart-line",          # Mudamos o ícone
-                "gift","calendar"
-            ],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white","font-size":"18px"},
-                "nav-link": {
-                    "font-size": "14px","text-align":"left","margin":"0px",
-                    "color":"white","--hover-color":"#145a7c"
-                },
-                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
-            }
-        )
-    return selected
-
-def process_payment(client, payment_status):
-    """Processa o pagamento atualizando o status do pedido."""
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s,"Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
-    """
-    run_query(query, (payment_status, client), commit=True)
-
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """Gera uma representação textual da nota fiscal para impressão."""
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
-
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
-
-###############################################################################
-#                            LOGIN PAGE
-###############################################################################
-def login_page():
-    """Página de login do aplicativo."""
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    from datetime import datetime
-
-    # ---------------------------------------------------------------------
-    # 1) CSS Customizado para melhorar aparência
-    # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <style>
-        /* Centraliza o container */
-        .block-container {
-            max-width: 450px;
-            margin: 0 auto;
-            padding-top: 40px;
-        }
-        /* Título maior e em negrito */
-        .css-18e3th9 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            text-align: center;
-        }
-        /* Botão customizado */
-        .btn {
-            background-color: #004a8f !important;
-            padding: 8px 16px !important;
-            font-size: 0.875rem !important;
-            color: white !important;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn:hover {
-            background-color: #003366 !important;
-        }
-        /* Mensagem de rodapé */
-        .footer {
-            position: fixed;
-            left: 0; 
-            bottom: 0; 
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-        }
-        /* Placeholder estilizado */
-        input::placeholder {
-            color: #bbb;
-            font-size: 0.875rem;
-        }
-        /* Google login button */
-        .gmail-login {
-            background-color: #db4437;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 0.875rem;
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            margin-top: 10px;
-            display: block;
-            width: 100%;
-        }
-        .gmail-login:hover {
-            background-color: #c33d30;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # ---------------------------------------------------------------------
-    # 2) Carregar logo
-    # ---------------------------------------------------------------------
-    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
-    try:
-        resp = requests.get(logo_url, timeout=5)
-        if resp.status_code == 200:
-            logo = Image.open(BytesIO(resp.content))
-            st.image(logo, use_column_width=True)
-    except Exception:
-        st.error("Não foi possível carregar o logo.")
-
     st.title("")
 
     # ---------------------------------------------------------------------
@@ -2022,75 +1658,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
-def backup_all_tables(tables):
-    """Permite o download de todas as tabelas especificadas como um único CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            frames = []
-            for table in tables:
-                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
-                df["table_name"] = table
-                frames.append(df)
-            if frames:
-                combined = pd.concat(frames, ignore_index=True)
-                csv_data = combined.to_csv(index=False)
-                st.download_button(
-                    label="Baixar Todas as Tabelas CSV",
-                    data=csv_data,
-                    file_name="backup_all_tables.csv",
-                    mime="text/csv"
-                )
-        except Exception as e:
-            st.error(f"Erro ao exportar todas as tabelas: {e}")
-        finally:
-            conn.close()
-
-def export_table_to_csv(table_name):
-    """Permite o download de uma tabela específica como CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-            csv_data = df.to_csv(index=False)
-            st.download_button(
-                label=f"Baixar {table_name} CSV",
-                data=csv_data,
-                file_name=f"{table_name}.csv",
-                mime="text/csv"
-            )
-        except Exception as e:
-            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-        finally:
-            conn.close()
-
-def perform_backup():
-    """Executa as funcionalidades de backup."""
-    st.header("Sistema de Backup")
-    st.write("Clique para baixar backups das tabelas do banco de dados.")
-
-    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
-
-    st.subheader("Baixar Todas as Tabelas de uma Vez")
-    if st.button("Download All Tables"):
-        backup_all_tables(tables)
-
-    st.markdown("---")
-
-    st.subheader("Baixar Tabelas Individualmente")
-    for table in tables:
-        export_table_to_csv(table)
-
-def admin_backup_section():
-    """Seção de backup para administradores."""
-    if st.session_state.get("username") == "admin":
-        perform_backup()
-    else:
-        st.warning("Acesso restrito para administradores.")
 
 ###############################################################################
 #                           CALENDÁRIO DE EVENTOS
@@ -2318,6 +1885,9 @@ def events_calendar_page():
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
+###############################################################################
 def main():
     """Função principal que controla a execução do aplicativo."""
     apply_custom_css()
@@ -2351,7 +1921,7 @@ def main():
         admin_backup_section()
     elif selected_page == "Cardápio":
         menu_page()
-    elif selected_page == "Analytics":  # <-- Página sem duplicação
+    elif selected_page == "Analytics":
         analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
