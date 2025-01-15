@@ -1347,7 +1347,6 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
-
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1461,12 +1460,10 @@ def login_page():
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
 
-        # Botões
-        col1, col2 = st.columns([1, 1])
+        # Botão
+        col1, _ = st.columns([1, 1])
         with col1:
             btn_login = st.form_submit_button("Log in")
-        with col2:
-            
         st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Google
@@ -1524,6 +1521,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 
 ###############################################################################
