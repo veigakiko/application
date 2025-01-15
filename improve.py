@@ -1349,7 +1349,6 @@ def analytics_page():
 ###############################################################################
 def login_page():
     """Página de login do aplicativo."""
-    import streamlit as st
     from PIL import Image
     import requests
     from io import BytesIO
@@ -1415,16 +1414,12 @@ def login_page():
             font-weight: bold;
             cursor: pointer;
             text-align: center;
-            margin-bottom: 10px;
+            margin-top: 10px;
             display: block;
             width: 100%;
         }
         .gmail-login:hover {
             background-color: #c33d30;
-        }
-        /* Remove qualquer espaço entre os input boxes */
-        .form-container input {
-            margin-bottom: 0 !important; /* Sem margem entre os campos */
         }
         </style>
         """,
@@ -1434,17 +1429,27 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = "https://ibb.co/9sXD0H5"
-    logo = None
+    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # URL direto para a imagem
+    placeholder_image_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"  # URL de imagem padrão
+
     try:
         resp = requests.get(logo_url, timeout=5)
         if resp.status_code == 200:
             logo = Image.open(BytesIO(resp.content))
+            st.image(logo, use_column_width=True)
+        else:
+            # Opcional: Exibir imagem padrão se o logo falhar ao carregar
+            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
+            st.image(logo_placeholder, use_column_width=True)
     except Exception:
-        pass
+        # Opcional: Exibir imagem padrão em caso de exceção
+        try:
+            logo_placeholder = Image.open(BytesIO(requests.get(placeholder_image_url).content))
+            st.image(logo_placeholder, use_column_width=True)
+        except Exception:
+            # Se até a imagem padrão falhar, não exiba nada
+            pass
 
-    if logo:
-        st.image(logo, use_column_width=True)
     st.title("")
 
     # ---------------------------------------------------------------------
@@ -1454,23 +1459,24 @@ def login_page():
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
         # Campos de entrada
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
+        username_input = st.text_input("Username", placeholder="Username", key='username_input')
+        password_input = st.text_input("Password", type="password", placeholder="Password", key='password_input')
 
-        # Botão
+        # Botão de login
         btn_login = st.form_submit_button("Log in")
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        # Botão de login com Google
-        st.markdown(
-            """
-            <button class='gmail-login'>Log in with Google</button>
-            """,
-            unsafe_allow_html=True
-        )
 
     # ---------------------------------------------------------------------
-    # 4) Ação: Login
+    # 4) Botão de login com Google (fora do formulário)
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # ---------------------------------------------------------------------
+    # 5) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not username_input or not password_input:
@@ -1506,7 +1512,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 5) Rodapé / Footer
+    # 6) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
