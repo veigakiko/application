@@ -1361,111 +1361,76 @@ def login_page():
     st.markdown(
         """
         <style>
-        /* sign in FORM */
-        #logreg-forms{
-            width:412px;
-            margin:10vh auto;
-            background-color:#f3f3f3;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24);
-          transition: all 0.3s cubic-bezier(.25,.8,.25,1);
-        }
-        #logreg-forms form {
-            width: 100%;
-            max-width: 410px;
-            padding: 15px;
-            margin: auto;
-        }
-        #logreg-forms .form-control {
-            position: relative;
-            box-sizing: border-box;
-            height: auto;
-            padding: 10px;
-            font-size: 16px;
-        }
-        #logreg-forms .form-control:focus { z-index: 2; }
-        #logreg-forms .form-signin input[type="email"] {
-            margin-bottom: -1px;
-            border-bottom-right-radius: 0;
-            border-bottom-left-radius: 0;
-        }
-        #logreg-forms .form-signin input[type="password"] {
-            border-top-left-radius: 0;
-            border-top-right-radius: 0;
-        }
-
-        #logreg-forms .social-login{
-            width:390px;
-            margin:0 auto;
-            margin-bottom: 14px;
-        }
-        #logreg-forms .social-btn{
-            font-weight: 100;
-            color:white;
-            width:190px;
-            font-size: 0.9rem;
-        }
-
-        #logreg-forms a{
-            display: block;
-            padding-top:10px;
-            color:lightseagreen;
-        }
-
-        #logreg-form .lines{
-            width:200px;
-            border:1px solid red;
-        }
-
-
-        #logreg-forms button[type="submit"]{ margin-top:10px; }
-
-        #logreg-forms .facebook-btn{  background-color:#3C589C; }
-
-        #logreg-forms .google-btn{ background-color: #DF4B3B; }
-
-        #logreg-forms .form-reset, #logreg-forms .form-signup{ display: none; }
-
-        #logreg-forms .form-signup .social-btn{ width:210px; }
-
-        #logreg-forms .form-signup input { margin-bottom: 2px;}
-
-        .form-signup .social-login{
-            width:210px !important;
+        /* Centraliza o container */
+        .block-container {
+            max-width: 450px;
             margin: 0 auto;
+            padding-top: 50px;
         }
-
-        /* Mobile */
-
-        @media screen and (max-width:500px){
-            #logreg-forms{
-                width:300px;
-            }
-            
-            #logreg-forms  .social-login{
-                width:200px;
-                margin:0 auto;
-                margin-bottom: 10px;
-            }
-            #logreg-forms  .social-btn{
-                font-size: 1.3rem;
-                font-weight: 100;
-                color:white;
-                width:200px;
-                height: 56px;
-            }
-            #logreg-forms .social-btn:nth-child(1){
-                margin-bottom: 5px;
-            }
-            #logreg-forms .social-btn span{
-                display: none;
-            }
-            #logreg-forms  .facebook-btn:after{
-                content:'Facebook';
-            }
-          
-            #logreg-forms  .google-btn:after{
-                content:'Google+';
-            }
+        /* Título maior e em negrito */
+        .css-18e3th9 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        /* Botão customizado */
+        .css-1x8cf1d.edgvbvh10, .signup-button {
+            background-color: #004a8f !important;
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
+            background-color: #003366 !important;
+        }
+        .signup-button {
+            margin-left: auto !important;
+        }
+        /* Mensagem de rodapé */
+        .footer {
+            position: fixed;
+            left: 0; 
+            bottom: 0; 
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        /* Botão de login com Gmail */
+        .gmail-login {
+            background-color: #db4437;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            margin-bottom: 10px;
+            display: block;
+            width: 100%;
+        }
+        .gmail-login:hover {
+            background-color: #c33d30;
+        }
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #999;
+            font-size: 0.875rem;
+        }
+        /* Reduz espaçamento entre os elementos */
+        .form-container input {
+            margin-bottom: 10px !important;
+        }
+        .form-container p {
+            margin-bottom: 15px !important;
         }
         </style>
         """,
@@ -1492,59 +1457,60 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        st.markdown("<div id='logreg-forms'>", unsafe_allow_html=True)
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
+        st.write("<p style='text-align: center;'>keep the beach vibes flowing!🌴🎾</p>", unsafe_allow_html=True)
 
-        st.write("### Sign in")
-        email = st.text_input("Email address")
-        password = st.text_input("Password", type="password")
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
-        remember_me = st.checkbox("Remember me")
-        login_btn = st.form_submit_button("Sign in")
+        col1, col2 = st.columns([1, 1], gap="medium")
+        with col1:
+            btn_login = st.form_submit_button("Log in")
+        with col2:
+            btn_signup = st.form_submit_button("Sign up")
+        st.markdown("</div>", unsafe_allow_html=True)
 
-        if login_btn:
-            try:
-                creds = st.secrets["credentials"]
-                admin_user = creds["admin_username"]
-                admin_pass = creds["admin_password"]
-                caixa_user = creds["caixa_username"]
-                caixa_pass = creds["caixa_password"]
-            except KeyError:
-                st.error("Credentials not found in st.secrets['credentials']. Check the configuration.")
-                st.stop()
-
-            if email == admin_user and password == admin_pass:
-                st.session_state.logged_in = True
-                st.session_state.username = "admin"
-                st.session_state.login_time = datetime.now()
-                st.success("Successfully logged in as ADMIN!")
-                st.experimental_rerun()
-
-            elif email == caixa_user and password == caixa_pass:
-                st.session_state.logged_in = True
-                st.session_state.username = "caixa"
-                st.session_state.login_time = datetime.now()
-                st.success("Successfully logged in as CAIXA!")
-                st.experimental_rerun()
-
-            else:
-                st.error("Incorrect username or password.")
-
+        # Botão de login com Gmail
         st.markdown(
             """
-            <div class="social-login">
-                <button class="btn google-btn social-btn" type="button"> <span>Sign in with Google</span> </button>
-                <button class="btn facebook-btn social-btn" type="button"> <span>Sign in with Facebook</span> </button>
-            </div>
-            <a href="#">Forgot password?</a>
-            <p>Not a member? <a href="#">Register</a></p>
+            <button class='gmail-login'>Log in with Google</button>
             """,
             unsafe_allow_html=True
         )
 
-        st.markdown("</div>", unsafe_allow_html=True)
+    # ---------------------------------------------------------------------
+    # 4) Ação: Login
+    # ---------------------------------------------------------------------
+    if btn_login:
+        try:
+            creds = st.secrets["credentials"]
+            admin_user   = creds["admin_username"]
+            admin_pass   = creds["admin_password"]
+            caixa_user   = creds["caixa_username"]
+            caixa_pass   = creds["caixa_password"]
+        except KeyError:
+            st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+            st.stop()
+
+        if username_input == admin_user and password_input == admin_pass:
+            st.session_state.logged_in = True
+            st.session_state.username = "admin"
+            st.session_state.login_time = datetime.now()
+            st.success("Login bem-sucedido como ADMIN!")
+            st.experimental_rerun()
+
+        elif username_input == caixa_user and password_input == caixa_pass:
+            st.session_state.logged_in = True
+            st.session_state.username = "caixa"
+            st.session_state.login_time = datetime.now()
+            st.success("Login bem-sucedido como CAIXA!")
+            st.experimental_rerun()
+
+        else:
+            st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 4) Rodapé / Footer
+    # 5) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1554,7 +1520,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 
 ###############################################################################
