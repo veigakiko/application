@@ -1375,7 +1375,7 @@ def login_page():
             text-align: center;
         }
         /* Botão customizado */
-        .css-1x8cf1d.edgvbvh10, .signup-button {
+        .btn {
             background-color: #004a8f !important;
             padding: 8px 16px !important;
             font-size: 0.875rem !important;
@@ -1387,7 +1387,7 @@ def login_page():
             cursor: pointer;
             width: 100%;
         }
-        .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
+        .btn:hover {
             background-color: #003366 !important;
         }
         .signup-button {
@@ -1403,7 +1403,12 @@ def login_page():
             font-size: 12px;
             color: #999;
         }
-        /* Botão de login com Gmail */
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        /* Google login button */
         .gmail-login {
             background-color: #db4437;
             color: white;
@@ -1421,25 +1426,13 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
-        /* Placeholder estilizado */
-        input::placeholder {
-            color: #999;
-            font-size: 0.875rem;
-        }
-        /* Reduz espaçamento entre os elementos */
-        .form-container input {
-            margin-bottom: 10px !important;
-        }
-        .form-container p {
-            margin-bottom: 15px !important;
-        }
         </style>
         """,
         unsafe_allow_html=True
     )
 
     # ---------------------------------------------------------------------
-    # 2) Tenta carregar o logo (caso exista). Ajuste a URL ou caminho local
+    # 2) Carregar logo
     # ---------------------------------------------------------------------
     logo_url = "https://ibb.co/9sXD0H5"
     logo = None
@@ -1455,23 +1448,23 @@ def login_page():
     st.title("")
 
     # ---------------------------------------------------------------------
-    # 3) Sessão de formulário de login
+    # 3) Formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
-        st.write("<p style='text-align: center;'>keep the beach vibes flowing!🌴🎾</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
+        # Campos de entrada
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
 
-        col1, col2 = st.columns([1, 1], gap="medium")
+        # Botões
+        col1, col2 = st.columns([1, 1])
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
             btn_signup = st.form_submit_button("Sign up")
-        st.markdown("</div>", unsafe_allow_html=True)
 
-        # Botão de login com Gmail
+        # Botão de login com Google
         st.markdown(
             """
             <button class='gmail-login'>Log in with Google</button>
@@ -1483,32 +1476,37 @@ def login_page():
     # 4) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
-        try:
-            creds = st.secrets["credentials"]
-            admin_user   = creds["admin_username"]
-            admin_pass   = creds["admin_password"]
-            caixa_user   = creds["caixa_username"]
-            caixa_pass   = creds["caixa_password"]
-        except KeyError:
-            st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-            st.stop()
-
-        if username_input == admin_user and password_input == admin_pass:
-            st.session_state.logged_in = True
-            st.session_state.username = "admin"
-            st.session_state.login_time = datetime.now()
-            st.success("Login bem-sucedido como ADMIN!")
-            st.experimental_rerun()
-
-        elif username_input == caixa_user and password_input == caixa_pass:
-            st.session_state.logged_in = True
-            st.session_state.username = "caixa"
-            st.session_state.login_time = datetime.now()
-            st.success("Login bem-sucedido como CAIXA!")
-            st.experimental_rerun()
-
+        if not username_input or not password_input:
+            st.error("Por favor, preencha todos os campos.")
         else:
-            st.error("Usuário ou senha incorretos.")
+            try:
+                # Credenciais de exemplo
+                creds = st.secrets["credentials"]
+                admin_user = creds["admin_username"]
+                admin_pass = creds["admin_password"]
+                caixa_user = creds["caixa_username"]
+                caixa_pass = creds["caixa_password"]
+            except KeyError:
+                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+                st.stop()
+
+            # Verificação de login
+            if username_input == admin_user and password_input == admin_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "admin"
+                st.session_state.login_time = datetime.now()
+                st.success("Login bem-sucedido como ADMIN!")
+                st.experimental_rerun()
+
+            elif username_input == caixa_user and password_input == caixa_pass:
+                st.session_state.logged_in = True
+                st.session_state.username = "caixa"
+                st.session_state.login_time = datetime.now()
+                st.success("Login bem-sucedido como CAIXA!")
+                st.experimental_rerun()
+
+            else:
+                st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
     # 5) Rodapé / Footer
