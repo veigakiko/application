@@ -1347,6 +1347,7 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
+
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1376,7 +1377,7 @@ def login_page():
         /* Botão customizado */
         .css-1x8cf1d.edgvbvh10 {
             background-color: #004a8f !important;
-            padding: 5px 10px !important;
+            padding: 8px 16px !important;
             font-size: 0.875rem !important;
         }
         /* Mensagem de rodapé */
@@ -1403,6 +1404,7 @@ def login_page():
             cursor: pointer;
             margin-top: 10px;
             width: 100%;
+            height: 40px;
         }
         .gsi-material-button:hover {
             background-color: #f7f7f7;
