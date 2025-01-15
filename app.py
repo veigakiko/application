@@ -306,7 +306,7 @@ def home_page():
                 st.info("Erro ao gerar resumo Stock vs. Orders.")
 
         # NOVO ITEM: Total Faturado
-        with st.expander("Total Faturado"):
+        with st.expander("Amount Invoiced"):
             faturado_query = """
                 SELECT date("Data") as dt, SUM("total") as total_dia
                 FROM public.vw_pedido_produto
@@ -1613,9 +1613,9 @@ def sidebar_navigation():
                 f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
 
-        st.title("Boituva Beach Club 🎾")
+       
         selected = option_menu(
-            "Menu Principal",
+            "Beach Menu",
             [
                 "Home","Orders","Products","Stock","Clients",
                 "Nota Fiscal","Backup","Cardápio",
