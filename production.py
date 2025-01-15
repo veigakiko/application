@@ -10,7 +10,8 @@ from io import BytesIO
 from fpdf import FPDF
 import os
 import uuid
-import calendar  # Para gerar o HTML do calendário
+import calendar
+
 
 ###############################################################################
 #                                   UTILIDADES
@@ -928,44 +929,14 @@ def admin_backup_section():
 
 
 ###############################################################################
-#                           PÁGINA: CALENDÁRIO DE EVENTOS
+#                            CALENDÁRIO DE EVENTOS
 ###############################################################################
-import streamlit as st
-import calendar
-from datetime import date, datetime
-import pandas as pd
-
 def events_calendar_page():
     st.title("Calendário de Eventos")
+    # Exemplo sem integração ao DB, usando st.session_state. Ajuste conforme necessário.
+    if "my_events" not in st.session_state:
+        st.session_state["my_events"] = []
 
-    # ---------------------------------------------------------
-    # 1. Leitura dos eventos do DB
-    # ---------------------------------------------------------
-    query_select = """
-        SELECT id, nome, descricao, data_evento, inscricao_aberta
-        FROM public.tb_eventos
-        ORDER BY data_evento;
-    """
-    events_data = run_query(query_select)  # returns list of tuples
-    if not events_data:
-        events_data = []  # se estiver vazio ou None, vira lista vazia
-
-    # Converte para uma lista de dicionários (opcional) ou DataFrame
-    # Aqui convertemos para lista de dict para facilitar
-    eventos_db = []
-    for row in events_data:
-        # row é algo como (id, nome, descricao, data_evento, inscricao_aberta)
-        eventos_db.append({
-            "id": row[0],
-            "nome": row[1],
-            "descricao": row[2],
-            "data": row[3],
-            "inscricao_aberta": row[4],
-        })
-
-    # ---------------------------------------------------------
-    # 2. Formulário para agendar novo evento
-    # ---------------------------------------------------------
     with st.form(key="new_event"):
         st.subheader("Agendar Novo Evento")
         nome_evento = st.text_input("Nome do Evento")
@@ -976,49 +947,32 @@ def events_calendar_page():
         agendar = st.form_submit_button("Agendar Evento")
 
     if agendar:
-        if nome_evento.strip():
-            query_insert = """
-                INSERT INTO public.tb_eventos (nome, descricao, data_evento, inscricao_aberta)
-                VALUES (%s, %s, %s, %s);
-            """
-            run_query(
-                query_insert,
-                (nome_evento.strip(), descricao_evento.strip(), data_evento, inscricao_aberta),
-                commit=True
-            )
-            st.success("Evento agendado com sucesso!")
-            st.experimental_rerun()  # Recarrega a página para atualizar listagem
-        else:
-            st.warning("Informe ao menos o nome do evento!")
+        st.session_state["my_events"].append({
+            "nome": nome_evento,
+            "data": data_evento,
+            "descricao": descricao_evento,
+            "inscricao_aberta": inscricao_aberta
+        })
+        st.success("Evento agendado com sucesso!")
 
     st.markdown("---")
 
-    # ---------------------------------------------------------
-    # 3. Exibir calendário do mês atual
-    # ---------------------------------------------------------
     today = date.today()
     year = today.year
     month = today.month
-
-    # Filtra eventos somente do mês/ano atual
     events_this_month = [
-        ev for ev in eventos_db
+        ev for ev in st.session_state["my_events"]
         if ev["data"].year == year and ev["data"].month == month
     ]
 
-    cal = calendar.HTMLCalendar(firstweekday=0)  # 0 = segunda-feira ou 6 = domingo, etc.
+    cal = calendar.HTMLCalendar(firstweekday=0)
     html_calendar = cal.formatmonth(year, month)
-
-    # Destaca os dias que têm evento
     for ev in events_this_month:
         event_day = ev["data"].day
-        # Cria string de destaque com tooltip
         highlight_str = (
             f' style="background-color:yellow; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
-
-        # Substitui para cada classe de dia (mon, tue, etc.)
         for cssclass in cal.cssclasses:
             original_tag = f'<td class="{cssclass}">{event_day}</td>'
             replaced_tag = f'<td class="{cssclass}"{highlight_str}>{event_day}</td>'
@@ -1027,16 +981,14 @@ def events_calendar_page():
     st.subheader(f"Calendário {today.strftime('%B de %Y')}")
     st.markdown(html_calendar, unsafe_allow_html=True)
 
-    # Lista de eventos do mês
     if events_this_month:
         st.subheader("Eventos deste mês")
         df_month_events = pd.DataFrame(events_this_month)
-        # Ajuste formato
         df_month_events["data"] = df_month_events["data"].astype(str)
         df_month_events.rename(columns={
             "nome": "Nome do Evento",
-            "descricao": "Descrição",
             "data": "Data",
+            "descricao": "Descrição",
             "inscricao_aberta": "Inscrição Aberta"
         }, inplace=True)
         st.dataframe(df_month_events, use_container_width=True)
@@ -1045,36 +997,64 @@ def events_calendar_page():
 
     st.markdown("---")
 
-    # ---------------------------------------------------------
-    # 4. Excluir Eventos
-    # ---------------------------------------------------------
+    # Seção para excluir eventos
     st.subheader("Excluir Eventos Registrados")
-    
-    # Monta lista de identificação única: "<id> - Nome (YYYY-MM-DD)"
     def event_key(ev):
-        return f"{ev['id']} - {ev['nome']} ({ev['data'].strftime('%Y-%m-%d')})"
+        return f"{ev['nome']} ({ev['data']})"
 
-    all_keys = [event_key(ev) for ev in eventos_db]
+    all_keys = [event_key(ev) for ev in st.session_state["my_events"]]
     selected_event_key = st.selectbox("Selecione um evento para excluir", [""] + all_keys)
 
     if st.button("Excluir Evento Selecionado"):
         if selected_event_key == "":
             st.warning("Selecione um evento para excluir.")
         else:
-            # Extrai o ID do prefixo "<id> - ..."
-            try:
-                event_id_str = selected_event_key.split(" - ")[0]
-                event_id = int(event_id_str)
-            except:
-                st.error("Formato inesperado ao extrair ID do evento.")
-                return
+            for i, ev in enumerate(st.session_state["my_events"]):
+                if event_key(ev) == selected_event_key:
+                    st.session_state["my_events"].pop(i)
+                    st.success(f"Evento '{selected_event_key}' excluído com sucesso!")
+                    st.experimental_rerun()
+                    break
 
-            # Com o ID, removemos do banco
-            query_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-            run_query(query_delete, (event_id,), commit=True)
-            st.success(f"Evento ID={event_id} excluído com sucesso!")
-            st.experimental_rerun()
 
+###############################################################################
+#                     PROGRAMA DE FIDELIDADE (AJUSTADO)
+###############################################################################
+def loyalty_program_page():
+    st.title("Programa de Fidelidade")
+
+    # 1) Carrega e filtra dados da view
+    query = """
+        SELECT "Cliente", total_geral
+        FROM public.vw_cliente_sum_total
+        WHERE total_geral > 100
+          AND "Cliente" <> 'Professor Vinicius Bech Club Boituva'
+    """
+    data = run_query(query)
+    if data:
+        df = pd.DataFrame(data, columns=["Cliente","Total Geral"])
+        st.subheader("Clientes com Total Geral > 100 (excluindo Professor Vinicius)")
+        st.dataframe(df, use_container_width=True)
+    else:
+        st.info("Nenhum cliente com total_geral acima de 100 ou dados indisponíveis.")
+
+    st.markdown("---")
+
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
+
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado!")
+        else:
+            st.error("Pontos insuficientes.")
 
 
 ###############################################################################
@@ -1311,46 +1291,6 @@ def settings_page():
     if st.button("Salvar Preferências"):
         st.session_state.theme = theme_choice
         st.success("Preferências salvas!")
-
-
-def loyalty_program_page():
-    st.title("Programa de Fidelidade")
-
-    # 1) Carrega e filtra dados da view
-    query = """
-        SELECT "Cliente", total_geral
-        FROM public.vw_cliente_sum_total
-        WHERE total_geral > 100
-          AND "Cliente" <> 'Professor Vinicius Bech Club Boituva'
-    """
-    data = run_query(query)
-    if data:
-        # 2) Converte em DataFrame e exibe
-        df = pd.DataFrame(data, columns=["Cliente","Total Geral"])
-        st.subheader("Clientes com Total Geral > 100")
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Nenhum cliente com total_geral acima de 100 (ou com Professor Vinicius filtrado).")
-
-    st.markdown("---")
-
-    # 3) Lógica de pontos existente
-    st.subheader("Acumule pontos a cada compra!")
-    if 'points' not in st.session_state:
-        st.session_state.points = 0
-
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
-    if st.button("Adicionar Pontos"):
-        st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
-
-    if st.button("Resgatar Prêmio"):
-        if st.session_state.points >= 100:
-            st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
-        else:
-            st.error("Pontos insuficientes.")
-
 
 
 ###############################################################################
