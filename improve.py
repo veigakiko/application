@@ -1356,7 +1356,7 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Tenta carregar o logo (caso exista). Ajuste a URL ou caminho local
     # ---------------------------------------------------------------------
-    logo_url = "https://res.cloudinary.com/lptennis/image/upload/v1657233475/kyz4k7fcptxt7x7mu9qu.jpg"
+    logo_url = "https://ibb.co/9sXD0H5"
     logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
