@@ -940,150 +940,204 @@ def events_calendar_page():
     st.title("Calendário de Eventos")
 
     # ----------------------------------------------------------------------------
-    # 1) CRIAR/ALTERAR FUNÇÃO QUE LÊ OS EVENTOS DO BANCO
+    # 1) Helper: Ler eventos do banco
     # ----------------------------------------------------------------------------
     def get_events_from_db():
         """
-        Retorna uma lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
-        ordenadas pela data do evento.
+        Retorna lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
         """
         query = """
-        SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
-        FROM public.tb_eventos
-        ORDER BY data_evento;
+            SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
+            FROM public.tb_eventos
+            ORDER BY data_evento;
         """
         rows = run_query(query)
-        if rows is None:
-            return []
-        return rows
+        return rows if rows else []
 
     # ----------------------------------------------------------------------------
-    # 2) FORM PARA CADASTRAR NOVO EVENTO
+    # 2) Cadastro de novo evento
     # ----------------------------------------------------------------------------
-    with st.form(key="new_event"):
-        st.subheader("Agendar Novo Evento")
-        nome_evento = st.text_input("Nome do Evento")
-        data_evento = st.date_input("Data do Evento", value=date.today())
-        descricao_evento = st.text_area("Descrição do Evento")
-        inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
-        agendar = st.form_submit_button("Agendar Evento")
+    st.subheader("Agendar Novo Evento")
+    with st.form(key="new_event_form"):
+        col1, col2 = st.columns(2)
+        with col1:
+            nome_evento = st.text_input("Nome do Evento")
+            data_evento = st.date_input("Data do Evento", value=date.today())
+        with col2:
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
+            descricao_evento = st.text_area("Descrição do Evento")
+        btn_cadastrar = st.form_submit_button("Agendar")
 
-    if agendar:
-        if nome_evento:
-            # Inserindo no banco de dados
-            q_ins = """
-            INSERT INTO public.tb_eventos
-                (nome, descricao, data_evento, inscricao_aberta, data_criacao)
-            VALUES
-                (%s, %s, %s, %s, CURRENT_TIMESTAMP)
+    if btn_cadastrar:
+        if nome_evento.strip():
+            q_insert = """
+                INSERT INTO public.tb_eventos
+                    (nome, descricao, data_evento, inscricao_aberta, data_criacao)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            run_query(q_ins, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.success("Evento agendado com sucesso!")
-            # Forçando refresh
-            st.experimental_rerun()
+            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            st.success("Evento cadastrado com sucesso!")
+            st.experimental_rerun()  # Forçar reload
         else:
-            st.warning("Informe pelo menos o nome do evento.")
+            st.warning("Informe ao menos o nome do evento.")
 
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 3) LER EVENTOS CADASTRADOS E EXIBIR NO CALENDÁRIO
+    # 3) Filtros de Mês/Ano
+    # ----------------------------------------------------------------------------
+    current_date = date.today()
+    ano_padrao = current_date.year
+    mes_padrao = current_date.month
+
+    # Seletores de ano e mês
+    col_ano, col_mes = st.columns(2)
+    with col_ano:
+        ano_selecionado = st.selectbox(
+            "Selecione o Ano",
+            list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
+            index=2  # Por padrão, seleciona o ano atual
+        )
+    with col_mes:
+        # Lista de meses com nomes
+        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
+        mes_selecionado = st.selectbox(
+            "Selecione o Mês",
+            options=list(range(1, 13)),
+            format_func=lambda x: meses_nomes[x-1],
+            index=mes_padrao - 1  # Seleciona o mês atual
+        )
+
+    # ----------------------------------------------------------------------------
+    # 4) Ler dados e filtrar
     # ----------------------------------------------------------------------------
     event_rows = get_events_from_db()
     if not event_rows:
-        st.info("Nenhum evento cadastrado até o momento.")
+        st.info("Nenhum evento cadastrado.")
         return
 
-    # Convertendo para DataFrame
     df_events = pd.DataFrame(
         event_rows,
         columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
     )
 
-    # Para facilitar a manipulação de datas, converter "data_evento" para datetime
-    # Caso psycopg2 já traga como datetime, essa etapa pode ser desnecessária
     df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
-    # Vamos exibir o calendário do mês atual
-    today = date.today()
-    year = today.year
-    month = today.month
+    # Filtra para o ano/mês selecionados
+    df_filtrado = df_events[
+        (df_events["data_evento"].dt.year == ano_selecionado) &
+        (df_events["data_evento"].dt.month == mes_selecionado)
+    ].copy()
 
-    # Filtrando os eventos apenas para o mês/ano atual
-    df_this_month = df_events[
-        (df_events["data_evento"].dt.year == year) &
-        (df_events["data_evento"].dt.month == month)
-    ]
+    # ----------------------------------------------------------------------------
+    # 5) Montar o calendário
+    # ----------------------------------------------------------------------------
+    st.subheader("Visualização do Calendário")
 
-    # Gerando o calendário em HTML
     cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendar = cal.formatmonth(year, month)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
-    # Para cada evento no mês, destacamos o dia
-    for _, ev in df_this_month.iterrows():
-        day = ev["data_evento"].day
+    # Destacar dias com eventos
+    for _, ev in df_filtrado.iterrows():
+        dia = ev["data_evento"].day
         highlight_str = (
             f' style="background-color:yellow; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
 
         for cssclass in cal.cssclasses:
-            original_tag = f'<td class="{cssclass}">{day}</td>'
-            replaced_tag = f'<td class="{cssclass}"{highlight_str}>{day}</td>'
-            # Substitui no HTML do calendário
-            html_calendar = html_calendar.replace(original_tag, replaced_tag)
+            original_tag = f'<td class="{cssclass}">{dia}</td>'
+            replaced_tag = f'<td class="{cssclass}"{highlight_str}>{dia}</td>'
+            html_calendario = html_calendario.replace(original_tag, replaced_tag)
 
-    st.subheader(f"Calendário {today.strftime('%B de %Y')}")
-    st.markdown(html_calendar, unsafe_allow_html=True)
+    st.markdown(html_calendario, unsafe_allow_html=True)
 
     # ----------------------------------------------------------------------------
-    # 4) LISTA OS EVENTOS DO MÊS ATUAL
+    # 6) Listagem dos eventos no mês selecionado
     # ----------------------------------------------------------------------------
-    if len(df_this_month) > 0:
-        st.subheader("Eventos deste mês")
-        df_display = df_this_month.copy()
-        # Convertendo data_evento para string para exibição
+    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
+    if len(df_filtrado) == 0:
+        st.info("Nenhum evento neste mês.")
+    else:
+        df_display = df_filtrado.copy()
         df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
         df_display.rename(columns={
+            "id": "ID",
             "nome": "Nome do Evento",
             "descricao": "Descrição",
             "data_evento": "Data",
-            "inscricao_aberta": "Inscrição Aberta"
+            "inscricao_aberta": "Inscrição Aberta",
+            "data_criacao": "Data Criação"
         }, inplace=True)
-        # Exibir no DataFrame do Streamlit
-        st.dataframe(df_display[["id", "Nome do Evento", "Data", "Descrição", "Inscrição Aberta"]], use_container_width=True)
-    else:
-        st.info("Nenhum evento agendado para este mês.")
+        st.dataframe(df_display, use_container_width=True)
 
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 5) EXCLUIR EVENTOS DA TABELA
+    # 7) Edição e Exclusão de Eventos
     # ----------------------------------------------------------------------------
-    st.subheader("Excluir Eventos Registrados")
-    # Criar um "display" para cada evento
-    # Ex: "42 - Torneio Aberto (2025-01-31)"
-    df_events["exibir"] = df_events.apply(
-        lambda row: f"{row['id']} - {row['nome']} ({row['data_evento'].strftime('%Y-%m-%d')})", 
+    st.subheader("Editar / Excluir Eventos")
+    # Opções: "ID - Nome (YYYY-MM-DD)"
+    df_events["evento_label"] = df_events.apply(
+        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
         axis=1
     )
-    all_events = [""] + df_events["exibir"].tolist()
-    selected_event = st.selectbox("Selecione um evento para excluir", all_events)
+    events_list = [""] + df_events["evento_label"].tolist()
+    selected_event = st.selectbox("Selecione um evento:", events_list)
 
-    if st.button("Excluir Evento Selecionado"):
-        if selected_event == "":
-            st.warning("Selecione um evento primeiro.")
-        else:
-            # Extraindo o ID do evento (tudo antes do " - ")
-            event_id_str = selected_event.split(" - ")[0]
-            try:
-                event_id = int(event_id_str)
-                q_del = "DELETE FROM public.tb_eventos WHERE id = %s"
-                run_query(q_del, (event_id,), commit=True)
-                st.success(f"Evento ID={event_id} excluído com sucesso!")
-                st.experimental_rerun()
-            except ValueError:
-                st.error("Falha ao extrair o ID do evento.")
+    if selected_event:
+        # Extrair ID (antes do " - ")
+        event_id_str = selected_event.split(" - ")[0]
+        try:
+            event_id = int(event_id_str)
+        except ValueError:
+            st.error("Falha ao interpretar ID do evento.")
+            return
+
+        # Carrega dados do evento selecionado
+        ev_row = df_events[df_events["id"] == event_id].iloc[0]
+        original_nome = ev_row["nome"]
+        original_desc = ev_row["descricao"]
+        original_data = ev_row["data_evento"]
+        original_insc = ev_row["inscricao_aberta"]
+
+        with st.expander("Editar Evento", expanded=True):
+            col1, col2 = st.columns(2)
+            with col1:
+                new_nome = st.text_input("Nome do Evento", value=original_nome)
+                new_data = st.date_input("Data do Evento", value=original_data.date())
+            with col2:
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
+                new_desc = st.text_area("Descrição do Evento", value=original_desc)
+
+            col_btn1, col_btn2 = st.columns(2)
+            with col_btn1:
+                if st.button("Atualizar Evento"):
+                    if new_nome.strip():
+                        q_update = """
+                            UPDATE public.tb_eventos
+                            SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
+                            WHERE id=%s
+                        """
+                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        st.success("Evento atualizado com sucesso!")
+                        st.experimental_rerun()
+                    else:
+                        st.warning("O campo Nome do Evento não pode ficar vazio.")
+
+            with col_btn2:
+                if st.button("Excluir Evento", key=f"del_{event_id}"):
+                    confirm = st.checkbox("Confirmo que desejo excluir este evento.")
+                    if confirm:
+                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                        run_query(q_delete, (event_id,), commit=True)
+                        st.success(f"Evento ID={event_id} excluído!")
+                        st.experimental_rerun()
+                    else:
+                        st.warning("Marque o checkbox de confirmação para excluir.")
+
+    else:
+        st.info("Selecione um evento para editar ou excluir.")
 
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
