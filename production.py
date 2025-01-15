@@ -1028,6 +1028,12 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 ###############################################################################
 #                           CALENDÁRIO DE EVENTOS
 ###############################################################################
+import calendar
+from datetime import datetime, date
+import pandas as pd
+import streamlit as st
+from streamlit.components.v1 import html
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1069,9 +1075,11 @@ def events_calendar_page():
                     (nome, descricao, data_evento, inscricao_aberta, data_criacao)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.success("Evento cadastrado com sucesso!")
-            st.experimental_rerun()
+            if run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True):
+                st.success("Evento cadastrado com sucesso!")
+                st.experimental_rerun()
+            else:
+                st.error("Falha ao cadastrar o evento.")
         else:
             st.warning("Informe ao menos o nome do evento.")
 
@@ -1104,12 +1112,154 @@ def events_calendar_page():
         event_rows,
         columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
     )
-    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
+    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors='coerce')
 
     df_filtrado = df_events[df_events["data_evento"].dt.year == ano_selecionado].copy()
 
     # ----------------------------------------------------------------------------
-    # 5) Montar o calendário para todos os meses do ano selecionado
+    # 5) Função para gerar HTML do calendário
+    # ----------------------------------------------------------------------------
+    def create_calendar_html(year, month, events):
+        """
+        Cria uma tabela HTML representando o calendário do mês com os eventos destacados.
+        """
+        cal = calendar.Calendar(firstweekday=0)  # Segunda-feira como primeiro dia da semana
+        month_name = calendar.month_name[month]
+        weeks = cal.monthdayscalendar(year, month)
+
+        # Mapeamento de dias para eventos
+        day_events = {}
+        for _, event in events.iterrows():
+            day = event['data_evento'].day
+            if day not in day_events:
+                day_events[day] = []
+            day_events[day].append(event)
+
+        # Início da tabela HTML
+        html_cal = f"""
+        <div class="calendar-container">
+            <h3 class="month-header">{month_name} {year}</h3>
+            <table class="calendar-table">
+                <thead>
+                    <tr>
+        """
+
+        # Cabeçalhos dos dias da semana
+        weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+        for day in weekdays:
+            html_cal += f"<th>{day}</th>"
+        html_cal += "</tr></thead><tbody>"
+
+        # Linhas das semanas
+        for week in weeks:
+            html_cal += "<tr>"
+            for day in week:
+                if day == 0:
+                    html_cal += "<td class='empty'></td>"
+                else:
+                    if day in day_events:
+                        # Listar todos os eventos no dia
+                        events_html = ""
+                        for event in day_events[day]:
+                            events_html += f"<li title='{event['nome']}: {event['descricao']}'>{event['nome']}</li>"
+                        html_cal += f"""
+                        <td class='event-day'>
+                            <div class='day-number'>{day}</div>
+                            <ul class='event-list'>{events_html}</ul>
+                        </td>
+                        """
+                    else:
+                        html_cal += f"""
+                        <td>
+                            <div class='day-number'>{day}</div>
+                        </td>
+                        """
+            html_cal += "</tr>"
+        html_cal += "</tbody></table></div>"
+
+        return html_cal
+
+    # ----------------------------------------------------------------------------
+    # 6) Estilização CSS do Calendário
+    # ----------------------------------------------------------------------------
+    calendar_css = """
+    <style>
+    .calendar-container {
+        margin-bottom: 30px;
+    }
+    .month-header {
+        text-align: center;
+        color: #1b4f72;
+        font-size: 1.5em;
+        margin-bottom: 10px;
+    }
+    .calendar-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    .calendar-table th {
+        background-color: #1b4f72;
+        color: white;
+        padding: 10px;
+        text-align: center;
+    }
+    .calendar-table td {
+        border: 1px solid #1b4f72;
+        vertical-align: top;
+        height: 100px;
+        padding: 5px;
+        position: relative;
+    }
+    .empty {
+        background-color: #f0f0f0;
+    }
+    .day-number {
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        font-weight: bold;
+        color: #1b4f72;
+    }
+    .event-day {
+        background-color: #e6f2ff;
+    }
+    .event-list {
+        list-style-type: none;
+        padding-left: 0;
+        margin-top: 25px;
+        max-height: 60px;
+        overflow-y: auto;
+    }
+    .event-list li {
+        background-color: #1b4f72;
+        color: white;
+        padding: 2px 4px;
+        margin-bottom: 2px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.85em;
+    }
+    .event-list li:hover {
+        background-color: #145a7c;
+    }
+    @media (max-width: 768px) {
+        .calendar-table th, .calendar-table td {
+            padding: 5px;
+        }
+        .day-number {
+            font-size: 0.8em;
+        }
+        .event-list li {
+            font-size: 0.75em;
+        }
+    }
+    </style>
+    """
+
+    st.markdown(calendar_css, unsafe_allow_html=True)
+
+    # ----------------------------------------------------------------------------
+    # 7) Gerar e Exibir Calendários para Todos os Meses
     # ----------------------------------------------------------------------------
     st.subheader(f"Calendário de Eventos para {ano_selecionado}")
 
@@ -1120,72 +1270,11 @@ def events_calendar_page():
     for month in range(1, 13):
         col_index = (month - 1) % num_cols
         with cols[col_index]:
-            st.markdown(f"### {calendar.month_name[month]}")
-            cal = calendar.HTMLCalendar(firstweekday=0)
-            html_calendario = cal.formatmonth(ano_selecionado, month)
-
-            # Filtrar eventos para o mês atual
-            df_mes = df_filtrado[df_filtrado["data_evento"].dt.month == month]
-
-            # Destacar dias com eventos
-            for _, ev in df_mes.iterrows():
-                dia = ev["data_evento"].day
-                # Adicionar estilo inline para destacar o dia
-                # Usando font color and background color
-                highlight_str = (
-                    f' style="background-color:blue; color:white; font-weight:bold;" '
-                    f'title="{ev["nome"]}: {ev["descricao"]}"'
-                )
-                # Substituir as tags <td> correspondentes ao dia
-                # Esta abordagem pode sobrescrever múltiplos dias iguais se houver eventos no mesmo dia
-                html_calendario = html_calendario.replace(
-                    f'<td class="mon">{dia}</td>',
-                    f'<td class="mon"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="tue">{dia}</td>',
-                    f'<td class="tue"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="wed">{dia}</td>',
-                    f'<td class="wed"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="thu">{dia}</td>',
-                    f'<td class="thu"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="fri">{dia}</td>',
-                    f'<td class="fri"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="sat">{dia}</td>',
-                    f'<td class="sat"{highlight_str}>{dia}</td>'
-                )
-                html_calendario = html_calendario.replace(
-                    f'<td class="sun">{dia}</td>',
-                    f'<td class="sun"{highlight_str}>{dia}</td>'
-                )
-
-            # Ajustar o tamanho do calendário via CSS
-            st.markdown(
-                f"""
-                <style>
-                table {{
-                    width: 100%;
-                    table-layout: fixed;
-                }}
-                td {{
-                    height: 60px;
-                }}
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            st.markdown(html_calendario, unsafe_allow_html=True)
+            html_calendar = create_calendar_html(ano_selecionado, month, df_filtrado[df_filtrado["data_evento"].dt.month == month])
+            html(html_calendar, height=300, scrolling=True)
 
     # ----------------------------------------------------------------------------
-    # 6) Listagem dos eventos no ano selecionado
+    # 8) Listagem dos Eventos no Ano Selecionado
     # ----------------------------------------------------------------------------
     st.subheader(f"Eventos de {ano_selecionado}")
     if df_filtrado.empty:
@@ -1206,7 +1295,7 @@ def events_calendar_page():
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
+    # 9) Edição e Exclusão de Eventos
     # ----------------------------------------------------------------------------
     st.subheader("Editar / Excluir Eventos")
 
@@ -1219,12 +1308,12 @@ def events_calendar_page():
 
     if selected_event:
         # Extrair ID do formato "123 - Evento X (2025-01-01)"
-        event_id_str = selected_event.split(" - ")[0]
         try:
+            event_id_str = selected_event.split(" - ")[0]
             event_id = int(event_id_str)
-        except ValueError:
+        except (ValueError, IndexError):
             st.error("Falha ao interpretar ID do evento.")
-            return
+            st.stop()
 
         # Carrega dados do evento selecionado
         ev_row = df_events[df_events["id"] == event_id].iloc[0]
@@ -1251,19 +1340,25 @@ def events_calendar_page():
                             SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
                             WHERE id=%s
                         """
-                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
-                        st.success("Evento atualizado com sucesso!")
-                        st.experimental_rerun()
+                        if run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True):
+                            st.success("Evento atualizado com sucesso!")
+                            st.experimental_rerun()
+                        else:
+                            st.error("Falha ao atualizar o evento.")
                     else:
                         st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
-                # Exclusão imediata sem checkbox de confirmação
+                # Exclusão imediata com confirmação
                 if st.button("Excluir Evento"):
-                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    run_query(q_delete, (event_id,), commit=True)
-                    st.success(f"Evento ID={event_id} excluído!")
-                    st.experimental_rerun()
+                    confirm = st.checkbox("Confirma a exclusão deste evento?", key=f"confirm_del_{event_id}")
+                    if confirm:
+                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                        if run_query(q_delete, (event_id,), commit=True):
+                            st.success(f"Evento ID={event_id} excluído!")
+                            st.experimental_rerun()
+                        else:
+                            st.error("Falha ao excluir o evento.")
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
