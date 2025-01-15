@@ -1448,11 +1448,16 @@ def login_page():
         username_input = st.text_input("Username")
         password_input = st.text_input("Password", type="password")
 
-        col1, col2 = st.columns([1, 1])
+        col1, col2 = st.columns([1, 1], gap="small")
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
-            st.form_submit_button("Sign up")
+            st.markdown(
+                """
+                <button class='signup-button'>Sign up</button>
+                """,
+                unsafe_allow_html=True
+            )
 
         # Botão de login com Gmail
         st.markdown(
