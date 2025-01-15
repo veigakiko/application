@@ -1373,64 +1373,59 @@ def login_page():
             font-weight: 600;
             text-align: center;
         }
-        /* Botão customizado */
-        .css-1x8cf1d.edgvbvh10, .signup-button {
-            background-color: #004a8f !important;
-            padding: 8px 16px !important;
-            font-size: 0.875rem !important;
-            color: white !important;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            cursor: pointer;
-            width: 100%;
+        /* Form Outline */
+        .form-outline {
+            margin-bottom: 1rem;
         }
-        .css-1x8cf1d.edgvbvh10:hover, .signup-button:hover {
-            background-color: #003366 !important;
-        }
-        .signup-button {
-            margin-left: auto !important;
-        }
-        /* Mensagem de rodapé */
-        .footer {
-            position: fixed;
-            left: 0; 
-            bottom: 0; 
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-        }
-        /* Botão de login com Gmail */
-        .gmail-login {
-            background-color: #db4437;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
+        .form-outline label {
+            margin-top: 5px;
             font-size: 0.875rem;
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            margin-bottom: 10px;
+            color: #555;
+        }
+        .form-outline input {
             display: block;
             width: 100%;
-        }
-        .gmail-login:hover {
-            background-color: #c33d30;
-        }
-        /* Placeholder estilizado */
-        input::placeholder {
-            color: #999;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-top: 5px;
             font-size: 0.875rem;
         }
-        /* Reduz espaçamento entre os elementos */
-        .form-container input {
-            margin-bottom: 10px !important;
+        .form-outline input:focus {
+            border-color: #004a8f;
+            outline: none;
+            box-shadow: 0 0 5px rgba(0, 74, 143, 0.5);
         }
-        .form-container p {
-            margin-bottom: 15px !important;
+        .form-check {
+            display: flex;
+            align-items: center;
+        }
+        .form-check input {
+            margin-right: 5px;
+        }
+        .btn-primary {
+            background-color: #004a8f;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+        .btn-primary:hover {
+            background-color: #003366;
+        }
+        .btn-link {
+            color: #004a8f;
+            font-size: 0.875rem;
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .btn-link:hover {
+            text-decoration: underline;
+        }
+        .text-center {
+            text-align: center;
         }
         </style>
         """,
@@ -1456,58 +1451,67 @@ def login_page():
     # ---------------------------------------------------------------------
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
-    with st.form("login_form", clear_on_submit=False):
-        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
-        st.write("<p style='text-align: center;'>keep the beach vibes flowing!🌴🎾</p>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <form>
+          <!-- Email input -->
+          <div data-mdb-input-init class="form-outline mb-4">
+            <input type="email" id="form2Example1" class="form-control" placeholder="Email address" />
+          </div>
 
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
+          <!-- Password input -->
+          <div data-mdb-input-init class="form-outline mb-4">
+            <input type="password" id="form2Example2" class="form-control" placeholder="Password" />
+          </div>
 
-        col1, col2 = st.columns([1, 1], gap="medium")
-        with col1:
-            btn_login = st.form_submit_button("Log in")
-        with col2:
-            btn_signup = st.form_submit_button("Sign up")
-        st.markdown("</div>", unsafe_allow_html=True)
+          <!-- 2 column grid layout for inline styling -->
+          <div class="row mb-4">
+            <div class="col d-flex justify-content-center">
+              <!-- Checkbox -->
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" value="" id="form2Example31" checked />
+                <label class="form-check-label" for="form2Example31"> Remember me </label>
+              </div>
+            </div>
 
-        # Botão de login com Gmail
-        st.markdown(
-            """
-            <button class='gmail-login'>Log in with Google</button>
-            """,
-            unsafe_allow_html=True
-        )
+            <div class="col">
+              <!-- Simple link -->
+              <a href="#!">Forgot password?</a>
+            </div>
+          </div>
+
+          <!-- Submit button -->
+          <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-primary btn-block mb-4">Sign in</button>
+
+          <!-- Register buttons -->
+          <div class="text-center">
+            <p>Not a member? <a href="#!">Register</a></p>
+            <p>or sign up with:</p>
+            <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
+              <i class="fab fa-facebook-f"></i>
+            </button>
+
+            <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
+              <i class="fab fa-google"></i>
+            </button>
+
+            <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
+              <i class="fab fa-twitter"></i>
+            </button>
+
+            <button type="button" data-mdb-button-init data-mdb-ripple-init class="btn btn-link btn-floating mx-1">
+              <i class="fab fa-github"></i>
+            </button>
+          </div>
+        </form>
+        """,
+        unsafe_allow_html=True
+    )
 
     # ---------------------------------------------------------------------
-    # 4) Ação: Login
+    # 4) Ação: Login (Fictício - para exibição do layout)
     # ---------------------------------------------------------------------
-    if btn_login:
-        try:
-            creds = st.secrets["credentials"]
-            admin_user   = creds["admin_username"]
-            admin_pass   = creds["admin_password"]
-            caixa_user   = creds["caixa_username"]
-            caixa_pass   = creds["caixa_password"]
-        except KeyError:
-            st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-            st.stop()
-
-        if username_input == admin_user and password_input == admin_pass:
-            st.session_state.logged_in = True
-            st.session_state.username = "admin"
-            st.session_state.login_time = datetime.now()
-            st.success("Login bem-sucedido como ADMIN!")
-            st.experimental_rerun()
-
-        elif username_input == caixa_user and password_input == caixa_pass:
-            st.session_state.logged_in = True
-            st.session_state.username = "caixa"
-            st.session_state.login_time = datetime.now()
-            st.success("Login bem-sucedido como CAIXA!")
-            st.experimental_rerun()
-
-        else:
-            st.error("Usuário ou senha incorretos.")
+    st.write("Demo form, no actual backend connected.")
 
     # ---------------------------------------------------------------------
     # 5) Rodapé / Footer
