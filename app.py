@@ -1348,6 +1348,7 @@ def analytics_page():
 #                            LOGIN PAGE
 ###############################################################################
 
+
 def login_page():
     """Página de login do aplicativo."""
     import streamlit as st
@@ -1361,28 +1362,26 @@ def login_page():
         st.session_state.username_input = ""
     if 'password_input' not in st.session_state:
         st.session_state.password_input = ""
-    if 'selected_field' not in st.session_state:
-        st.session_state.selected_field = "Username"
 
-    # Função para atualizar o campo de entrada selecionado
-    def append_char(char):
-        if st.session_state.selected_field == "Username":
+    # Função para atualizar o campo de entrada específico
+    def append_char(field, char):
+        if field == "Username":
             st.session_state.username_input += char
-        elif st.session_state.selected_field == "Password":
+        elif field == "Password":
             st.session_state.password_input += char
 
-    # Função para remover o último caractere
-    def backspace():
-        if st.session_state.selected_field == "Username":
+    # Função para remover o último caractere do campo específico
+    def backspace(field):
+        if field == "Username":
             st.session_state.username_input = st.session_state.username_input[:-1]
-        elif st.session_state.selected_field == "Password":
+        elif field == "Password":
             st.session_state.password_input = st.session_state.password_input[:-1]
 
-    # Função para limpar o campo selecionado
-    def clear_field():
-        if st.session_state.selected_field == "Username":
+    # Função para limpar o campo específico
+    def clear_field(field):
+        if field == "Username":
             st.session_state.username_input = ""
-        elif st.session_state.selected_field == "Password":
+        elif field == "Password":
             st.session_state.password_input = ""
 
     # ---------------------------------------------------------------------
@@ -1393,7 +1392,7 @@ def login_page():
         <style>
         /* Centraliza o container */
         .block-container {
-            max-width: 450px;
+            max-width: 500px;
             margin: 0 auto;
             padding-top: 40px;
         }
@@ -1456,15 +1455,18 @@ def login_page():
         .form-container input {
             margin-bottom: 0 !important; /* Sem margem entre os campos */
         }
-        /* Estilo para o teclado virtual */
+        /* Estilo para os teclados virtuais */
         .virtual-keyboard button {
-            margin: 2px;
-            padding: 10px 15px;
-            font-size: 1rem;
+            margin: 1px;
+            padding: 8px 10px;
+            font-size: 0.875rem;
             border: 1px solid #ccc;
             border-radius: 4px;
             cursor: pointer;
-            background-color: #f0f0f0;
+            background-color: #f9f9f9;
+            min-width: 40px;
+            min-height: 40px;
+            text-align: center;
         }
         .virtual-keyboard button:hover {
             background-color: #e0e0e0;
@@ -1496,13 +1498,6 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Seleção do campo para inserir caracteres
-        st.radio(
-            "Selecione o campo para inserir:",
-            ("Username", "Password"),
-            key='selected_field'
-        )
-
         # Campos de entrada com valores controlados por session_state
         username_input = st.text_input("", placeholder="Username", value=st.session_state.username_input, key='username_display', disabled=True)
         password_input = st.text_input("", type="password", placeholder="Password", value=st.session_state.password_input, key='password_display', disabled=True)
@@ -1524,33 +1519,42 @@ def login_page():
     st.session_state.password_input = st.session_state.get('password_input', '')
 
     # ---------------------------------------------------------------------
-    # 4) Teclado Virtual
+    # 4) Teclados Virtuais
     # ---------------------------------------------------------------------
-    st.markdown("### Teclado Virtual")
-    cols = st.columns(10)
-    keys = [
+    st.markdown("### Teclado Virtual para Username")
+    cols_username = st.columns(10)
+    keys_username = [
         '1','2','3','4','5','6','7','8','9','0',
         'Q','W','E','R','T','Y','U','I','O','P',
         'A','S','D','F','G','H','J','K','L',
-        'Z','X','C','V','B','N','M','Back','Clear'
+        'Z','X','C','V','B','N','M','⌫','C'
     ]
 
-    for key in keys:
-        if key == 'Back':
-            cols_index = keys.index(key) % 10
-            with cols[cols_index]:
-                if st.button('⌫', key=f'back_{key}'):
-                    backspace()
-        elif key == 'Clear':
-            cols_index = keys.index(key) % 10
-            with cols[cols_index]:
-                if st.button('C', key=f'clear_{key}'):
-                    clear_field()
-        else:
-            cols_index = keys.index(key) % 10
-            with cols[cols_index]:
-                if st.button(key, key=f'key_{key}'):
-                    append_char(key)
+    # Função para mapear teclas para Username
+    def render_keyboard(field, keys, cols):
+        num_cols = 10  # Número de colunas por linha
+        for i, key in enumerate(keys):
+            col = cols[i % num_cols]
+            with col:
+                if key == '⌫':
+                    if st.button('⌫', key=f'back_{field}'):
+                        backspace(field)
+                elif key == 'C':
+                    if st.button('C', key=f'clear_{field}'):
+                        clear_field(field)
+                else:
+                    if st.button(key, key=f'key_{field}_{key}'):
+                        append_char(field, key)
+
+    # Teclado para Username
+    render_keyboard("Username", keys_username, cols_username)
+
+    st.markdown("### Teclado Virtual para Password")
+    cols_password = st.columns(10)
+    keys_password = keys_username  # Mesmas teclas para simplificação
+
+    # Teclado para Password
+    render_keyboard("Password", keys_password, cols_password)
 
     # ---------------------------------------------------------------------
     # 5) Ação: Login
@@ -1599,7 +1603,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
