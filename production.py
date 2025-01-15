@@ -1023,22 +1023,33 @@ def events_calendar_page():
 def loyalty_program_page():
     st.title("Programa de Fidelidade")
 
-    # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # assume que run_query retorna lista de tuplas
+    # 1) Carregar dados da view, filtrando por total_geral > 100
+    #    e excluindo "Professor Vinicius Bech Club Boituva".
+    query = """
+        SELECT "Cliente", total_geral
+        FROM public.vw_cliente_sum_total
+        WHERE "Cliente" <> 'Professor Vinicius Bech Club Boituva'
+          AND total_geral > 100
+        ORDER BY total_geral DESC;
+    """
+    data = run_query(query)  # 'run_query' executa a consulta SQL e retorna lista de tuplas
 
-    # 2) Exibir em dataframe
+    # 2) Exibir em dataframe, formatando 'total_geral'
     if data:
         df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
+
+        # Se existir a função 'format_currency(value)' para converter em R$ ##,##...
+        df["Total Geral"] = df["Total Geral"].apply(format_currency)
+
         st.subheader("Clientes - Fidelidade")
         st.dataframe(df, use_container_width=True)
     else:
-        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
+        st.info("Nenhum cliente com total_geral acima de 100 ou dados indisponíveis.")
 
     st.markdown("---")
 
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
+    # 3) (Opcional) Se ainda quiser manter a lógica de acumular pontos localmente,
+    # deixe o bloco abaixo. Caso não seja necessário, remova completamente.
 
     st.subheader("Acumule pontos a cada compra!")
     if 'points' not in st.session_state:
@@ -1055,6 +1066,7 @@ def loyalty_program_page():
             st.success("Prêmio resgatado!")
         else:
             st.error("Pontos insuficientes.")
+
 
 
 
