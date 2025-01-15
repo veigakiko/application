@@ -1466,7 +1466,7 @@ def login_page():
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
-            btn_signup = st.form_submit_button("Sign up")
+            
         st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Google
