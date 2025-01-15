@@ -1288,7 +1288,7 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
-        st.write("Informe suas credenciais para acessar o sistema:")
+        st.write("Log in and keep the beach vibes flowing!:")
         username_input = st.text_input("Usuário")
         password_input = st.text_input("Senha", type="password")
         
