@@ -1019,97 +1019,70 @@ def events_calendar_page():
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
 ###############################################################################
-def loyalty_program_page():
-    st.title("Programa de Fidelidade")
-
-    # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # assume que run_query retorna lista de tuplas
-
-    # 2) Exibir em dataframe
-    if data:
-        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
-        st.subheader("Clientes - Fidelidade")
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
-
-    st.markdown("---")
-
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
-
-    st.subheader("Acumule pontos a cada compra!")
-    if 'points' not in st.session_state:
-        st.session_state.points = 0
-
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
-    if st.button("Adicionar Pontos"):
-        st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
-
-    if st.button("Resgatar Prêmio"):
-        if st.session_state.points >= 100:
-            st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
-        else:
-            st.error("Pontos insuficientes.")
 
 
-###############################################################################
-#                    NOVA PÁGINA: ANALYTICS (Faturamento)
-###############################################################################
 def analytics_page():
     st.title("Analytics")
 
-    # Consulta a view com produto e faturamento
-    query = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
-    result = run_query(query)
+    # Pega dados da view
+    query_prod_fat = 'SELECT "Produto", total_faturado FROM public.vw_produto_total_faturado;'
+    result_prod_fat = run_query(query_prod_fat)
 
-    # Se não vier nenhum resultado
-    if not result:
-        st.info("Nenhum dado encontrado em vw_produto_total_faturado.")
+    if not result_prod_fat:
+        st.info("Nenhum dado encontrado na view vw_produto_total_faturado.")
         return
 
-    # Converte o resultado em DataFrame
-    df_faturado = pd.DataFrame(result, columns=["Produto", "total_faturado"])
+    df_prod_fat = pd.DataFrame(result_prod_fat, columns=["Produto", "total_faturado"])
 
-    # Converte para tipo numérico (float). Valores inválidos se tornam NaN e são preenchidos com 0.
-    df_faturado["total_faturado"] = pd.to_numeric(
-        df_faturado["total_faturado"], errors="coerce"
-    ).fillna(0)
+    # --- DEBUG: veja o que chegou do BD
+    st.write("**Valores brutos** na coluna total_faturado:")
+    st.write(df_prod_fat["total_faturado"].unique())
 
-    # Ordena do maior para o menor
-    df_faturado.sort_values(by="total_faturado", ascending=False, inplace=True)
+    # 1) Converte tudo para string e tira espaços
+    df_prod_fat["total_faturado"] = df_prod_fat["total_faturado"].astype(str).str.strip()
 
-    # Exibe a tabela
+    # 2) Remove pontos de milhar e troca vírgula por ponto
+    #    Ex: "1.234,56" -> "1234,56" -> "1234.56"
+    df_prod_fat["total_faturado"] = (
+        df_prod_fat["total_faturado"]
+        .str.replace(".", "", regex=False)  
+        .str.replace(",", ".", regex=False)
+    )
+
+    # 3) Converte para float, transformando o que não der certo em NaN
+    df_prod_fat["total_faturado"] = pd.to_numeric(df_prod_fat["total_faturado"], errors="coerce")
+
+    # 4) Substitui NaN por zero, se desejar
+    df_prod_fat["total_faturado"] = df_prod_fat["total_faturado"].fillna(0)
+
+    # --- DEBUG pós-conversão
+    st.write("**Valores após conversão** na coluna total_faturado:")
+    st.write(df_prod_fat["total_faturado"].unique())
+
+    # Agora df_prod_fat["total_faturado"] é float. Se quiser, verifique tipos:
+    st.write("Tipos após conversão:", df_prod_fat["total_faturado"].dtypes)
+
+    # Prossegue com o restante do código normalmente
+    df_prod_fat.sort_values(by="total_faturado", ascending=False, inplace=True)
+
     st.subheader("Tabela de Faturamento por Produto")
-    st.dataframe(df_faturado, use_container_width=True)
+    st.dataframe(df_prod_fat, use_container_width=True)
 
-    # Verifica se há algum valor positivo
-    max_val = df_faturado["total_faturado"].max()
-    if max_val <= 0:
-        st.warning("Não há valores de faturamento maiores que zero.")
-    else:
-        # Caso haja valores positivos, plotamos o gráfico
-        import altair as alt
-
-        st.subheader("Gráfico de Faturamento (Barras Horizontais)")
-        chart = (
-            alt.Chart(df_faturado)
-            .mark_bar()
-            .encode(
-                x=alt.X("total_faturado:Q", title="Total Faturado"),
-                y=alt.Y("Produto:N", sort="-x", title="Produto"),
-            )
-            .properties(
-                title="Faturamento por Produto (Ordenado)",
-                width="container",
-                height=400
-            )
+    import altair as alt
+    chart_prod_fat = (
+        alt.Chart(df_prod_fat)
+        .mark_bar()
+        .encode(
+            x=alt.X("total_faturado:Q", title="Total Faturado", axis=alt.Axis(format=",.2f")),
+            y=alt.Y("Produto:N", sort="-x", title="Produto")
         )
-        st.altair_chart(chart, use_container_width=True)
-
+        .properties(
+            title="Faturamento por Produto (Ordenado)",
+            width="container",
+            height=400
+        )
+    )
+    st.altair_chart(chart_prod_fat, use_container_width=True)
 
 
 
