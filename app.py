@@ -16,7 +16,6 @@ import numpy as np
 from sklearn.linear_model import LinearRegression
 import matplotlib.pyplot as plt
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode
-from st_aggrid.shared import JsCode
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -172,7 +171,11 @@ def run_query(query: str, values=None, commit: bool = False):
                 conn.commit()
                 return True
             else:
-                return cursor.fetchall()
+                try:
+                    return cursor.fetchall()
+                except psycopg2.ProgrammingError:
+                    # Caso a query não retorne nada (como INSERT)
+                    return []
     except Exception as e:
         st.error(f"Erro ao executar a query: {e}")
     finally:
@@ -189,24 +192,24 @@ def load_all_data():
     data = {}
     try:
         data["orders"] = run_query(
-            'SELECT "Cliente","Produto","Quantidade","Data","Status" FROM public.tb_pedido ORDER BY "Data" DESC'
+            'SELECT cliente, produto, quantidade, data, status, id FROM public.tb_pedido ORDER BY data DESC'
         ) or []
         data["products"] = run_query(
-            'SELECT supplier,product,quantity,unit_value,total_value,creation_date FROM public.tb_products ORDER BY creation_date DESC'
+            'SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
         data["clients"] = run_query(
-            'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
+            'SELECT nome_completo FROM public.tb_clientes ORDER BY nome_completo'
         ) or []
         data["stock"] = run_query(
-            'SELECT "Produto","Quantidade","Transação","Data" FROM public.tb_estoque ORDER BY "Data" DESC'
+            'SELECT produto, quantidade, transacao, data FROM public.tb_estoque ORDER BY data DESC'
         ) or []
         data["revenue"] = run_query(
             """
-            SELECT date("Data") as dt, SUM("total") as total_dia
+            SELECT date(data) as dt, SUM(total) as total_dia
             FROM public.vw_pedido_produto
-            WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-            GROUP BY date("Data")
-            ORDER BY date("Data")
+            WHERE status IN ('received - debited','received - credit','received - pix','received - cash')
+            GROUP BY date(data)
+            ORDER BY date(data)
             """
         ) or pd.DataFrame()
     except Exception as e:
@@ -228,7 +231,7 @@ def home_page():
 
     notification_placeholder = st.empty()
     client_count_query = """
-        SELECT COUNT(DISTINCT "Cliente") 
+        SELECT COUNT(DISTINCT cliente) 
         FROM public.tb_pedido
         WHERE status=%s
     """
@@ -242,11 +245,11 @@ def home_page():
         # Expander para agrupar relatórios administrativos
         with st.expander("Open Orders Summary"):
             open_orders_query = """
-                SELECT "Cliente",SUM("total") AS Total
+                SELECT cliente, SUM(total) AS total
                 FROM public.vw_pedido_produto
                 WHERE status=%s
-                GROUP BY "Cliente"
-                ORDER BY "Cliente" DESC
+                GROUP BY cliente
+                ORDER BY cliente DESC
             """
             open_orders_data = run_query(open_orders_query, ('em aberto',))
             if open_orders_data:
@@ -261,7 +264,7 @@ def home_page():
         with st.expander("Stock vs. Orders Summary"):
             try:
                 stock_vs_orders_query = """
-                    SELECT product,stock_quantity,orders_quantity,total_in_stock
+                    SELECT product, stock_quantity, orders_quantity, total_in_stock
                     FROM public.vw_stock_vs_orders_summary
                 """
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
@@ -302,11 +305,11 @@ def home_page():
         # NOVO ITEM: Total Faturado
         with st.expander("Total Faturado"):
             faturado_query = """
-                SELECT date("Data") as dt, SUM("total") as total_dia
+                SELECT date(data) as dt, SUM(total) as total_dia
                 FROM public.vw_pedido_produto
-                WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-                GROUP BY date("Data")
-                ORDER BY date("Data")
+                WHERE status IN ('received - debited','received - credit','received - pix','received - cash')
+                GROUP BY date(data)
+                ORDER BY date(data)
             """
             faturado_data = run_query(faturado_query)
             if faturado_data:
@@ -345,9 +348,11 @@ def orders_page():
 
         if submit_button:
             if customer_name and product and quantity > 0:
+                # Supõe-se que há uma coluna 'total' ou similar na tabela 'tb_pedido'
+                # Ajuste conforme necessário
                 query_insert = """
-                    INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data","Status")
-                    VALUES (%s,%s,%s,%s,'em aberto')
+                    INSERT INTO public.tb_pedido(cliente, produto, quantidade, data, status)
+                    VALUES (%s, %s, %s, %s, 'em aberto')
                 """
                 run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
                 st.success("Pedido registrado com sucesso!")
@@ -360,7 +365,7 @@ def orders_page():
         st.subheader("Listagem de Pedidos")
         orders_data = st.session_state.data.get("orders", [])
         if orders_data:
-            cols = ["Cliente","Produto","Quantidade","Data","Status"]
+            cols = ["Cliente","Produto","Quantidade","Data","Status","ID"]
             df_orders = pd.DataFrame(orders_data, columns=cols)
             st.dataframe(df_orders, use_container_width=True)
             download_df_as_csv(df_orders, "orders.csv", label="Baixar Pedidos CSV")
@@ -398,8 +403,8 @@ def orders_page():
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
                                 status_opts = [
-                                    "em aberto", "Received - Debited", "Received - Credit",
-                                    "Received - Pix", "Received - Cash"
+                                    "em aberto", "received - debited", "received - credit",
+                                    "received - pix", "received - cash"
                                 ]
                                 if original_status in status_opts:
                                     s_index = status_opts.index(original_status)
@@ -416,21 +421,20 @@ def orders_page():
                         if delete_btn:
                             q_del = """
                                 DELETE FROM public.tb_pedido
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                                WHERE cliente=%s AND produto=%s AND data=%s AND id=%s
                             """
-                            run_query(q_del, (original_client, original_product, original_date), commit=True)
+                            run_query(q_del, (original_client, original_product, original_date, sel["ID"]), commit=True)
                             st.success("Pedido deletado!")
                             refresh_data()
 
                         if update_btn:
                             q_upd = """
                                 UPDATE public.tb_pedido
-                                SET "Produto"=%s,"Quantidade"=%s,"Status"=%s
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                                SET produto=%s, quantidade=%s, status=%s
+                                WHERE id=%s
                             """
                             run_query(q_upd, (
-                                edit_prod, edit_qty, edit_status,
-                                original_client, original_product, original_date
+                                edit_prod, edit_qty, edit_status, sel["ID"]
                             ), commit=True)
                             st.success("Pedido atualizado!")
                             refresh_data()
@@ -462,12 +466,12 @@ def products_page():
         if submit_prod:
             if supplier and product and quantity > 0 and unit_value >= 0:
                 total_value = quantity * unit_value
-                q_ins = """
+                query_insert = """
                     INSERT INTO public.tb_products
-                    (supplier,product,quantity,unit_value,total_value,creation_date)
-                    VALUES (%s,%s,%s,%s,%s,%s)
+                    (supplier, product, quantity, unit_value, total_value, creation_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
+                run_query(query_insert, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
                 st.success("Produto adicionado com sucesso!")
                 refresh_data()
             else:
@@ -478,7 +482,7 @@ def products_page():
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date"]
+            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date","image_url"]
             df_prod = pd.DataFrame(products_data, columns=cols)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
@@ -528,15 +532,16 @@ def products_page():
 
                         if update_btn:
                             edit_total_val = edit_quantity * edit_unit_val
-                            q_upd = """
+                            query_update = """
                                 UPDATE public.tb_products
-                                SET supplier=%s,product=%s,quantity=%s,unit_value=%s,
-                                    total_value=%s,creation_date=%s
-                                WHERE supplier=%s AND product=%s AND creation_date=%s
+                                SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
+                                    total_value=%s, creation_date=%s
+                                WHERE id=%s
                             """
-                            run_query(q_upd, (
+                            # Assumindo que há uma coluna 'id' para identificação única
+                            run_query(query_update, (
                                 edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
-                                edit_creation_date, original_supplier, original_product, original_creation_date
+                                edit_creation_date, sel.get("id")  # Ajuste conforme sua tabela
                             ), commit=True)
                             st.success("Produto atualizado!")
                             refresh_data()
@@ -544,13 +549,11 @@ def products_page():
                         if delete_btn:
                             confirm = st.checkbox("Confirma a exclusão deste produto?")
                             if confirm:
-                                q_del = """
+                                query_delete = """
                                     DELETE FROM public.tb_products
-                                    WHERE supplier=%s AND product=%s AND creation_date=%s
+                                    WHERE id=%s
                                 """
-                                run_query(q_del, (
-                                    original_supplier, original_product, original_creation_date
-                                ), commit=True)
+                                run_query(query_delete, (sel.get("id"),), commit=True)
                                 st.success("Produto deletado!")
                                 refresh_data()
         else:
@@ -582,11 +585,11 @@ def stock_page():
         if submit_st:
             if product and quantity > 0:
                 current_datetime = datetime.combine(date_input, datetime.min.time())
-                q_ins = """
-                    INSERT INTO public.tb_estoque("Produto","Quantidade","Transação","Data")
-                    VALUES(%s,%s,%s,%s)
+                query_insert = """
+                    INSERT INTO public.tb_estoque(produto, quantidade, transacao, data)
+                    VALUES(%s, %s, %s, %s)
                 """
-                run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
+                run_query(query_insert, (product, quantity, transaction, current_datetime), commit=True)
                 st.success("Movimentação de estoque registrada!")
                 refresh_data()
             else:
@@ -651,12 +654,12 @@ def stock_page():
 
                         if update_btn:
                             new_dt = datetime.combine(edit_date, datetime.min.time())
-                            q_upd = """
+                            query_update = """
                                 UPDATE public.tb_estoque
-                                SET "Produto"=%s,"Quantidade"=%s,"Transação"=%s,"Data"=%s
-                                WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
+                                SET produto=%s, quantidade=%s, transacao=%s, data=%s
+                                WHERE produto=%s AND transacao=%s AND data=%s
                             """
-                            run_query(q_upd, (
+                            run_query(query_update, (
                                 edit_prod, edit_qty, edit_trans, new_dt,
                                 original_product, original_trans, original_date
                             ), commit=True)
@@ -664,11 +667,11 @@ def stock_page():
                             refresh_data()
 
                         if delete_btn:
-                            q_del = """
+                            query_delete = """
                                 DELETE FROM public.tb_estoque
-                                WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
+                                WHERE produto=%s AND transacao=%s AND data=%s
                             """
-                            run_query(q_del, (original_product, original_trans, original_date), commit=True)
+                            run_query(query_delete, (original_product, original_trans, original_date), commit=True)
                             st.success("Registro deletado!")
                             refresh_data()
         else:
@@ -695,14 +698,14 @@ def clients_page():
                 unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
                 email = f"{nome_completo.replace(' ','_').lower()}_{unique_id}@example.com"
 
-                q_ins = """
+                query_insert = """
                     INSERT INTO public.tb_clientes(
                         nome_completo, data_nascimento, genero, telefone,
                         email, endereco, data_cadastro
                     )
-                    VALUES(%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                    VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 """
-                run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
+                run_query(query_insert, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
                 st.success("Cliente registrado!")
                 refresh_data()
             else:
@@ -711,13 +714,13 @@ def clients_page():
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
         st.subheader("Todos os Clientes")
-        clients_data = run_query("SELECT nome_completo,email FROM public.tb_clientes ORDER BY data_cadastro DESC;")
+        clients_data = run_query("SELECT nome_completo, email, id FROM public.tb_clientes ORDER BY data_cadastro DESC;")
         if clients_data:
-            cols = ["Full Name","Email"]
+            cols = ["Full Name","Email","ID"]
             df_clients = pd.DataFrame(clients_data, columns=cols)
-            # Exibir apenas a coluna Full Name
-            st.dataframe(df_clients[["Full Name"]], use_container_width=True)
-            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clientes CSV")
+            # Exibir apenas a coluna Full Name e Email
+            st.dataframe(df_clients[["Full Name", "Email"]], use_container_width=True)
+            download_df_as_csv(df_clients[["Full Name", "Email"]], "clients.csv", label="Baixar Clientes CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Cliente")
@@ -735,10 +738,10 @@ def clients_page():
                     sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                     with st.form(key='edit_client_form'):
                         edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
-                        edit_data_nasc = st.date_input("Data de Nascimento", value=date.today())
+                        edit_data_nasc = st.date_input("Data de Nascimento", value=date.today())  # Ajuste conforme necessário
                         edit_genero = st.selectbox("Gênero", ["Masculino", "Feminino", "Outro"], index=0)
-                        edit_telefone = st.text_input("Telefone", value="0000-0000")
-                        edit_endereco = st.text_area("Endereço", value="Endereço padrão")
+                        edit_telefone = st.text_input("Telefone", value="0000-0000")  # Ajuste conforme necessário
+                        edit_endereco = st.text_area("Endereço", value="Endereço padrão")  # Ajuste conforme necessário
                         col_upd, col_del = st.columns(2)
                         with col_upd:
                             update_btn = st.form_submit_button("Atualizar Cliente")
@@ -747,13 +750,13 @@ def clients_page():
 
                     if update_btn:
                         if edit_name and edit_telefone and edit_endereco:
-                            q_upd = """
+                            query_update = """
                                 UPDATE public.tb_clientes
                                 SET nome_completo=%s, data_nascimento=%s, genero=%s, telefone=%s,
                                     endereco=%s
                                 WHERE email=%s
                             """
-                            run_query(q_upd, (
+                            run_query(query_update, (
                                 edit_name, edit_data_nasc, edit_genero, edit_telefone,
                                 edit_endereco, original_email
                             ), commit=True)
@@ -765,8 +768,8 @@ def clients_page():
                     if delete_btn:
                         confirm = st.checkbox("Confirma a exclusão deste cliente?")
                         if confirm:
-                            q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
-                            run_query(q_del, (original_email,), commit=True)
+                            query_delete = "DELETE FROM public.tb_clientes WHERE email=%s"
+                            run_query(query_delete, (original_email,), commit=True)
                             st.success("Cliente deletado!")
                             refresh_data()
         else:
@@ -775,24 +778,24 @@ def clients_page():
 def invoice_page():
     """Página para gerar e gerenciar notas fiscais."""
     st.title("Nota Fiscal")
-    open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
+    open_clients_query = 'SELECT DISTINCT cliente FROM public.tb_pedido WHERE status=%s'
     open_clients = run_query(open_clients_query, ('em aberto',))
     client_list = [row[0] for row in open_clients] if open_clients else []
     selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
 
     if selected_client:
         invoice_query = """
-            SELECT "Produto","Quantidade","total"
-            FROM public.vw_pedido_produto
-            WHERE "Cliente"=%s AND status=%s
+            SELECT produto, quantidade, total, id
+            FROM public.tb_pedido
+            WHERE cliente=%s AND status=%s
         """
         invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
         if invoice_data:
-            df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
+            df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","Total","ID"])
 
             # Converte para numeric
-            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-            total_sem_desconto = df["total"].sum()
+            df["Total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
+            total_sem_desconto = df["Total"].sum()
 
             # Cupom fixo de exemplo
             cupons_validos = {
@@ -820,19 +823,19 @@ def invoice_page():
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Debit"):
-                    process_payment(selected_client, "Received - Debited")
+                    process_payment(selected_client, "received - debited")
                     st.success("Pagamento via Débito processado!")
             with col2:
                 if st.button("Credit"):
-                    process_payment(selected_client, "Received - Credit")
+                    process_payment(selected_client, "received - credit")
                     st.success("Pagamento via Crédito processado!")
             with col3:
                 if st.button("Pix"):
-                    process_payment(selected_client, "Received - Pix")
+                    process_payment(selected_client, "received - pix")
                     st.success("Pagamento via Pix processado!")
             with col4:
                 if st.button("Cash"):
-                    process_payment(selected_client, "Received - Cash")
+                    process_payment(selected_client, "received - cash")
                     st.success("Pagamento via Dinheiro processado!")
         else:
             st.info("Não há pedidos em aberto para esse cliente.")
@@ -846,7 +849,7 @@ def analytics_page():
     # Função para carregar dados de tb_pedido
     @st.cache_data(show_spinner=False)
     def load_pedido_data():
-        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", "Status", id FROM public.tb_pedido;'
+        query = 'SELECT cliente, produto, quantidade, data, status, id FROM public.tb_pedido;'
         results = run_query(query)
         if results:
             df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
@@ -902,17 +905,17 @@ def analytics_page():
         # Calcula a receita total por produto
         product_revenue = (
             pedido_data
-            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
-            .groupby("Produto")["Receita"]
+            .assign(receita=lambda df: df["Quantidade"] * df["Preço"])
+            .groupby("Produto")["receita"]
             .sum()
             .reset_index()
-            .sort_values(by="Receita", ascending=False)
+            .sort_values(by="receita", ascending=False)
             .head(10)
         )
 
         # Cria o gráfico
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
+        ax.barh(product_revenue["Produto"], product_revenue["receita"], color="skyblue")
         ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
         ax.set_xlabel("Receita Total (R$)", fontsize=12)
         ax.set_ylabel("Produto", fontsize=12)
@@ -951,12 +954,12 @@ def analytics_page():
                 # Exemplo de como salvar as alterações no banco de dados
                 try:
                     for index, row in updated_df.iterrows():
-                        q_upd = """
+                        query_update = """
                             UPDATE public.tb_pedido
-                            SET "Cliente"=%s, "Produto"=%s, "Quantidade"=%s, "Data"=%s, "Status"=%s
+                            SET cliente=%s, produto=%s, quantidade=%s, data=%s, status=%s
                             WHERE id=%s
                         """
-                        run_query(q_upd, (
+                        run_query(query_update, (
                             row["Cliente"], row["Produto"], row["Quantidade"],
                             row["Data"], row["Status"], row["ID"]
                         ), commit=True)
@@ -1120,22 +1123,24 @@ def menu_page():
                     # Nota: Dependendo do seu ambiente, pode ser necessário hospedar as imagens de forma acessível.
                     # Aqui, estamos apenas salvando localmente. Ajuste conforme necessário.
 
-                    update_query = """
+                    query_update = """
                         UPDATE public.tb_products
                         SET image_url=%s
                         WHERE product=%s
                     """
-                    run_query(update_query, (save_path, chosen_product), commit=True)
+                    run_query(query_update, (save_path, chosen_product), commit=True)
                     st.success("Imagem atualizada com sucesso!")
                     refresh_data()
                     st.experimental_rerun()
+    else:
+        st.warning("Nenhum produto selecionado para editar.")
 
 def loyalty_program_page():
     """Página do programa de fidelidade."""
     st.title("Programa de Fidelidade")
 
     # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
+    query = 'SELECT cliente, total_geral FROM public.vw_cliente_sum_total;'
     data = run_query(query)  # Assume que run_query retorna lista de tuplas
 
     # 2) Exibir em dataframe
@@ -1148,9 +1153,7 @@ def loyalty_program_page():
 
     st.markdown("---")
 
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
-
+    # 3) (Opcional) Acumular pontos localmente
     st.subheader("Acumule pontos a cada compra!")
     if 'points' not in st.session_state:
         st.session_state.points = 0
@@ -1203,12 +1206,12 @@ def events_calendar_page():
 
     if btn_cadastrar:
         if nome_evento.strip():
-            q_insert = """
+            query_insert = """
                 INSERT INTO public.tb_eventos
                     (nome, descricao, data_evento, inscricao_aberta, data_criacao)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            run_query(query_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
             st.success("Evento cadastrado com sucesso!")
             st.experimental_rerun()
         else:
@@ -1276,20 +1279,17 @@ def events_calendar_page():
         )
         # Substituir as tags <td> correspondentes ao dia
         # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
-        # Para evitar isso, utilizaremos o JsCode para destacar os dias com eventos
+        # Para evitar isso, utilizaremos o replace apenas uma vez por dia
+        # Vamos usar uma estratégia mais robusta utilizando BeautifulSoup
 
-    # Usando AgGrid para renderizar um calendário interativo seria mais adequado,
-    # mas para simplificação, vamos apenas exibir o calendário HTML com os dias destacados.
+        from bs4 import BeautifulSoup
 
-    # Ajuste do HTML do calendário para destacar os dias com eventos
-    for _, ev in df_filtrado.iterrows():
-        dia = ev["data_evento"].day
-        # Criar uma expressão regular para substituir as tags <td> contendo o dia específico
-        # Isto pode não ser perfeito, mas serve para fins ilustrativos
-        html_calendario = html_calendario.replace(
-            f'<td>{dia}</td>',
-            f'<td{highlight_str}>{dia}</td>'
-        )
+        soup = BeautifulSoup(html_calendario, 'html.parser')
+        for day_cell in soup.find_all('td'):
+            if day_cell.text.strip() == str(dia):
+                day_cell['style'] = "background-color:blue; color:white; font-weight:bold;"
+                day_cell['title'] = f"{ev['nome']}: {ev['descricao']}"
+        html_calendario = str(soup)
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
@@ -1355,12 +1355,12 @@ def events_calendar_page():
             with col_btn1:
                 if st.button("Atualizar Evento"):
                     if new_nome.strip():
-                        q_update = """
+                        query_update = """
                             UPDATE public.tb_eventos
                             SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
                             WHERE id=%s
                         """
-                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        run_query(query_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
                         st.success("Evento atualizado com sucesso!")
                         st.experimental_rerun()
                     else:
@@ -1369,8 +1369,8 @@ def events_calendar_page():
             with col_btn2:
                 # Exclusão imediata sem checkbox de confirmação
                 if st.button("Excluir Evento"):
-                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    run_query(q_delete, (event_id,), commit=True)
+                    query_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                    run_query(query_delete, (event_id,), commit=True)
                     st.success(f"Evento ID={event_id} excluído!")
                     st.experimental_rerun()
     else:
@@ -1398,7 +1398,7 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("--------------------------------------------------")
 
     # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    df["total"] = pd.to_numeric(df["Total"], errors="coerce").fillna(0)
     grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
     total_general = 0
     for _, row in grouped_df.iterrows():
@@ -1421,8 +1421,8 @@ def process_payment(client, payment_status):
     """Processa o pagamento atualizando o status do pedido."""
     query = """
         UPDATE public.tb_pedido
-        SET status=%s,"Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
+        SET status=%s, data=CURRENT_TIMESTAMP
+        WHERE cliente=%s AND status='em aberto'
     """
     run_query(query, (payment_status, client), commit=True)
 
@@ -1693,381 +1693,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
-def loyalty_program_page():
-    """Página do programa de fidelidade."""
-    st.title("Programa de Fidelidade")
-
-    # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # Assume que run_query retorna lista de tuplas
-
-    # 2) Exibir em dataframe
-    if data:
-        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
-        st.subheader("Clientes - Fidelidade")
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
-
-    st.markdown("---")
-
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
-
-    st.subheader("Acumule pontos a cada compra!")
-    if 'points' not in st.session_state:
-        st.session_state.points = 0
-
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
-    if st.button("Adicionar Pontos"):
-        st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
-
-    if st.button("Resgatar Prêmio"):
-        if st.session_state.points >= 100:
-            st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
-        else:
-            st.error("Pontos insuficientes.")
-
-###############################################################################
-#                           CALENDÁRIO DE EVENTOS
-###############################################################################
-def events_calendar_page():
-    """Página para gerenciar o calendário de eventos."""
-    st.title("Calendário de Eventos")
-
-    # ----------------------------------------------------------------------------
-    # 1) Helper: Ler eventos do banco
-    # ----------------------------------------------------------------------------
-    def get_events_from_db():
-        """
-        Retorna lista de tuplas (id, nome, descricao, data_evento, inscricao_aberta, data_criacao)
-        ordenadas pela data_evento.
-        """
-        query = """
-            SELECT id, nome, descricao, data_evento, inscricao_aberta, data_criacao
-            FROM public.tb_eventos
-            ORDER BY data_evento;
-        """
-        rows = run_query(query)  # Ajuste conforme suas funções de DB
-        return rows if rows else []
-
-    # ----------------------------------------------------------------------------
-    # 2) Cadastro de novo evento
-    # ----------------------------------------------------------------------------
-    st.subheader("Agendar Novo Evento")
-    with st.form(key="new_event_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            nome_evento = st.text_input("Nome do Evento")
-            data_evento = st.date_input("Data do Evento", value=date.today())
-        with col2:
-            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
-            descricao_evento = st.text_area("Descrição do Evento")
-        btn_cadastrar = st.form_submit_button("Agendar")
-
-    if btn_cadastrar:
-        if nome_evento.strip():
-            q_insert = """
-                INSERT INTO public.tb_eventos
-                    (nome, descricao, data_evento, inscricao_aberta, data_criacao)
-                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
-            """
-            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.success("Evento cadastrado com sucesso!")
-            st.experimental_rerun()
-        else:
-            st.warning("Informe ao menos o nome do evento.")
-
-    st.markdown("---")
-
-    # ----------------------------------------------------------------------------
-    # 3) Filtros de Mês/Ano
-    # ----------------------------------------------------------------------------
-    current_date = date.today()
-    ano_padrao = current_date.year
-    mes_padrao = current_date.month
-
-    col_ano, col_mes = st.columns(2)
-    with col_ano:
-        ano_selecionado = st.selectbox(
-            "Selecione o Ano",
-            list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
-            index=2  # por padrão, seleciona o ano atual
-        )
-    with col_mes:
-        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
-        mes_selecionado = st.selectbox(
-            "Selecione o Mês",
-            options=list(range(1, 13)),
-            format_func=lambda x: meses_nomes[x-1],
-            index=mes_padrao - 1
-        )
-
-    # ----------------------------------------------------------------------------
-    # 4) Ler dados e filtrar
-    # ----------------------------------------------------------------------------
-    event_rows = get_events_from_db()
-    if not event_rows:
-        st.info("Nenhum evento cadastrado.")
-        return
-
-    df_events = pd.DataFrame(
-        event_rows,
-        columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
-    )
-    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
-
-    df_filtrado = df_events[
-        (df_events["data_evento"].dt.year == ano_selecionado) &
-        (df_events["data_evento"].dt.month == mes_selecionado)
-    ].copy()
-
-    # ----------------------------------------------------------------------------
-    # 5) Montar o calendário
-    # ----------------------------------------------------------------------------
-    st.subheader("Visualização do Calendário")
-
-    cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
-
-    # Destacar dias com eventos
-    for _, ev in df_filtrado.iterrows():
-        dia = ev["data_evento"].day
-        # Ajustamos a cor de fundo para azul e o texto para branco
-        highlight_str = (
-            f' style="background-color:blue; color:white; font-weight:bold;" '
-            f'title="{ev["nome"]}: {ev["descricao"]}"'
-        )
-        # Substituir as tags <td> correspondentes ao dia
-        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
-        # Para evitar isso, utilizaremos o JsCode para destacar os dias com eventos
-
-        # Usando replace direto
-        html_calendario = html_calendario.replace(
-            f'<td>{dia}</td>',
-            f'<td{highlight_str}>{dia}</td>'
-        )
-
-    st.markdown(html_calendario, unsafe_allow_html=True)
-
-    # ----------------------------------------------------------------------------
-    # 6) Listagem dos eventos no mês selecionado
-    # ----------------------------------------------------------------------------
-    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
-    if len(df_filtrado) == 0:
-        st.info("Nenhum evento neste mês.")
-    else:
-        df_display = df_filtrado.copy()
-        df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
-        df_display.rename(columns={
-            "id": "ID",
-            "nome": "Nome do Evento",
-            "descricao": "Descrição",
-            "data_evento": "Data",
-            "inscricao_aberta": "Inscrição Aberta",
-            "data_criacao": "Data Criação"
-        }, inplace=True)
-        st.dataframe(df_display, use_container_width=True)
-
-    st.markdown("---")
-
-    # ----------------------------------------------------------------------------
-    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
-    # ----------------------------------------------------------------------------
-    st.subheader("Editar / Excluir Eventos")
-
-    df_events["evento_label"] = df_events.apply(
-        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
-        axis=1
-    )
-    events_list = [""] + df_events["evento_label"].tolist()
-    selected_event = st.selectbox("Selecione um evento:", events_list)
-
-    if selected_event:
-        # Extrair ID do formato "123 - Evento X (2025-01-01)"
-        event_id_str = selected_event.split(" - ")[0]
-        try:
-            event_id = int(event_id_str)
-        except ValueError:
-            st.error("Falha ao interpretar ID do evento.")
-            return
-
-        # Carrega dados do evento selecionado
-        ev_row = df_events[df_events["id"] == event_id].iloc[0]
-        original_nome = ev_row["nome"]
-        original_desc = ev_row["descricao"]
-        original_data = ev_row["data_evento"]
-        original_insc = ev_row["inscricao_aberta"]
-
-        with st.expander("Editar Evento", expanded=True):
-            col1, col2 = st.columns(2)
-            with col1:
-                new_nome = st.text_input("Nome do Evento", value=original_nome)
-                new_data = st.date_input("Data do Evento", value=original_data.date())
-            with col2:
-                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
-                new_desc = st.text_area("Descrição do Evento", value=original_desc)
-
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if st.button("Atualizar Evento"):
-                    if new_nome.strip():
-                        q_update = """
-                            UPDATE public.tb_eventos
-                            SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
-                            WHERE id=%s
-                        """
-                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
-                        st.success("Evento atualizado com sucesso!")
-                        st.experimental_rerun()
-                    else:
-                        st.warning("O campo Nome do Evento não pode ficar vazio.")
-
-            with col_btn2:
-                # Exclusão imediata sem checkbox de confirmação
-                if st.button("Excluir Evento"):
-                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    run_query(q_delete, (event_id,), commit=True)
-                    st.success(f"Evento ID={event_id} excluído!")
-                    st.experimental_rerun()
-    else:
-        st.info("Selecione um evento para editar ou excluir.")
-
-def analytics_page():
-    """Página de Analytics contendo gráficos e edição de pedidos com st_aggrid."""
-    st.title("Analytics")
-
-    # Função para carregar dados de tb_pedido
-    @st.cache_data(show_spinner=False)
-    def load_pedido_data():
-        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", "Status", id FROM public.tb_pedido;'
-        results = run_query(query)
-        if results:
-            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-            # Converte a coluna "Data" para datetime
-            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
-            return df
-        else:
-            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-
-    pedido_data = load_pedido_data()
-
-    # Função para carregar dados de daily_revenue
-    @st.cache_data(show_spinner=False)
-    def load_daily_revenue_data():
-        query = 'SELECT order_date, daily_revenue FROM public.daily_revenue;'
-        results = run_query(query)
-        if results:
-            df = pd.DataFrame(results, columns=["order_date", "daily_revenue"])
-            # Converte a coluna "order_date" para datetime
-            df["order_date"] = pd.to_datetime(df["order_date"], errors='coerce')
-            return df
-        else:
-            return pd.DataFrame(columns=["order_date", "daily_revenue"])
-
-    daily_revenue_data = load_daily_revenue_data()
-
-    # Adicionar o gráfico de Receita Diária
-    st.subheader("Receita Diária ao Longo do Tempo")
-
-    if not daily_revenue_data.empty:
-        # Ordena os dados por data
-        daily_revenue_data = daily_revenue_data.sort_values(by="order_date")
-
-        # Cria o gráfico
-        fig_revenue, ax_revenue = plt.subplots(figsize=(10, 6))
-        ax_revenue.plot(daily_revenue_data["order_date"], daily_revenue_data["daily_revenue"], marker='o', linestyle='-', color='green')
-        ax_revenue.set_title("Receita Diária ao Longo do Tempo", fontsize=16)
-        ax_revenue.set_xlabel("Data", fontsize=12)
-        ax_revenue.set_ylabel("Receita Diária (R$)", fontsize=12)
-        ax_revenue.grid(True)
-        st.pyplot(fig_revenue)
-    else:
-        st.warning("Nenhum dado disponível para gerar o gráfico de Receita Diária.")
-
-    # Adicionar o gráfico de Top 10 Produtos por Receita Total
-    st.subheader("Top 10 Produtos por Receita Total (em Reais)")
-
-    if not pedido_data.empty:
-        # Adiciona uma coluna "Preço" simulada (substituir com valores reais, se disponíveis)
-        np.random.seed(42)
-        pedido_data['Preço'] = np.random.uniform(5, 50, size=len(pedido_data))
-
-        # Calcula a receita total por produto
-        product_revenue = (
-            pedido_data
-            .assign(Receita=lambda df: df["Quantidade"] * df["Preço"])
-            .groupby("Produto")["Receita"]
-            .sum()
-            .reset_index()
-            .sort_values(by="Receita", ascending=False)
-            .head(10)
-        )
-
-        # Cria o gráfico
-        fig, ax = plt.subplots(figsize=(10, 6))
-        ax.barh(product_revenue["Produto"], product_revenue["Receita"], color="skyblue")
-        ax.set_title("Top 10 Produtos por Receita Total (em Reais)", fontsize=16)
-        ax.set_xlabel("Receita Total (R$)", fontsize=12)
-        ax.set_ylabel("Produto", fontsize=12)
-        plt.gca().invert_yaxis()  # Inverte a ordem para o maior no topo
-        st.pyplot(fig)
-    else:
-        st.warning("Nenhum dado disponível para gerar o gráfico de Top 10 Produtos.")
-
-    # Seção para edição de pedidos usando st_aggrid
-    st.subheader("Editar Pedidos")
-
-    if st.session_state.get("username") == "admin":
-        gb = GridOptionsBuilder.from_dataframe(pedido_data)
-        gb.configure_pagination(paginationAutoPageSize=True)  # Add pagination
-        gb.configure_side_bar()  # Add a sidebar
-        gb.configure_selection('single')  # Allow single row selection
-        gb.configure_default_column(editable=True)  # Make all columns editable
-        grid_options = gb.build()
-
-        grid_response = AgGrid(
-            pedido_data,
-            gridOptions=grid_options,
-            update_mode=GridUpdateMode.MODEL_CHANGED,
-            enable_enterprise_modules=True,
-            height=400,
-            width='100%',
-            reload_data=False
-        )
-
-        updated_df = grid_response['data']
-        selected = grid_response['selected_rows']
-        selected_df = pd.DataFrame(selected)
-
-        if st.button("Salvar Alterações"):
-            if not updated_df.equals(pedido_data):
-                # Exemplo de como salvar as alterações no banco de dados
-                try:
-                    for index, row in updated_df.iterrows():
-                        q_upd = """
-                            UPDATE public.tb_pedido
-                            SET "Cliente"=%s, "Produto"=%s, "Quantidade"=%s, "Data"=%s, "Status"=%s
-                            WHERE id=%s
-                        """
-                        run_query(q_upd, (
-                            row["Cliente"], row["Produto"], row["Quantidade"],
-                            row["Data"], row["Status"], row["ID"]
-                        ), commit=True)
-                    st.success("Alterações salvas com sucesso!")
-                    refresh_data()
-                except Exception as e:
-                    st.error(f"Erro ao salvar alterações: {e}")
-            else:
-                st.info("Nenhuma alteração detectada.")
-    else:
-        st.info("Você não tem permissão para editar pedidos.")
-
-    st.markdown("---")
-    st.info("**Nota:** Para implementar funcionalidades avançadas de edição, como detecção de mudanças e atualizações parciais, você pode precisar aprimorar a lógica de atualização.")
 
 ###############################################################################
 #                             MENU PRINCIPAL
