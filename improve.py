@@ -1414,13 +1414,13 @@ def login_page():
         with col1:
             btn_login = st.form_submit_button("Log in")
         with col2:
-            btn_forgot = st.form_submit_button("reset password", help="Exemplo simples de fluxo de recuperação")
+            btn_forgot = st.form_submit_button("Sign up", help="Exemplo simples de fluxo de recuperação")
         st.write("Or log in with")
     # ---------------------------------------------------------------------
     # 4) Ação: Esqueci a senha (Exemplo Simples)
     # ---------------------------------------------------------------------
     if btn_forgot:
-        st.info("Entre em contato com o administrador para redefinir sua senha, ou envie um e-mail para suporte@seusite.com.br.")
+        st.info("Entre em contato com o administrador para cadastrar suporte@seusite.com.br.")
     
     # ---------------------------------------------------------------------
     # 5) Ação: Login
