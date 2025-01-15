@@ -1428,7 +1428,7 @@ def login_page():
         }
         /* Reduz espaço entre os input boxes */
         .form-container input {
-            margin-bottom: 8px !important;
+            margin-bottom: 4px !important;
         }
         </style>
         """,
