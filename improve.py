@@ -14,9 +14,12 @@ import calendar
 import altair as alt
 import numpy as np
 from sklearn.linear_model import LinearRegression
+import mitosheet  # Importação do MitoSheet
+from mitosheet.streamlit.v1 import spreadsheet
+from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
-
-
+# Configuração da página para layout wide
+st.set_page_config(layout="wide")
 
 ###############################################################################
 #                                   UTILIDADES
@@ -192,6 +195,15 @@ def load_all_data():
         data["stock"] = run_query(
             'SELECT "Produto","Quantidade","Transação","Data" FROM public.tb_estoque ORDER BY "Data" DESC'
         ) or []
+        data["revenue"] = run_query(
+            """
+            SELECT date("Data") as dt, SUM("total") as total_dia
+            FROM public.vw_pedido_produto
+            WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+            GROUP BY date("Data")
+            ORDER BY date("Data")
+            """
+        ) or pd.DataFrame()
     except:
         pass
     return data
@@ -872,7 +884,7 @@ def invoice_page():
 
 
 ###############################################################################
-#                           BACKUP (ADMIN)
+#                            BACKUP (ADMIN)
 ###############################################################################
 def export_table_to_csv(table_name):
     conn = get_db_connection()
@@ -934,7 +946,7 @@ def admin_backup_section():
 
 
 ###############################################################################
-#                            CALENDÁRIO DE EVENTOS
+#                           CALENDÁRIO DE EVENTOS
 ###############################################################################
 def events_calendar_page():
     st.title("Calendário de Eventos")
@@ -1042,10 +1054,36 @@ def events_calendar_page():
             f' style="background-color:blue; color:white; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
-        for cssclass in cal.cssclasses:
-            original_tag = f'<td class="{cssclass}">{dia}</td>'
-            replaced_tag = f'<td class="{cssclass}"{highlight_str}>{dia}</td>'
-            html_calendario = html_calendario.replace(original_tag, replaced_tag)
+        # Substituir as tags <td> correspondentes ao dia
+        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        html_calendario = html_calendario.replace(
+            f'<td class="mon">{dia}</td>',
+            f'<td class="mon"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="tue">{dia}</td>',
+            f'<td class="tue"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="wed">{dia}</td>',
+            f'<td class="wed"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="thu">{dia}</td>',
+            f'<td class="thu"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="fri">{dia}</td>',
+            f'<td class="fri"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sat">{dia}</td>',
+            f'<td class="sat"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sun">{dia}</td>',
+            f'<td class="sun"{highlight_str}>{dia}</td>'
+        )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
@@ -1131,6 +1169,8 @@ def events_calendar_page():
                     st.experimental_rerun()
     else:
         st.info("Selecione um evento para editar ou excluir.")
+
+
 ###############################################################################
 #                     PROGRAMA DE FIDELIDADE (AJUSTADO)
 ###############################################################################
@@ -1172,63 +1212,127 @@ def loyalty_program_page():
 
 
 ###############################################################################
-#                    NOVA PÁGINA: ANALYTICS (Faturamento)
+#                     NOVA PÁGINA: ANALYTICS (Faturamento)
 ###############################################################################
 def analytics_page():
     st.title("Analytics Dashboard")
-    data = st.session_state.data.get("revenue", pd.DataFrame())
-    if data.empty:
-        st.warning("No data available for analytics.")
-        return
-
-    data["dt"] = pd.to_datetime(data["dt"])
-    data = data.sort_values("dt")
     
+    # Importações necessárias para MitoSheet (já importadas no topo)
+    # from datetime import datetime, timedelta
+    # import pandas as pd
+    # import streamlit as st
+    # from mitosheet.streamlit.v1 import spreadsheet
+    # from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+    
+    # Função para carregar dados de tb_pedido
+    @st.cache_data(show_spinner=False)
+    def load_pedido_data():
+        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+            # Converte a coluna "Data" para datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+    
+    pedido_data = load_pedido_data()
+    
+    # Exibir dados de faturamento existentes
     st.subheader("Revenue Over Time")
-    chart = alt.Chart(data).mark_line(point=True).encode(
-        x=alt.X("dt:T", title="Date"),
-        y=alt.Y("total_dia:Q", title="Daily Revenue"),
-        tooltip=["dt:T", "total_dia:Q"]
-    ).properties(width="container", height=400)
-    st.altair_chart(chart, use_container_width=True)
-
+    revenue_query = """
+        SELECT date("Data") as dt, SUM("total") as total_dia
+        FROM public.vw_pedido_produto
+        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+        GROUP BY date("Data")
+        ORDER BY date("Data")
+    """
+    revenue_data = run_query(revenue_query)
+    if revenue_data:
+        df_revenue = pd.DataFrame(revenue_data, columns=["dt", "total_dia"])
+        df_revenue["dt"] = pd.to_datetime(df_revenue["dt"], errors='coerce')
+        df_revenue = df_revenue.sort_values("dt")
+        
+        chart = alt.Chart(df_revenue).mark_line(point=True).encode(
+            x=alt.X("dt:T", title="Date"),
+            y=alt.Y("total_dia:Q", title="Daily Revenue"),
+            tooltip=["dt:T", "total_dia:Q"]
+        ).properties(width="container", height=400)
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.warning("No revenue data available.")
+    
     st.markdown("---")
     st.subheader("Revenue Prediction (Next 7 Days)")
     
-    # Preparing data for prediction
-    data["day"] = (data["dt"] - data["dt"].min()).dt.days
-    X = data[["day"]]
-    y = data["total_dia"]
-
-    model = LinearRegression()
-    model.fit(X, y)
-
-    future_days = np.arange(data["day"].max() + 1, data["day"].max() + 8).reshape(-1, 1)
-    predictions = model.predict(future_days)
-
-    future_dates = [data["dt"].max() + timedelta(days=i) for i in range(1, 8)]
-    prediction_df = pd.DataFrame({
-        "Date": future_dates,
-        "Predicted Revenue": predictions
-    })
-    prediction_df["Predicted Revenue"] = prediction_df["Predicted Revenue"].apply(format_currency)
-
-    st.write(prediction_df)
-
-    prediction_chart = alt.Chart(prediction_df).mark_line(point=True).encode(
-        x=alt.X("Date:T", title="Future Date"),
-        y=alt.Y("Predicted Revenue:Q", title="Predicted Revenue"),
-        tooltip=["Date:T", "Predicted Revenue:Q"]
-    ).properties(width="container", height=400)
-    st.altair_chart(prediction_chart, use_container_width=True)
-   
-
-
-
+    if not revenue_data:
+        st.warning("No data available for prediction.")
+    else:
+        # Preparação dos dados para a previsão
+        df_revenue["day"] = (df_revenue["dt"] - df_revenue["dt"].min()).dt.days
+        X = df_revenue[["day"]]
+        y = df_revenue["total_dia"]
+    
+        model = LinearRegression()
+        model.fit(X, y)
+    
+        future_days = np.arange(df_revenue["day"].max() + 1, df_revenue["day"].max() + 8).reshape(-1, 1)
+        predictions = model.predict(future_days)
+    
+        future_dates = [df_revenue["dt"].max() + timedelta(days=i) for i in range(1, 8)]
+        prediction_df = pd.DataFrame({
+            "Date": future_dates,
+            "Predicted Revenue": predictions
+        })
+        prediction_df["Predicted Revenue"] = prediction_df["Predicted Revenue"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    
+        st.write(prediction_df)
+    
+        prediction_chart = alt.Chart(prediction_df).mark_line(point=True).encode(
+            x=alt.X("Date:T", title="Future Date"),
+            y=alt.Y("Predicted Revenue:Q", title="Predicted Revenue"),
+            tooltip=["Date:T", "Predicted Revenue:Q"]
+        ).properties(width="container", height=400)
+        st.altair_chart(prediction_chart, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+    
+    # Inicializa MitoSheet com os dados de tb_pedido
+    new_dfs, code = spreadsheet(pedido_data)
+    code = code if code else "# Edite a planilha acima para gerar código"
+    st.code(code)
+    
+    # Função para limpar o cache do MitoSheet periodicamente
+    def clear_mito_backend_cache():
+        _get_mito_backend.clear()
+    
+    # Função para armazenar o tempo da última execução
+    @st.cache_resource
+    def get_cached_time():
+        return {"last_executed_time": None}
+    
+    def try_clear_cache():
+        CLEAR_DELTA = timedelta(hours=12)
+        current_time = datetime.now()
+        cached_time = get_cached_time()
+        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+            clear_mito_backend_cache()
+            cached_time["last_executed_time"] = current_time
+    
+    try_clear_cache()
+    
+    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+    st.markdown("---")
+    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
 
 
 ###############################################################################
-#                                LOGIN PAGE
+#                            LOGIN PAGE
 ###############################################################################
 def login_page():
     # ---------------------------------------------------------------------
@@ -1530,7 +1634,138 @@ def menu_page():
 
 
 ###############################################################################
-#                                     MAIN
+#                     NOVA PÁGINA: ANALYTICS (Faturamento)
+###############################################################################
+def analytics_page():
+    st.title("Analytics Dashboard")
+    
+    # Função para carregar dados de tb_pedido
+    @st.cache_data(show_spinner=False)
+    def load_pedido_data():
+        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
+        results = run_query(query)
+        if results:
+            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+            # Converte a coluna "Data" para datetime
+            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
+            return df
+        else:
+            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
+    
+    pedido_data = load_pedido_data()
+    
+    # Exibir dados de faturamento existentes
+    st.subheader("Revenue Over Time")
+    revenue_query = """
+        SELECT date("Data") as dt, SUM("total") as total_dia
+        FROM public.vw_pedido_produto
+        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+        GROUP BY date("Data")
+        ORDER BY date("Data")
+    """
+    revenue_data = run_query(revenue_query)
+    if revenue_data:
+        df_revenue = pd.DataFrame(revenue_data, columns=["dt", "total_dia"])
+        df_revenue["dt"] = pd.to_datetime(df_revenue["dt"], errors='coerce')
+        df_revenue = df_revenue.sort_values("dt")
+        
+        chart = alt.Chart(df_revenue).mark_line(point=True).encode(
+            x=alt.X("dt:T", title="Date"),
+            y=alt.Y("total_dia:Q", title="Daily Revenue"),
+            tooltip=["dt:T", "total_dia:Q"]
+        ).properties(width="container", height=400)
+        st.altair_chart(chart, use_container_width=True)
+    else:
+        st.warning("No revenue data available.")
+    
+    st.markdown("---")
+    st.subheader("Revenue Prediction (Next 7 Days)")
+    
+    if not revenue_data:
+        st.warning("No data available for prediction.")
+    else:
+        # Preparação dos dados para a previsão
+        df_revenue["day"] = (df_revenue["dt"] - df_revenue["dt"].min()).dt.days
+        X = df_revenue[["day"]]
+        y = df_revenue["total_dia"]
+    
+        model = LinearRegression()
+        model.fit(X, y)
+    
+        future_days = np.arange(df_revenue["day"].max() + 1, df_revenue["day"].max() + 8).reshape(-1, 1)
+        predictions = model.predict(future_days)
+    
+        future_dates = [df_revenue["dt"].max() + timedelta(days=i) for i in range(1, 8)]
+        prediction_df = pd.DataFrame({
+            "Date": future_dates,
+            "Predicted Revenue": predictions
+        })
+        prediction_df["Predicted Revenue"] = prediction_df["Predicted Revenue"].apply(lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", "."))
+    
+        st.write(prediction_df)
+    
+        prediction_chart = alt.Chart(prediction_df).mark_line(point=True).encode(
+            x=alt.X("Date:T", title="Future Date"),
+            y=alt.Y("Predicted Revenue:Q", title="Predicted Revenue"),
+            tooltip=["Date:T", "Predicted Revenue:Q"]
+        ).properties(width="container", height=400)
+        st.altair_chart(prediction_chart, use_container_width=True)
+    
+    st.markdown("---")
+    
+    # Seção MitoSheet para edição de dados de tb_pedido
+    st.subheader("Editar Pedidos com MitoSheet")
+    
+    # Inicializa MitoSheet com os dados de tb_pedido
+    new_dfs, code = spreadsheet(pedido_data)
+    code = code if code else "# Edite a planilha acima para gerar código"
+    st.code(code)
+    
+    # Função para limpar o cache do MitoSheet periodicamente
+    def clear_mito_backend_cache():
+        _get_mito_backend.clear()
+    
+    # Função para armazenar o tempo da última execução
+    @st.cache_resource
+    def get_cached_time():
+        return {"last_executed_time": None}
+    
+    def try_clear_cache():
+        CLEAR_DELTA = timedelta(hours=12)
+        current_time = datetime.now()
+        cached_time = get_cached_time()
+        if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
+            clear_mito_backend_cache()
+            cached_time["last_executed_time"] = current_time
+    
+    try_clear_cache()
+    
+    # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
+    # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
+    st.markdown("---")
+    st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
+
+
+###############################################################################
+#                            BACKUP (ADMIN)
+###############################################################################
+# (Esta seção já está incluída acima e não precisa ser duplicada)
+
+
+###############################################################################
+#                            CALENDÁRIO DE EVENTOS
+###############################################################################
+# (Esta seção já está incluída acima e não precisa ser duplicada)
+
+
+###############################################################################
+#                     PÁGINAS DO APLICATIVO (CONTINUADA)
+###############################################################################
+# (As funções para outras páginas já estão incluídas acima e não precisam ser duplicadas)
+
+
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
 ###############################################################################
 def main():
     apply_custom_css()
