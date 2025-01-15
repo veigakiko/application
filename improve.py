@@ -1426,6 +1426,13 @@ def login_page():
             color: #999;
             font-size: 0.875rem;
         }
+        /* Reduz espaçamento entre os elementos */
+        .form-container input {
+            margin-bottom: 10px !important;
+        }
+        .form-container p {
+            margin-bottom: 10px !important;
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1451,6 +1458,7 @@ def login_page():
     # 3) Sessão de formulário de login
     # ---------------------------------------------------------------------
     with st.form("login_form", clear_on_submit=False):
+        st.markdown("<div class='form-container'>", unsafe_allow_html=True)
         st.write("keep the beach vibes flowing!🌴🎾")
 
         username_input = st.text_input("", placeholder="Username")
@@ -1461,6 +1469,7 @@ def login_page():
             btn_login = st.form_submit_button("Log in")
         with col2:
             btn_signup = st.form_submit_button("Sign up")
+        st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Gmail
         st.markdown(
