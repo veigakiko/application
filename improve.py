@@ -1422,9 +1422,9 @@ def login_page():
         .gmail-login:hover {
             background-color: #c33d30;
         }
-        /* Remove espaço entre os input boxes */
+        /* Remove qualquer espaço entre os input boxes */
         .form-container input {
-            margin-bottom: 0 !important; /* Remove qualquer espaço entre os campos */
+            margin-bottom: 0 !important; /* Sem margem entre os campos */
         }
         </style>
         """,
@@ -1458,9 +1458,7 @@ def login_page():
         password_input = st.text_input("", type="password", placeholder="Password")
 
         # Botão
-        col1, _ = st.columns([1, 1])
-        with col1:
-            btn_login = st.form_submit_button("Log in")
+        btn_login = st.form_submit_button("Log in")
         st.markdown("</div>", unsafe_allow_html=True)
 
         # Botão de login com Google
@@ -1518,6 +1516,7 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
+
 
 ###############################################################################
 #                            INICIALIZAÇÃO E MAIN
