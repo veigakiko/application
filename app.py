@@ -1627,9 +1627,7 @@ def login_page():
         if resp.status_code == 200:
             logo = Image.open(BytesIO(resp.content))
             st.image(logo, use_column_width=True)
-    except Exception:
-        st.error("Não foi possível carregar o logo.")
-
+    
     st.title("")
 
     # ---------------------------------------------------------------------
