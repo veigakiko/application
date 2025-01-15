@@ -1347,6 +1347,12 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
+import streamlit as st
+from PIL import Image
+import requests
+from io import BytesIO
+from datetime import datetime
+
 def login_page():
     """Página de login do aplicativo com teclado virtual único e detecção automática do campo ativo."""
     
@@ -1357,13 +1363,6 @@ def login_page():
         st.session_state.password_input = ""
     if 'active_field' not in st.session_state:
         st.session_state.active_field = "Username"  # Campo padrão ativo
-
-    # Função para atualizar o campo de entrada específico
-    def append_char(char):
-        if st.session_state.active_field == "Username":
-            st.session_state.username_input += char
-        elif st.session_state.active_field == "Password":
-            st.session_state.password_input += char
 
     # Função para remover o último caractere do campo específico
     def backspace():
@@ -1480,7 +1479,7 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # Verifique se este URL aponta para a imagem correta
+    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # Substitua pelo URL correto do seu logo
     logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
@@ -1505,7 +1504,7 @@ def login_page():
             placeholder="Username",
             value=st.session_state.username_input,
             key='username_display',
-            on_change=lambda: set_active_field("Username")
+            on_change=lambda: st.session_state.update({'active_field': 'Username'})
         )
         password_input = st.text_input(
             "Password",
@@ -1513,7 +1512,7 @@ def login_page():
             placeholder="Password",
             value=st.session_state.password_input,
             key='password_display',
-            on_change=lambda: set_active_field("Password")
+            on_change=lambda: st.session_state.update({'active_field': 'Password'})
         )
 
         # Atualizar session_state com entradas diretas
@@ -1556,13 +1555,22 @@ def login_page():
         with col:
             if key == '⌫':
                 if st.button('⌫', key=f'backspace_{i}'):
-                    backspace()
+                    if st.session_state.active_field == "Username":
+                        st.session_state.username_input = st.session_state.username_input[:-1]
+                    elif st.session_state.active_field == "Password":
+                        st.session_state.password_input = st.session_state.password_input[:-1]
             elif key == 'Clear':
                 if st.button('Clear', key=f'clear_{i}'):
-                    clear_field()
+                    if st.session_state.active_field == "Username":
+                        st.session_state.username_input = ""
+                    elif st.session_state.active_field == "Password":
+                        st.session_state.password_input = ""
             else:
                 if st.button(key, key=f'key_{key}_{i}'):
-                    append_char(key)
+                    if st.session_state.active_field == "Username":
+                        st.session_state.username_input += key
+                    elif st.session_state.active_field == "Password":
+                        st.session_state.password_input += key
 
     # ---------------------------------------------------------------------
     # 6) Ação: Login
@@ -1612,9 +1620,6 @@ def login_page():
         unsafe_allow_html=True
     )
 
-def set_active_field(field_name):
-    """Função para definir o campo ativo."""
-    st.session_state.active_field = field_name
 
 
 ###############################################################################
