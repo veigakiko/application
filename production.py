@@ -1231,49 +1231,129 @@ def analytics_page():
 #                                LOGIN PAGE
 ###############################################################################
 def login_page():
+    # ---------------------------------------------------------------------
+    # 1) CSS Customizado para melhorar aparência
+    # ---------------------------------------------------------------------
     st.markdown(
         """
         <style>
+        /* Centraliza o container */
         .block-container {
-            padding-top: 80px;
-            padding-bottom: 80px;
+            max-width: 450px;
+            margin: 0 auto;
+            padding-top: 50px;
+        }
+        /* Título maior e em negrito */
+        .css-18e3th9 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        /* Botão customizado */
+        .css-1x8cf1d edgvbvh10 {
+            background-color: #004a8f !important;
+        }
+        /* Mensagem de rodapé */
+        .footer {
+            position: fixed;
+            left: 0; 
+            bottom: 0; 
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
         }
         </style>
         """,
         unsafe_allow_html=True
     )
 
+    # ---------------------------------------------------------------------
+    # 2) Tenta carregar o logo (caso exista). Ajuste a URL ou caminho local
+    # ---------------------------------------------------------------------
     logo_url = "https://res.cloudinary.com/lptennis/image/upload/v1657233475/kyz4k7fcptxt7x7mu9qu.jpg"
+    logo = None
     try:
-        resp = requests.get(logo_url)
-        resp.raise_for_status()
-        logo = Image.open(BytesIO(resp.content))
-        st.image(logo, use_column_width=False)
-    except:
+        resp = requests.get(logo_url, timeout=5)
+        if resp.status_code == 200:
+            logo = Image.open(BytesIO(resp.content))
+    except Exception:
         pass
 
-    st.title("Beach Club - Login")
-    with st.form(key='login_form'):
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-        subm = st.form_submit_button("Entrar")
+    if logo:
+        st.image(logo, use_column_width=True)
+    st.title("Boituva Beach Club - Login")
 
-    if subm:
-        creds = st.secrets["credentials"]
-        if username == creds["admin_username"] and password == creds["admin_password"]:
+    # ---------------------------------------------------------------------
+    # 3) Sessão de formulário de login
+    # ---------------------------------------------------------------------
+    with st.form("login_form", clear_on_submit=False):
+        st.write("Informe suas credenciais para acessar o sistema:")
+        username_input = st.text_input("Usuário")
+        password_input = st.text_input("Senha", type="password")
+        
+        col1, col2 = st.columns([1,1])
+        with col1:
+            btn_login = st.form_submit_button("Entrar")
+        with col2:
+            btn_forgot = st.form_submit_button("Esqueci a senha", help="Exemplo simples de fluxo de recuperação")
+
+    # ---------------------------------------------------------------------
+    # 4) Ação: Esqueci a senha (Exemplo Simples)
+    # ---------------------------------------------------------------------
+    if btn_forgot:
+        st.info("Entre em contato com o administrador para redefinir sua senha, ou envie um e-mail para suporte@seusite.com.br.")
+    
+    # ---------------------------------------------------------------------
+    # 5) Ação: Login
+    # ---------------------------------------------------------------------
+    if btn_login:
+        # Carrega as credenciais (ajuste seu secrets.toml ou variáveis de ambiente)
+        # Exemplo fictício:
+        # st.secrets["credentials"] = {
+        #   "admin_username": "admin",
+        #   "admin_password": "1234",
+        #   "caixa_username": "caixa",
+        #   "caixa_password": "7777"
+        # }
+        try:
+            creds = st.secrets["credentials"]
+            admin_user   = creds["admin_username"]
+            admin_pass   = creds["admin_password"]
+            caixa_user   = creds["caixa_username"]
+            caixa_pass   = creds["caixa_password"]
+        except KeyError:
+            st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+            st.stop()
+
+        if username_input == admin_user and password_input == admin_pass:
             st.session_state.logged_in = True
             st.session_state.username = "admin"
             st.session_state.login_time = datetime.now()
-            st.success("Login como administrador!")
+            st.success("Login bem-sucedido como ADMIN!")
             st.experimental_rerun()
-        elif username == creds["caixa_username"] and password == creds["caixa_password"]:
+
+        elif username_input == caixa_user and password_input == caixa_pass:
             st.session_state.logged_in = True
             st.session_state.username = "caixa"
             st.session_state.login_time = datetime.now()
-            st.success("Login como caixa!")
+            st.success("Login bem-sucedido como CAIXA!")
             st.experimental_rerun()
+
         else:
             st.error("Usuário ou senha incorretos.")
+
+    # ---------------------------------------------------------------------
+    # 6) Rodapé / Footer
+    # ---------------------------------------------------------------------
+    st.markdown(
+        """
+        <div class='footer'>
+            © 2025 | Todos os direitos reservados | Boituva Beach Club
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 
 ###############################################################################
