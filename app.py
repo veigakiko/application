@@ -1347,36 +1347,13 @@ def analytics_page():
 ###############################################################################
 #                            LOGIN PAGE
 ###############################################################################
-import streamlit as st
-from PIL import Image
-import requests
-from io import BytesIO
-from datetime import datetime
-
 def login_page():
-    """Página de login do aplicativo com teclado virtual único e detecção automática do campo ativo."""
-    
-    # Inicializar session_state para campos de entrada e active_field
-    if 'username_input' not in st.session_state:
-        st.session_state.username_input = ""
-    if 'password_input' not in st.session_state:
-        st.session_state.password_input = ""
-    if 'active_field' not in st.session_state:
-        st.session_state.active_field = "Username"  # Campo padrão ativo
-
-    # Função para remover o último caractere do campo específico
-    def backspace():
-        if st.session_state.active_field == "Username":
-            st.session_state.username_input = st.session_state.username_input[:-1]
-        elif st.session_state.active_field == "Password":
-            st.session_state.password_input = st.session_state.password_input[:-1]
-
-    # Função para limpar o campo específico
-    def clear_field():
-        if st.session_state.active_field == "Username":
-            st.session_state.username_input = ""
-        elif st.session_state.active_field == "Password":
-            st.session_state.password_input = ""
+    """Página de login do aplicativo."""
+    import streamlit as st
+    from PIL import Image
+    import requests
+    from io import BytesIO
+    from datetime import datetime
 
     # ---------------------------------------------------------------------
     # 1) CSS Customizado para melhorar aparência
@@ -1386,7 +1363,7 @@ def login_page():
         <style>
         /* Centraliza o container */
         .block-container {
-            max-width: 500px;
+            max-width: 450px;
             margin: 0 auto;
             padding-top: 40px;
         }
@@ -1447,29 +1424,7 @@ def login_page():
         }
         /* Remove qualquer espaço entre os input boxes */
         .form-container input {
-            margin-bottom: 10px !important; /* Espaço entre os campos */
-        }
-        /* Estilo para os teclados virtuais */
-        .virtual-keyboard button {
-            margin: 1px;
-            padding: 8px 10px;
-            font-size: 0.875rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            cursor: pointer;
-            background-color: #f9f9f9;
-            min-width: 35px;
-            min-height: 35px;
-            text-align: center;
-        }
-        .virtual-keyboard button:hover {
-            background-color: #e0e0e0;
-        }
-        /* Indicador de campo ativo */
-        .active-indicator {
-            font-weight: bold;
-            color: #004a8f;
-            margin-bottom: 10px;
+            margin-bottom: 0 !important; /* Sem margem entre os campos */
         }
         </style>
         """,
@@ -1479,7 +1434,7 @@ def login_page():
     # ---------------------------------------------------------------------
     # 2) Carregar logo
     # ---------------------------------------------------------------------
-    logo_url = "https://i.ibb.co/9sXD0H5/logo.png"  # Substitua pelo URL correto do seu logo
+    logo_url = "https://ibb.co/9sXD0H5"
     logo = None
     try:
         resp = requests.get(logo_url, timeout=5)
@@ -1498,85 +1453,27 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Campos de entrada com callbacks para definir o campo ativo
-        username_input = st.text_input(
-            "Username",
-            placeholder="Username",
-            value=st.session_state.username_input,
-            key='username_display',
-            on_change=lambda: st.session_state.update({'active_field': 'Username'})
-        )
-        password_input = st.text_input(
-            "Password",
-            type="password",
-            placeholder="Password",
-            value=st.session_state.password_input,
-            key='password_display',
-            on_change=lambda: st.session_state.update({'active_field': 'Password'})
-        )
+        # Campos de entrada
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
-        # Atualizar session_state com entradas diretas
-        st.session_state.username_input = username_input
-        st.session_state.password_input = password_input
-
-        # Indicador do campo ativo
-        st.markdown(f"<div class='active-indicator'>**Campo ativo: {st.session_state.active_field}**</div>", unsafe_allow_html=True)
-
-        # Botão de login
+        # Botão
         btn_login = st.form_submit_button("Log in")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Botão de login com Google
+        st.markdown(
+            """
+            <button class='gmail-login'>Log in with Google</button>
+            """,
+            unsafe_allow_html=True
+        )
 
     # ---------------------------------------------------------------------
-    # 4) Botão de login com Google (fora do formulário)
-    # ---------------------------------------------------------------------
-    st.markdown(
-        """
-        <button class='gmail-login' onclick="window.location.href='https://your-google-login-url.com'">Log in with Google</button>
-        """,
-        unsafe_allow_html=True
-    )
-
-    # ---------------------------------------------------------------------
-    # 5) Teclado Virtual Único (fora do formulário)
-    # ---------------------------------------------------------------------
-    st.markdown("### Teclado Virtual")
-
-    keys = [
-        '1','2','3','4','5','6','7','8','9','0',
-        'Q','W','E','R','T','Y','U','I','O','P',
-        'A','S','D','F','G','H','J','K','L',
-        'Z','X','C','V','B','N','M','⌫','Clear'
-    ]
-
-    # Organizar teclas em linhas de 10 colunas
-    cols = st.columns(10)  # 10 colunas para alinhamento similar a teclado real
-
-    for i, key in enumerate(keys):
-        col = cols[i % 10]
-        with col:
-            if key == '⌫':
-                if st.button('⌫', key=f'backspace_{i}'):
-                    if st.session_state.active_field == "Username":
-                        st.session_state.username_input = st.session_state.username_input[:-1]
-                    elif st.session_state.active_field == "Password":
-                        st.session_state.password_input = st.session_state.password_input[:-1]
-            elif key == 'Clear':
-                if st.button('Clear', key=f'clear_{i}'):
-                    if st.session_state.active_field == "Username":
-                        st.session_state.username_input = ""
-                    elif st.session_state.active_field == "Password":
-                        st.session_state.password_input = ""
-            else:
-                if st.button(key, key=f'key_{key}_{i}'):
-                    if st.session_state.active_field == "Username":
-                        st.session_state.username_input += key
-                    elif st.session_state.active_field == "Password":
-                        st.session_state.password_input += key
-
-    # ---------------------------------------------------------------------
-    # 6) Ação: Login
+    # 4) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
-        if not st.session_state.username_input or not st.session_state.password_input:
+        if not username_input or not password_input:
             st.error("Por favor, preencha todos os campos.")
         else:
             try:
@@ -1591,14 +1488,14 @@ def login_page():
                 st.stop()
 
             # Verificação de login
-            if st.session_state.username_input == admin_user and st.session_state.password_input == admin_pass:
+            if username_input == admin_user and password_input == admin_pass:
                 st.session_state.logged_in = True
                 st.session_state.username = "admin"
                 st.session_state.login_time = datetime.now()
                 st.success("Login bem-sucedido como ADMIN!")
                 st.experimental_rerun()
 
-            elif st.session_state.username_input == caixa_user and st.session_state.password_input == caixa_pass:
+            elif username_input == caixa_user and password_input == caixa_pass:
                 st.session_state.logged_in = True
                 st.session_state.username = "caixa"
                 st.session_state.login_time = datetime.now()
@@ -1609,7 +1506,7 @@ def login_page():
                 st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
-    # 7) Rodapé / Footer
+    # 5) Rodapé / Footer
     # ---------------------------------------------------------------------
     st.markdown(
         """
@@ -1619,7 +1516,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 
 ###############################################################################
