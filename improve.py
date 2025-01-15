@@ -1366,7 +1366,7 @@ def login_page():
         .block-container {
             max-width: 450px;
             margin: 0 auto;
-            padding-top: 50px;
+            padding-top: 40px;
         }
         /* Título maior e em negrito */
         .css-18e3th9 {
