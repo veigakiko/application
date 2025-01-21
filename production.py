@@ -232,27 +232,6 @@ def refresh_data():
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
-class EventCalendar(calendar.HTMLCalendar):
-    """Classe personalizada para destacar dias com eventos."""
-
-    def __init__(self, events):
-        super().__init__()
-        self.events = events  # Dicionário com dias como chaves e listas de eventos como valores
-
-    def formatday(self, day, weekday):
-        if day != 0:
-            if day in self.events:
-                # Exibir múltiplos eventos no tooltip
-                tooltip = "<br>".join([f"{event['nome']}: {event['descricao']}" for event in self.events[day]])
-                return f"<td style='background-color:blue; color:white; font-weight:bold;' title='{tooltip}'>{day}</td>"
-            else:
-                return f"<td>{day}</td>"
-        return "<td></td>"
-
-    def formatmonth(self, year, month):
-        return super().formatmonth(year, month)
-
-
 def home_page():
     """Página inicial do aplicativo."""
     st.title("Boituva Beach Club")
@@ -273,18 +252,24 @@ def home_page():
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
     if events_data:
-        # Organizar eventos por dia
-        events_by_day = {}
-        for event in events_data:
-            nome, descricao, data_evento = event
-            dia = data_evento.day
-            if dia not in events_by_day:
-                events_by_day[dia] = []
-            events_by_day[dia].append({"nome": nome, "descricao": descricao})
-
         # Gerar o calendário HTML com dias de eventos destacados
-        cal = EventCalendar(events_by_day)
+        cal = calendar.HTMLCalendar(firstweekday=0)
         html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+        # Destacar dias com eventos em azul
+        for _, ev in events_data:
+            dia = ev[2].day  # ev[2] corresponde a "data_evento"
+            # Ajustar a cor de fundo para azul e o texto para branco
+            highlight_str = (
+                f' style="background-color:blue; color:white; font-weight:bold;" '
+                f'title="{ev[0]}: {ev[1]}"'
+            )
+            # Substituir as tags <td class="...">dia</td> correspondentes ao dia
+            for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+                html_calendario = html_calendario.replace(
+                    f'<td class="{day_class}">{dia}</td>',
+                    f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                )
 
         # Adicionar CSS para estilizar o calendário
         st.markdown(
@@ -315,18 +300,14 @@ def home_page():
     else:
         st.info("Nenhum evento registrado para este mês.")
 
+    # Placeholder para notificações futuras (se necessário)
     notification_placeholder = st.empty()
-    client_count_query = """
-        SELECT COUNT(DISTINCT "Cliente") 
-        FROM public.tb_pedido
-        WHERE status=%s
-    """
-    
+
+    # Exemplo de uso adicional: Exibir sumário de pedidos abertos se admin
     if st.session_state.get("username") == "admin":
-        # Expander para agrupar relatórios administrativos
         with st.expander("Open Orders Summary"):
             open_orders_query = """
-                SELECT "Cliente",SUM("total") AS Total
+                SELECT "Cliente", SUM("total") AS Total
                 FROM public.vw_pedido_produto
                 WHERE status=%s
                 GROUP BY "Cliente"
@@ -334,10 +315,10 @@ def home_page():
             """
             open_orders_data = run_query(open_orders_query, ('em aberto',))
             if open_orders_data:
-                df_open = pd.DataFrame(open_orders_data, columns=["Client","Total"])
+                df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
                 total_open = df_open["Total"].sum()
                 df_open["Total_display"] = df_open["Total"].apply(format_currency)
-                st.table(df_open[["Client","Total_display"]])
+                st.table(df_open[["Client", "Total_display"]])
                 st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
@@ -345,17 +326,17 @@ def home_page():
         with st.expander("Stock vs. Orders Summary"):
             try:
                 stock_vs_orders_query = """
-                    SELECT product,stock_quantity,orders_quantity,total_in_stock
+                    SELECT product, stock_quantity, orders_quantity, total_in_stock
                     FROM public.vw_stock_vs_orders_summary
                 """
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
                 if stock_vs_orders_data:
                     df_svo = pd.DataFrame(
                         stock_vs_orders_data,
-                        columns=["Product","Stock_Quantity","Orders_Quantity","Total_in_Stock"]
+                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
-                    df_display = df_svo[["Product","Total_in_Stock"]]
+                    df_display = df_svo[["Product", "Total_in_Stock"]]
                     st.table(df_display)
                     total_val = int(df_svo["Total_in_Stock"].sum())
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val}")
@@ -394,7 +375,7 @@ def home_page():
             """
             faturado_data = run_query(faturado_query)
             if faturado_data:
-                df_fat = pd.DataFrame(faturado_data, columns=["Data","Total do Dia"])
+                df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
                 df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
                 st.table(df_fat)
             else:
@@ -444,7 +425,7 @@ def orders_page():
         st.subheader("Últimos 5 Pedidos Registrados")
         orders_data = st.session_state.data.get("orders", [])
         if orders_data:
-            df_recent_orders = pd.DataFrame(orders_data, columns=["Cliente","Produto","Quantidade","Data","Status"])
+            df_recent_orders = pd.DataFrame(orders_data, columns=["Cliente", "Produto", "Quantidade", "Data", "Status"])
             df_recent_orders = df_recent_orders.head(5)
             # Aplicando CSS para reduzir o tamanho do texto
             st.markdown(
@@ -468,7 +449,7 @@ def orders_page():
         st.subheader("Listagem de Pedidos")
         orders_data = st.session_state.data.get("orders", [])
         if orders_data:
-            cols = ["Cliente","Produto","Quantidade","Data","Status"]
+            cols = ["Cliente", "Produto", "Quantidade", "Data", "Status"]
             df_orders = pd.DataFrame(orders_data, columns=cols)
             st.dataframe(df_orders, use_container_width=True)
             download_df_as_csv(df_orders, "orders.csv", label="Baixar Pedidos CSV")
@@ -529,7 +510,7 @@ def orders_page():
                         if update_btn:
                             q_upd = """
                                 UPDATE public.tb_pedido
-                                SET "Produto"=%s,"Quantidade"=%s,status=%s
+                                SET "Produto"=%s, "Quantidade"=%s, status=%s
                                 WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
                             """
                             run_query(q_upd, (
@@ -569,8 +550,8 @@ def products_page():
                 total_value = quantity * unit_value
                 q_ins = """
                     INSERT INTO public.tb_products
-                    (supplier,product,quantity,unit_value,total_value,creation_date)
-                    VALUES (%s,%s,%s,%s,%s,%s)
+                    (supplier, product, quantity, unit_value, total_value, creation_date)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
                 run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
                 st.success("Produto adicionado com sucesso!")
@@ -583,7 +564,7 @@ def products_page():
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date"]
+            cols = ["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"]
             df_prod = pd.DataFrame(products_data, columns=cols)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
@@ -635,8 +616,8 @@ def products_page():
                             edit_total_val = edit_quantity * edit_unit_val
                             q_upd = """
                                 UPDATE public.tb_products
-                                SET supplier=%s,product=%s,quantity=%s,unit_value=%s,
-                                    total_value=%s,creation_date=%s
+                                SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
+                                    total_value=%s, creation_date=%s
                                 WHERE supplier=%s AND product=%s AND creation_date=%s
                             """
                             run_query(q_upd, (
@@ -669,7 +650,7 @@ def stock_page():
 
     # ======================= ABA: Nova Movimentação =======================
     with tabs[0]:
-        st.subheader("Registrar novo movimento de estoque")
+        st.subheader("Registrar nova movimentação de estoque")
         product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
         product_list = [row[0] for row in product_data] if product_data else ["No products"]
 
@@ -680,7 +661,7 @@ def stock_page():
             with col2:
                 quantity = st.number_input("Quantidade", min_value=1, step=1)
             with col3:
-                transaction = st.selectbox("Tipo de Transação", ["Entrada","Saída"])
+                transaction = st.selectbox("Tipo de Transação", ["Entrada", "Saída"])
             with col4:
                 date_input = st.date_input("Data", value=datetime.now().date())
             submit_st = st.form_submit_button("Registrar")
@@ -703,7 +684,7 @@ def stock_page():
         st.subheader("Movimentações de Estoque")
         stock_data = st.session_state.data.get("stock", [])
         if stock_data:
-            cols = ["Produto","Quantidade","Transação","Data"]
+            cols = ["Produto", "Quantidade", "Transação", "Data"]
             df_stock = pd.DataFrame(stock_data, columns=cols)
             st.dataframe(df_stock, use_container_width=True)
             download_df_as_csv(df_stock, "stock.csv", label="Baixar Stock CSV")
@@ -742,9 +723,9 @@ def stock_page():
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
                                 edit_trans = st.selectbox(
-                                    "Tipo", ["Entrada","Saída"],
-                                    index=["Entrada","Saída"].index(original_trans)
-                                    if original_trans in ["Entrada","Saída"] else 0
+                                    "Tipo", ["Entrada", "Saída"],
+                                    index=["Entrada", "Saída"].index(original_trans)
+                                    if original_trans in ["Entrada", "Saída"] else 0
                                 )
                             with col4:
                                 edit_date = st.date_input("Data", value=original_date.date())
@@ -759,7 +740,7 @@ def stock_page():
                             new_dt = datetime.combine(edit_date, datetime.min.time())
                             q_upd = """
                                 UPDATE public.tb_estoque
-                                SET "Produto"=%s,"Quantidade"=%s,"Transação"=%s,"Data"=%s
+                                SET "Produto"=%s, "Quantidade"=%s, "Transação"=%s, "Data"=%s
                                 WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
                             """
                             run_query(q_upd, (
@@ -795,19 +776,19 @@ def clients_page():
 
         if submit_client:
             if nome_completo:
-                data_nasc = date(2000,1,1)
+                data_nasc = date(2000, 1, 1)
                 genero = "Other"
                 telefone = "0000-0000"
                 endereco = "Endereço padrão"
                 unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
-                email = f"{nome_completo.replace(' ','_').lower()}_{unique_id}@example.com"
+                email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
 
                 q_ins = """
                     INSERT INTO public.tb_clientes(
                         nome_completo, data_nascimento, genero, telefone,
                         email, endereco, data_cadastro
                     )
-                    VALUES(%s,%s,%s,%s,%s,%s,CURRENT_TIMESTAMP)
+                    VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                 """
                 run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
                 st.success("Cliente registrado!")
@@ -818,9 +799,9 @@ def clients_page():
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
         st.subheader("Todos os Clientes")
-        clients_data = run_query("SELECT nome_completo,email FROM public.tb_clientes ORDER BY data_cadastro DESC;")
+        clients_data = run_query("SELECT nome_completo, email FROM public.tb_clientes ORDER BY data_cadastro DESC;")
         if clients_data:
-            cols = ["Full Name","Email"]
+            cols = ["Full Name", "Email"]
             df_clients = pd.DataFrame(clients_data, columns=cols)
             # Exibir apenas a coluna Full Name
             st.dataframe(df_clients[["Full Name"]], use_container_width=True)
@@ -828,8 +809,7 @@ def clients_page():
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Cliente")
-                client_display = [""] + [f"{row['Full Name']} ({row['Email']})"
-                                         for _, row in df_clients.iterrows()]
+                client_display = [""] + [f"{row['Full Name']} ({row['Email']})" for _, row in df_clients.iterrows()]
                 selected_display = st.selectbox("Selecione Cliente:", client_display)
                 if selected_display:
                     try:
@@ -878,7 +858,7 @@ def process_payment(client, payment_status):
     """Processa o pagamento atualizando o status do pedido."""
     query = """
         UPDATE public.tb_pedido
-        SET status=%s,"Data"=CURRENT_TIMESTAMP
+        SET status=%s, "Data"=CURRENT_TIMESTAMP
         WHERE "Cliente"=%s AND status='em aberto'
     """
     run_query(query, (payment_status, client), commit=True)
@@ -907,7 +887,7 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 
     # Garante que df["total"] seja numérico
     df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade':'sum','total':'sum'}).reset_index()
+    grouped_df = df.groupby('Produto').agg({'Quantidade': 'sum', 'total': 'sum'}).reset_index()
     total_general = 0
     for _, row in grouped_df.iterrows():
         description = f"{row['Produto'][:20]:<20}"
@@ -939,13 +919,13 @@ def cash_page():
 
     if selected_client:
         invoice_query = """
-            SELECT "Produto","Quantidade","total"
+            SELECT "Produto", "Quantidade", "total"
             FROM public.vw_pedido_produto
             WHERE "Cliente"=%s AND status=%s
         """
         invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
         if invoice_data:
-            df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
+            df = pd.DataFrame(invoice_data, columns=["Produto", "Quantidade", "total"])
 
             # Converte para numeric
             df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
@@ -1115,17 +1095,23 @@ def events_calendar_page():
     # ----------------------------------------------------------------------------
     st.subheader("Visualização do Calendário")
 
-    # Organizar eventos por dia
-    events_by_day = {}
+    cal = calendar.HTMLCalendar(firstweekday=0)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+
+    # Destacar dias com eventos
     for _, ev in df_filtrado.iterrows():
         dia = ev["data_evento"].day
-        if dia not in events_by_day:
-            events_by_day[dia] = []
-        events_by_day[dia].append({"nome": ev["nome"], "descricao": ev["descricao"]})
-
-    # Gerar o calendário HTML com dias de eventos destacados
-    cal = EventCalendar(events_by_day)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+        # Ajustar a cor de fundo para azul e o texto para branco
+        highlight_str = (
+            f' style="background-color:blue; color:white; font-weight:bold;" '
+            f'title="{ev["nome"]}: {ev["descricao"]}"'
+        )
+        # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
+        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+            html_calendario = html_calendario.replace(
+                f'<td class="{day_class}">{dia}</td>',
+                f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+            )
 
     # Adicionar CSS para estilizar o calendário
     st.markdown(
@@ -1318,7 +1304,7 @@ def apply_custom_css():
             font-size: 12px;
         }
         </style>
-        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
+        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
         """,
         unsafe_allow_html=True
     )
@@ -1332,25 +1318,25 @@ def sidebar_navigation():
         selected = option_menu(
             "Beach Menu",
             [
-                "Home","Orders","Products","Stock","Clients",
+                "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash",
-                "Programa de Fidelidade","Calendário de Eventos"
+                "Programa de Fidelidade", "Calendário de Eventos"
             ],
             icons=[
-                "house","file-text","box","list-task","layers",
+                "house", "file-text", "box", "list-task", "layers",
                 "receipt",
-                "gift","calendar"
+                "gift", "calendar"
             ],
             menu_icon="cast",
             default_index=0,
             styles={
                 "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white","font-size":"18px"},
+                "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
-                    "font-size": "14px","text-align":"left","margin":"0px",
-                    "color":"white","--hover-color":"#145a7c"
+                    "font-size": "14px", "text-align": "left", "margin": "0px",
+                    "color": "white", "--hover-color": "#145a7c"
                 },
-                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
+                "nav-link-selected": {"background-color": "#145a7c", "color": "white"},
             }
         )
         if 'login_time' in st.session_state:
@@ -1472,7 +1458,6 @@ def login_page():
             color: #bbb;
             font-size: 0.875rem;
         }
-        /* Removido conforme solicitação */
         /* Remove espaço entre os input boxes */
         .css-1siy2j8 input {
             margin-bottom: 0 !important; /* Sem margem entre os campos */
