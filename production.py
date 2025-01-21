@@ -1403,7 +1403,7 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#d1cfcf"},  # Alterado para vermelho
+                "container": {"background-color": "#1b4f72"},  # Alterado para vermelho
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
