@@ -262,7 +262,7 @@ def home_page():
             <style>
             table {
                 width: 40%;  /* Reduzida pela metade a largura do calendário */
-                margin-left: 10%;  /* Adiciona margem à esquerda para deslocar o calendário */
+                margin-left: 1%;  /* Adiciona margem à esquerda para deslocar o calendário */
                 margin-right: 0;    /* Remove a margem à direita */
                 border-collapse: collapse;
                 font-size: 12px;  /* Mantém o tamanho da fonte */
