@@ -228,7 +228,7 @@ def refresh_data():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-    st.title("Boituva Beach Club")
+    st.title("Beach Club Bar")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
     # Adicionando Calendar View acima de Open Orders Summary
