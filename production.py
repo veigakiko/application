@@ -181,8 +181,9 @@ def run_query(query: str, values=None, commit: bool = False):
                 return True
             else:
                 return cursor.fetchall()
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao executar query: {e}")
+        return None
     finally:
         if not conn.closed:
             conn.close()
@@ -218,8 +219,8 @@ def load_all_data():
             ORDER BY date("Data")
             """
         ) or pd.DataFrame()
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao carregar dados: {e}")
     return data
 
 
@@ -257,19 +258,20 @@ def home_page():
         html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
         # Destacar dias com eventos em azul
-        for _, ev in events_data:
-            dia = ev[2].day  # ev[2] corresponde a "data_evento"
+        for ev in events_data:
+            nome, descricao, data_evento = ev
+            dia = data_evento.day
             # Ajustar a cor de fundo para azul e o texto para branco
             highlight_str = (
                 f' style="background-color:blue; color:white; font-weight:bold;" '
-                f'title="{ev[0]}: {ev[1]}"'
+                f'title="{nome}: {descricao}"'
             )
-            # Substituir as tags <td class="...">dia</td> correspondentes ao dia
+            # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
             for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                html_calendario = html_calendario.replace(
-                    f'<td class="{day_class}">{dia}</td>',
-                    f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-                )
+                # Evitar substituir múltiplas vezes para o mesmo dia
+                target = f'<td class="{day_class}">{dia}</td>'
+                replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                html_calendario = html_calendario.replace(target, replacement)
 
         # Adicionar CSS para estilizar o calendário
         st.markdown(
@@ -361,8 +363,8 @@ def home_page():
                             st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
-            except:
-                st.info("Erro ao gerar resumo Stock vs. Orders.")
+            except Exception as e:
+                st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
         # NOVO ITEM: Total Faturado
         with st.expander("Amount Invoiced"):
@@ -1099,19 +1101,18 @@ def events_calendar_page():
     html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
     # Destacar dias com eventos
-    for _, ev in df_filtrado.iterrows():
-        dia = ev["data_evento"].day
+    for ev in df_filtrado.itertuples():
+        dia = ev.data_evento.day
         # Ajustar a cor de fundo para azul e o texto para branco
         highlight_str = (
             f' style="background-color:blue; color:white; font-weight:bold;" '
-            f'title="{ev["nome"]}: {ev["descricao"]}"'
+            f'title="{ev.nome}: {ev.descricao}"'
         )
         # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
         for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-            html_calendario = html_calendario.replace(
-                f'<td class="{day_class}">{dia}</td>',
-                f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-            )
+            target = f'<td class="{day_class}">{dia}</td>'
+            replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+            html_calendario = html_calendario.replace(target, replacement)
 
     # Adicionar CSS para estilizar o calendário
     st.markdown(
