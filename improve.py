@@ -683,6 +683,7 @@ def products_page():
                             with col_del:
                                 delete_btn = st.form_submit_button("Deletar Produto")
 
+                        # Processamento da Atualização
                         if update_btn:
                             edit_total_val = edit_quantity * edit_unit_val
                             q_upd = """
@@ -701,23 +702,23 @@ def products_page():
                             else:
                                 st.error("Falha ao atualizar produto.")
 
+                        # Processamento da Exclusão (sem confirmação)
                         if delete_btn:
-                            confirm = st.checkbox("Confirma a exclusão deste produto?")
-                            if confirm:
-                                q_del = """
-                                    DELETE FROM public.tb_products
-                                    WHERE supplier=%s AND product=%s AND creation_date=%s
-                                """
-                                success = run_query(q_del, (
-                                    original_supplier, original_product, original_creation_date
-                                ), commit=True)
-                                if success:
-                                    st.toast("Produto deletado com sucesso!")
-                                    refresh_data()
-                                else:
-                                    st.error("Falha ao deletar produto.")
+                            q_del = """
+                                DELETE FROM public.tb_products
+                                WHERE supplier=%s AND product=%s AND creation_date=%s
+                            """
+                            success = run_query(q_del, (
+                                original_supplier, original_product, original_creation_date
+                            ), commit=True)
+                            if success:
+                                st.toast("Produto deletado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao deletar produto.")
         else:
             st.info("Nenhum produto encontrado.")
+
 
 
 def stock_page():
