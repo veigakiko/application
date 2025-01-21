@@ -17,14 +17,11 @@ from sklearn.linear_model import LinearRegression
 import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
-from zoneinfo import ZoneInfo  # Disponível no Python 3.9+
-import pytz  # Fallback para versões anteriores
-import hmac
 
 # Configuração da página para layout wide
-st.set_page_config(page_title="Boituva Beach Club", layout="wide")
+# Ensure the layout is wide for better responsiveness
 
-###############################################################################
+#############################################################################
 #                                   UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
@@ -159,18 +156,15 @@ def run_query(query: str, values=None, commit: bool = False):
     if not conn:
         return None
     try:
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, values or ())
-                if commit:
-                    return True
-                else:
-                    return cursor.fetchall()
-    except psycopg2.Error as e:
-        st.error(f"Erro ao executar query: {e.pgcode} - {e.pgerror}")
-        return None
+        with conn.cursor() as cursor:
+            cursor.execute(query, values or ())
+            if commit:
+                conn.commit()
+                return True
+            else:
+                return cursor.fetchall()
     except Exception as e:
-        st.error(f"Erro inesperado: {e}")
+        st.error(f"Erro ao executar query: {e}")
         return None
     finally:
         if conn and not conn.closed:
@@ -186,7 +180,7 @@ def load_all_data():
     data = {}
     try:
         data["orders"] = run_query(
-            'SELECT "Cliente","Produto","Quantidade","Data","status" FROM public.tb_pedido ORDER BY "Data" DESC'
+            'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
             'SELECT supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date FROM public.tb_products ORDER BY creation_date DESC'
@@ -389,6 +383,7 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -441,12 +436,6 @@ def orders_page():
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
     tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
 
-    # Definir o fuso horário de São Paulo
-    try:
-        timezone = ZoneInfo("America/Sao_Paulo")  # Para Python 3.9+
-    except Exception:
-        timezone = pytz.timezone("America/Sao_Paulo")  # Fallback usando pytz
-
     # ======================= ABA: Novo Pedido =======================
     with tabs[0]:
         st.subheader("Novo Pedido")
@@ -470,18 +459,11 @@ def orders_page():
 
         if submit_button:
             if customer_name and product and quantity > 0:
-                # Definir o timestamp para São Paulo e torná-lo naïve
-                creation_datetime = datetime.now(timezone).replace(tzinfo=None)
-
-                # Mostrar o timestamp para depuração
-                st.write(f"Horário de São Paulo: {datetime.now(timezone)}")
-                st.write(f"Timestamp registrado (naïve): {creation_datetime}")
-
                 query_insert = """
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
-                    VALUES (%s, %s, %s, %s,'em aberto')
+                    VALUES (%s,%s,%s,%s,'em aberto')
                 """
-                success = run_query(query_insert, (customer_name, product, quantity, creation_datetime), commit=True)
+                success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
                 if success:
                     st.toast("Pedido registrado com sucesso!")
                     refresh_data()
@@ -646,22 +628,7 @@ def products_page():
         products_data = st.session_state.data.get("products", [])
         if products_data:
             cols = ["Supplier", "Product", "Quantity", "Unit Value", "Custo Unitário", "Total Value", "Creation Date"]
-            
-            # Adicione o seguinte código para depuração:
-            if products_data:
-                num_cols_returned = len(products_data[0])
-                st.write(f"Número de colunas retornadas: {num_cols_returned}")
-            else:
-                st.write("Nenhum dado retornado para produtos.")
-            st.write(f"Colunas esperadas: {cols}")
-            st.write(f"Dados retornados (exemplo): {products_data[:1]}")  # Mostra o primeiro registro para inspeção
-
-            try:
-                df_prod = pd.DataFrame(products_data, columns=cols)
-            except ValueError as ve:
-                st.error(f"Erro ao criar DataFrame: {ve}")
-                st.stop()
-
+            df_prod = pd.DataFrame(products_data, columns=cols)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
 
@@ -673,7 +640,6 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
-
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -885,16 +851,15 @@ def clients_page():
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
             nome_completo = st.text_input("Nome Completo")
-            # Removido o campo 'pais' para evitar erros
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
             if nome_completo:
                 try:
-                    data_nasc = date(2000, 1, 1)  # Valor padrão ou pode ser adaptado para incluir no formulário
-                    genero = "Other"  # Valor padrão ou pode ser adaptado para incluir no formulário
-                    telefone = "0000-0000"  # Valor padrão ou pode ser adaptado para incluir no formulário
-                    endereco = "Endereço padrão"  # Valor padrão ou pode ser adaptado para incluir no formulário
+                    data_nasc = date(2000, 1, 1)
+                    genero = "Other"
+                    telefone = "0000-0000"
+                    endereco = "Endereço padrão"
                     unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
                     email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
 
@@ -943,7 +908,6 @@ def clients_page():
                         sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                         with st.form(key='edit_client_form'):
                             edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
-                            # Removido o campo 'pais' para evitar erros
                             col_upd, col_del = st.columns(2)
                             with col_upd:
                                 update_btn = st.form_submit_button("Atualizar Cliente")
@@ -963,8 +927,6 @@ def clients_page():
                                     refresh_data()
                                 else:
                                     st.error("Falha ao atualizar cliente.")
-                            else:
-                                st.warning("Nome completo não pode ficar vazio.")
 
                         if delete_btn:
                             try:
@@ -982,6 +944,148 @@ def clients_page():
                 st.info("Nenhum cliente encontrado.")
         except Exception as e:
             st.error(f"Erro ao carregar clientes: {e}")
+
+###############################################################################
+#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
+###############################################################################
+def process_payment(client, payment_status):
+    """Processa o pagamento atualizando o status do pedido."""
+    query = """
+        UPDATE public.tb_pedido
+        SET status=%s, "Data"=CURRENT_TIMESTAMP
+        WHERE "Cliente"=%s AND status='em aberto'
+    """
+    success = run_query(query, (payment_status, client), commit=True)
+    if success:
+        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
+    else:
+        st.error("Falha ao processar pagamento.")
+
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """Gera uma representação textual da nota fiscal para impressão."""
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    # Garante que df["total"] seja numérico
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby('Produto').agg({'Quantidade': 'sum', 'total': 'sum'}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row['total']
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
+
+###############################################################################
+#                          PÁGINA: NOTA FISCAL -> CASH
+###############################################################################
+def cash_page():
+    """Página para gerar e gerenciar notas fiscais."""
+    st.title("Cash")
+    open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
+    open_clients = run_query(open_clients_query, ('em aberto',))
+    client_list = [row[0] for row in open_clients] if open_clients else []
+    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
+
+    if selected_client:
+        invoice_query = """
+            SELECT "Produto", "Quantidade", "total"
+            FROM public.vw_pedido_produto
+            WHERE "Cliente"=%s AND status=%s
+        """
+        invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
+        if invoice_data:
+            df = pd.DataFrame(invoice_data, columns=["Produto", "Quantidade", "total"])
+
+            # Converte para numeric
+            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+            total_sem_desconto = df["total"].sum()
+
+            # Cupom fixo de exemplo
+            cupons_validos = {
+                "10": 0.10,
+                "15": 0.15,
+                "20": 0.20,
+                "25": 0.25,
+                "30": 0.30,
+                "35": 0.35,
+                "40": 0.40,
+                "45": 0.45,
+                "50": 0.50,
+                "55": 0.55,
+                "60": 0.60,
+                "65": 0.65,
+                "70": 0.70,
+                "75": 0.75,
+                "80": 0.80,
+                "85": 0.85,
+                "90": 0.90,
+                "95": 0.95,
+                "100": 1.00,
+            }
+
+            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            desconto_aplicado = 0.0
+            if coupon_code in cupons_validos:
+                desconto_aplicado = cupons_validos[coupon_code]
+                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+
+            # Cálculo final
+            total_sem_desconto = float(total_sem_desconto or 0)
+            desconto_aplicado = float(desconto_aplicado or 0)
+            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
+
+            # Gera a nota (apenas para exibição)
+            generate_invoice_for_printer(df)
+
+            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
+            st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
+            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
+
+            # Botões de pagamento
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button("Debit"):
+                    process_payment(selected_client, "Received - Debited")
+            with col2:
+                if st.button("Credit"):
+                    process_payment(selected_client, "Received - Credit")
+            with col3:
+                if st.button("Pix"):
+                    process_payment(selected_client, "Received - Pix")
+            with col4:
+                if st.button("Cash"):
+                    process_payment(selected_client, "Received - Cash")
+        else:
+            st.info("Não há pedidos em aberto para esse cliente.")
+    else:
+        st.warning("Selecione um cliente.")
 
 ###############################################################################
 #                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
@@ -1120,7 +1224,7 @@ def events_calendar_page():
         }
         td {
             width: 14.28%;
-            height: 60px;  /* Reduzida a altura das células */
+            height: 60px;  /* Reduz a altura das células */
             text-align: center;
             vertical-align: top;
             border: 1px solid #ddd;
@@ -1279,11 +1383,6 @@ def loyalty_program_page():
         else:
             st.error("Pontos insuficientes.")
 
-def cash_page():
-    """Página para gerenciar caixa."""
-    st.title("Caixa")
-    st.write("Funcionalidade de gerenciamento de caixa ainda não implementada.")
-
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
@@ -1399,6 +1498,11 @@ def sidebar_navigation():
                 f"{st.session_state.username} logged in at {st.session_state.login_time.strftime('%H:%M')}"
             )
     return selected
+
+###############################################################################
+#                     PÁGINAS REMOVIDAS
+###############################################################################
+# A página "Cardápio" foi removida completamente, incluindo sua função e referências.
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1564,6 +1668,8 @@ def login_page():
                 st.stop()
 
             # Verificação de login com tempo constante para evitar ataques de timing
+            import hmac
+
             def verify_credentials(input_user, input_pass, actual_user, actual_pass):
                 return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
 
