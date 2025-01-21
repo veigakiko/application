@@ -1474,7 +1474,7 @@ def sidebar_navigation():
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash",
-                "Programa de Fidelidade", "Calendário de Eventos"
+                 "Calendário de Eventos"
             ],
             icons=[
                 "house", "file-text", "box", "list-task", "layers",
