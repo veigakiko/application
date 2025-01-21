@@ -28,12 +28,10 @@ def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
-
 def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV"):
     """Permite o download de um DataFrame como CSV."""
     csv_data = df.to_csv(index=False)
     st.download_button(label=label, data=csv_data, file_name=filename, mime="text/csv")
-
 
 def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar Excel"):
     """Permite o download de um DataFrame como Excel."""
@@ -49,18 +47,15 @@ def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar E
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
 
-
 def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
     """Permite o download de um DataFrame como JSON."""
     json_data = df.to_json(orient='records', lines=True)
     st.download_button(label=label, data=json_data, file_name=filename, mime="application/json")
 
-
 def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
     """Permite o download de um DataFrame como HTML."""
     html_data = df.to_html(index=False)
     st.download_button(label=label, data=html_data, file_name=filename, mime="text/html")
-
 
 def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar Parquet"):
     """Permite o download de um DataFrame como Parquet."""
@@ -92,7 +87,6 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
         pdf.ln()
 
     return pdf.output(dest='S')
-
 
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     """Faz upload de um PDF para o file.io e retorna o link."""
@@ -162,7 +156,6 @@ def get_db_connection():
     except:
         return None
 
-
 def run_query(query: str, values=None, commit: bool = False):
     """
     Executa uma query no banco de dados.
@@ -224,7 +217,6 @@ def load_all_data():
         st.error(f"Erro ao carregar dados: {e}")
     return data
 
-
 def refresh_data():
     """Atualiza os dados armazenados no session_state."""
     load_all_data.clear()
@@ -264,7 +256,7 @@ def home_page():
             dia = data_evento.day
             # Ajustar a cor de fundo para azul e o texto para branco
             highlight_str = (
-                f' style="background-color:blue; color:white; font-weight:bold;" '
+                f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
                 f'title="{nome}: {descricao}"'
             )
             # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
@@ -326,7 +318,29 @@ def home_page():
                 df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
                 total_open = df_open["Total"].sum()
                 df_open["Total_display"] = df_open["Total"].apply(format_currency)
+
+                # Estilização da tabela
+                st.markdown(
+                    """
+                    <style>
+                    .open-orders-table th {
+                        background-color: #145a7c;
+                        color: white;
+                        padding: 8px;
+                    }
+                    .open-orders-table td {
+                        padding: 8px;
+                        text-align: right;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # Renderizando a tabela com CSS aplicado
+                st.markdown('<div class="open-orders-table">', unsafe_allow_html=True)
                 st.table(df_open[["Client", "Total_display"]])
+                st.markdown('</div>', unsafe_allow_html=True)
                 st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
@@ -345,9 +359,32 @@ def home_page():
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
-                    st.table(df_display)
+                    df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
+
+                    # Estilização da tabela
+                    st.markdown(
+                        """
+                        <style>
+                        .stock-orders-table th {
+                            background-color: #145a7c;
+                            color: white;
+                            padding: 8px;
+                        }
+                        .stock-orders-table td {
+                            padding: 8px;
+                            text-align: right;
+                        }
+                        </style>
+                        """,
+                        unsafe_allow_html=True
+                    )
+
+                    # Renderizando a tabela com CSS aplicado
+                    st.markdown('<div class="stock-orders-table">', unsafe_allow_html=True)
+                    st.table(df_display[["Product", "Total_in_Stock_display"]])
+                    st.markdown('</div>', unsafe_allow_html=True)
                     total_val = int(df_svo["Total_in_Stock"].sum())
-                    st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val}")
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {format_currency(total_val)}")
 
                     pdf_bytes = convert_df_to_pdf(df_svo)
                     st.subheader("Baixar PDF 'Stock vs Orders'")
@@ -385,7 +422,29 @@ def home_page():
             if faturado_data:
                 df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
                 df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
+
+                # Estilização da tabela
+                st.markdown(
+                    """
+                    <style>
+                    .amount-invoiced-table th {
+                        background-color: #145a7c;
+                        color: white;
+                        padding: 8px;
+                    }
+                    .amount-invoiced-table td {
+                        padding: 8px;
+                        text-align: right;
+                    }
+                    </style>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+                # Renderizando a tabela com CSS aplicado
+                st.markdown('<div class="amount-invoiced-table">', unsafe_allow_html=True)
                 st.table(df_fat)
+                st.markdown('</div>', unsafe_allow_html=True)
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
@@ -694,13 +753,14 @@ def stock_page():
         if stock_data:
             cols = ["Produto", "Quantidade", "Transação", "Data"]
             df_stock = pd.DataFrame(stock_data, columns=cols)
+            df_stock["Data"] = pd.to_datetime(df_stock["Data"]).dt.strftime("%Y-%m-%d %H:%M:%S")
             st.dataframe(df_stock, use_container_width=True)
             download_df_as_csv(df_stock, "stock.csv", label="Baixar Stock CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar/Deletar Registro de Estoque")
                 df_stock["unique_key"] = df_stock.apply(
-                    lambda row: f"{row['Produto']}|{row['Transação']}|{row['Data'].strftime('%Y-%m-%d %H:%M:%S')}",
+                    lambda row: f"{row['Produto']}|{row['Transação']}|{row['Data']}",
                     axis=1
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
@@ -736,7 +796,7 @@ def stock_page():
                                     if original_trans in ["Entrada", "Saída"] else 0
                                 )
                             with col4:
-                                edit_date = st.date_input("Data", value=original_date.date())
+                                edit_date = st.date_input("Data", value=datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date())
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -745,7 +805,7 @@ def stock_page():
                                 delete_btn = st.form_submit_button("Deletar")
 
                         if update_btn:
-                            new_dt = datetime.combine(edit_date, datetime.min.time())
+                            new_dt = datetime.combine(edit_date, datetime.min.time()).strftime("%Y-%m-%d %H:%M:%S")
                             q_upd = """
                                 UPDATE public.tb_estoque
                                 SET "Produto"=%s, "Quantidade"=%s, "Transação"=%s, "Data"=%s
@@ -1111,7 +1171,7 @@ def events_calendar_page():
         dia = ev.data_evento.day
         # Ajustar a cor de fundo para azul e o texto para branco
         highlight_str = (
-            f' style="background-color:blue; color:white; font-weight:bold;" '
+            f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
             f'title="{ev.nome}: {ev.descricao}"'
         )
         # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
@@ -1120,7 +1180,7 @@ def events_calendar_page():
             replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
             html_calendario = html_calendario.replace(target, replacement)
 
-    # Adicionar CSS para estilizar o calendário
+    # Adicionar CSS para estilizar o calendário e reduzir seu tamanho
     st.markdown(
         """
         <style>
@@ -1170,7 +1230,27 @@ def events_calendar_page():
             "inscricao_aberta": "Inscrição Aberta",
             "data_criacao": "Data Criação"
         }, inplace=True)
-        st.dataframe(df_display, use_container_width=True)
+        # Aplicar formatação condicional usando CSS
+        st.markdown(
+            """
+            <style>
+            .event-table th {
+                background-color: #1b4f72;
+                color: white;
+                padding: 8px;
+                text-align: center;
+            }
+            .event-table td {
+                padding: 8px;
+                text-align: left;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        st.markdown('<div class="event-table">', unsafe_allow_html=True)
+        st.table(df_display)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("---")
 
@@ -1285,7 +1365,6 @@ def initialize_session_state():
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
 
-
 def apply_custom_css():
     """Aplica CSS customizado para melhorar a aparência do aplicativo."""
     st.markdown(
@@ -1322,7 +1401,6 @@ def apply_custom_css():
         unsafe_allow_html=True
     )
 
-
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
@@ -1357,7 +1435,6 @@ def sidebar_navigation():
                 f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
     return selected
-
 
 ###############################################################################
 #                     PÁGINAS REMOVIDAS
