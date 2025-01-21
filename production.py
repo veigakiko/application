@@ -135,8 +135,8 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
                 from_=whatsapp_from,
                 to=f"whatsapp:+{recipient_number}"
             )
-    except:
-        pass
+    except Exception as e:
+        st.error(f"Erro ao enviar WhatsApp: {e}")
 
 
 ###############################################################################
@@ -153,7 +153,8 @@ def get_db_connection():
             port=st.secrets["db"]["port"]
         )
         return conn
-    except:
+    except Exception as e:
+        st.error(f"Falha na conexão com o banco de dados: {e}")
         return None
 
 def run_query(query: str, values=None, commit: bool = False):
@@ -165,7 +166,6 @@ def run_query(query: str, values=None, commit: bool = False):
     """
     conn = get_db_connection()
     if not conn:
-        st.error("Falha na conexão com o banco de dados.")
         return None
     try:
         with conn.cursor() as cursor:
@@ -179,7 +179,7 @@ def run_query(query: str, values=None, commit: bool = False):
         st.error(f"Erro ao executar query: {e}")
         return None
     finally:
-        if not conn.closed:
+        if conn and not conn.closed:
             conn.close()
     return None
 
@@ -319,6 +319,8 @@ def home_page():
             if open_orders_data:
                 df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
                 total_open = df_open["Total"].sum()
+
+                # Formatar a coluna para exibição
                 df_open["Total_display"] = df_open["Total"].apply(format_currency)
 
                 # Selecionar apenas as colunas desejadas
@@ -408,6 +410,14 @@ def home_page():
             faturado_data = run_query(faturado_query)
             if faturado_data:
                 df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
+
+                # Assegurar que 'Total do Dia' é numérico
+                df_fat["Total do Dia"] = pd.to_numeric(df_fat["Total do Dia"], errors='coerce').fillna(0)
+
+                # Calcular a soma
+                total_geral = df_fat["Total do Dia"].sum()
+
+                # Formatar a coluna para exibição
                 df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
 
                 # Selecionar apenas as colunas desejadas
@@ -424,7 +434,7 @@ def home_page():
 
                 st.write(styled_df_fat)
 
-                st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(df_fat['Total do Dia'].str.replace('R\$ ', '').str.replace('.', '').str.replace(',', '.').astype(float).sum())}")
+                st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(total_geral)}")
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
@@ -1407,6 +1417,7 @@ def sidebar_navigation():
                 f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
     return selected
+
 
 ###############################################################################
 #                     PÁGINAS REMOVIDAS
