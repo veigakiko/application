@@ -42,7 +42,7 @@ def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar E
     towrite.seek(0)
     st.download_button(
         label=label,
-        data=towrite,
+        data=toscribe,
         file_name=filename,
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
@@ -356,10 +356,10 @@ def home_page():
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
-                    df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
-
-                    # Selecionar apenas as colunas desejadas para exibição
-                    df_display = df_display[["Product", "Total_in_Stock_display"]]
+                    
+                    # Manter Total_in_Stock como numérico, sem formatação de moeda
+                    # Se desejar, você pode formatar com separadores de milhares sem o símbolo de moeda
+                    df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
 
                     # Resetar o índice e remover
                     df_display = df_display.reset_index(drop=True)
@@ -374,28 +374,28 @@ def home_page():
 
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
-                    st.markdown(f"**Total Geral (Stock vs. Orders):** {format_currency(total_val)}")
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
 
-                    # Gerar e baixar PDF
-                    pdf_bytes = convert_df_to_pdf(df_svo)
-                    st.subheader("Baixar PDF 'Stock vs Orders'")
-                    st.download_button(
-                        label="Baixar PDF",
-                        data=pdf_bytes,
-                        file_name="stock_vs_orders_summary.pdf",
-                        mime="application/pdf"
-                    )
+                    # Remover as seções de download PDF e envio via WhatsApp
+                    # As linhas abaixo foram removidas conforme solicitado
+                    # pdf_bytes = convert_df_to_pdf(df_svo)
+                    # st.subheader("Baixar PDF 'Stock vs Orders'")
+                    # st.download_button(
+                    #     label="Baixar PDF",
+                    #     data=pdf_bytes,
+                    #     file_name="stock_vs_orders_summary.pdf",
+                    #     mime="application/pdf"
+                    # )
 
-                    # Enviar PDF via WhatsApp
-                    st.subheader("Enviar esse PDF via WhatsApp")
-                    phone_number = st.text_input("Número (ex: 5511999999999)")
-                    if st.button("Upload e Enviar"):
-                        link = upload_pdf_to_fileio(pdf_bytes)
-                        if link and phone_number:
-                            send_whatsapp(phone_number, media_url=link)
-                            st.success("PDF enviado via WhatsApp com sucesso!")
-                        else:
-                            st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
+                    # st.subheader("Enviar esse PDF via WhatsApp")
+                    # phone_number = st.text_input("Número (ex: 5511999999999)")
+                    # if st.button("Upload e Enviar"):
+                    #     link = upload_pdf_to_fileio(pdf_bytes)
+                    #     if link and phone_number:
+                    #         send_whatsapp(phone_number, media_url=link)
+                    #         st.success("PDF enviado via WhatsApp com sucesso!")
+                    #     else:
+                    #         st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
