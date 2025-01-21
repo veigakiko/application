@@ -261,11 +261,11 @@ def home_page():
             """
             <style>
             table {
-                width: 80%;  /* Reduz a largura do calendário */
+                width: 40%;  /* Reduzida pela metade a largura do calendário */
                 margin-left: auto;
                 margin-right: auto;
                 border-collapse: collapse;
-                font-size: 12px;  /* Reduz o tamanho da fonte */
+                font-size: 12px;  /* Mantém o tamanho da fonte */
             }
             th {
                 background-color: #1b4f72;
@@ -274,7 +274,7 @@ def home_page():
             }
             td {
                 width: 14.28%;
-                height: 60px;  /* Reduz a altura das células */
+                height: 45px;  /* Reduzida a altura das células */
                 text-align: center;
                 vertical-align: top;
                 border: 1px solid #ddd;
@@ -369,24 +369,6 @@ def home_page():
 
                     # Remover as seções de download PDF e envio via WhatsApp
                     # As linhas abaixo foram removidas conforme solicitado
-                    # pdf_bytes = convert_df_to_pdf(df_svo)
-                    # st.subheader("Baixar PDF 'Stock vs Orders'")
-                    # st.download_button(
-                    #     label="Baixar PDF",
-                    #     data=pdf_bytes,
-                    #     file_name="stock_vs_orders_summary.pdf",
-                    #     mime="application/pdf"
-                    # )
-
-                    # st.subheader("Enviar esse PDF via WhatsApp")
-                    # phone_number = st.text_input("Número (ex: 5511999999999)")
-                    # if st.button("Upload e Enviar"):
-                    #     link = upload_pdf_to_fileio(pdf_bytes)
-                    #     if link and phone_number:
-                    #         send_whatsapp(phone_number, media_url=link)
-                    #         st.success("PDF enviado via WhatsApp com sucesso!")
-                    #     else:
-                    #         st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
