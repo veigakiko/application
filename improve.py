@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
-st.set_page_config(layout="wide")
+# Ensure the layout is wide for better responsiveness
 
 #############################################################################
 #                                   UTILIDADES
@@ -217,21 +217,18 @@ def home_page():
    
     # Adicionando Calendar View e Lista de Eventos lado a lado
     st.subheader("Home")
-    
-    # Adicionando dropdown para selecionar o mês
-    months = list(calendar.month_name)[1:]  # ['January', 'February', ..., 'December']
-    selected_month = st.selectbox("Selecione o Mês", options=months, index=date.today().month - 1)
-    selected_month_num = months.index(selected_month) + 1
-    current_year = date.today().year  # Mantém o ano atual
+    current_date = date.today()
+    ano_atual = current_date.year
+    mes_atual = current_date.month
 
-    # Obter eventos do banco de dados para o mês selecionado
+    # Obter eventos do banco de dados para o mês atual
     events_query = """
         SELECT nome, descricao, data_evento 
         FROM public.tb_eventos 
         WHERE EXTRACT(YEAR FROM data_evento) = %s AND EXTRACT(MONTH FROM data_evento) = %s
         ORDER BY data_evento
     """
-    events_data = run_query(events_query, (current_year, selected_month_num))
+    events_data = run_query(events_query, (ano_atual, mes_atual))
 
     # Criar duas colunas: uma para o calendário e outra para a lista de eventos
     col_calendar, col_events = st.columns([1, 1], gap="large")  # Proporção 50% para calendário e 50% para eventos
@@ -240,7 +237,7 @@ def home_page():
         if events_data:
             # Gerar o calendário HTML com dias de eventos destacados
             cal = calendar.HTMLCalendar(firstweekday=0)
-            html_calendario = cal.formatmonth(current_year, selected_month_num)
+            html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
             # Destacar dias com eventos em azul
             for ev in events_data:
@@ -317,81 +314,121 @@ def home_page():
 
     # Exibir sumários apenas para usuários admin
     if st.session_state.get("username") == "admin":
+        # Exibir as três seções uma abaixo da outra
         # ======================= Open Orders Summary =======================
-        open_orders_query = """
-            SELECT "Cliente", SUM("total") AS Total
-            FROM public.vw_pedido_produto
-            WHERE status=%s
-            GROUP BY "Cliente"
-            ORDER BY "Cliente" DESC
-        """
-        open_orders_data = run_query(open_orders_query, ('em aberto',))
-        if open_orders_data:
-            df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
-            total_open = df_open["Total"].sum()
-
-            # Formatar a coluna para exibição
-            df_open["Total_display"] = df_open["Total"].apply(format_currency)
-
-            # Selecionar apenas as colunas desejadas
-            df_open = df_open[["Client", "Total_display"]]
-
-            # Resetar o índice e remover
-            df_open = df_open.reset_index(drop=True)
-
-            # Estilização da tabela
-            styled_df_open = df_open.style.set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
-                {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-            ])
-
-            st.markdown("### Open Orders Summary")
-            st.write(styled_df_open)
-
-            st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
-        else:
-            st.info("Nenhum pedido em aberto encontrado.")
-
-        # ======================= Stock vs. Orders Summary =======================
-        try:
-            stock_vs_orders_query = """
-                SELECT product, stock_quantity, orders_quantity, total_in_stock
-                FROM public.vw_stock_vs_orders_summary
+        with st.expander("Open Orders Summary"):
+            open_orders_query = """
+                SELECT "Cliente", SUM("total") AS Total
+                FROM public.vw_pedido_produto
+                WHERE status=%s
+                GROUP BY "Cliente"
+                ORDER BY "Cliente" DESC
             """
-            stock_vs_orders_data = run_query(stock_vs_orders_query)
-            if stock_vs_orders_data:
-                df_svo = pd.DataFrame(
-                    stock_vs_orders_data,
-                    columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
-                )
-                df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
-                df_display = df_svo[["Product", "Total_in_Stock"]]
-                
+            open_orders_data = run_query(open_orders_query, ('em aberto',))
+            if open_orders_data:
+                df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
+                total_open = df_open["Total"].sum()
+
                 # Formatar a coluna para exibição
-                df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
+                df_open["Total_display"] = df_open["Total"].apply(format_currency)
+
+                # Selecionar apenas as colunas desejadas
+                df_open = df_open[["Client", "Total_display"]]
 
                 # Resetar o índice e remover
-                df_display = df_display.reset_index(drop=True)
+                df_open = df_open.reset_index(drop=True)
 
                 # Estilização da tabela
-                styled_df_svo = df_display.style.set_table_styles([
+                styled_df_open = df_open.style.set_table_styles([
                     {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                     {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
                 ])
 
-                st.markdown("### Stock vs. Orders Summary")
-                st.write(styled_df_svo)
+                st.write(styled_df_open)
 
-                # Calcular o total utilizando a coluna numérica original
-                total_val = df_svo["Total_in_Stock"].sum()
-                st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+                st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
             else:
-                st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
-        except Exception as e:
-            st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
+                st.info("Nenhum pedido em aberto encontrado.")
 
-    # Removido o expander "Amount Invoiced"
-    # ================================================================================
+        # ======================= Stock vs. Orders Summary =======================
+        with st.expander("Stock vs. Orders Summary"):
+            try:
+                stock_vs_orders_query = """
+                    SELECT product, stock_quantity, orders_quantity, total_in_stock
+                    FROM public.vw_stock_vs_orders_summary
+                """
+                stock_vs_orders_data = run_query(stock_vs_orders_query)
+                if stock_vs_orders_data:
+                    df_svo = pd.DataFrame(
+                        stock_vs_orders_data,
+                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+                    )
+                    df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                    df_display = df_svo[["Product", "Total_in_Stock"]]
+                    
+                    # Formatar a coluna para exibição
+                    df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
+
+                    # Resetar o índice e remover
+                    df_display = df_display.reset_index(drop=True)
+
+                    # Estilização da tabela
+                    styled_df_svo = df_display.style.set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                    ])
+
+                    st.write(styled_df_svo)
+
+                    # Calcular o total utilizando a coluna numérica original
+                    total_val = df_svo["Total_in_Stock"].sum()
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+
+                else:
+                    st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
+            except Exception as e:
+                st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
+
+        # ======================= Amount Invoiced =======================
+        with st.expander("Amount Invoiced"):
+            faturado_query = """
+                SELECT date("Data") as dt, SUM("total") as total_dia
+                FROM public.vw_pedido_produto
+                WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+                GROUP BY date("Data")
+                ORDER BY date("Data")
+            """
+            faturado_data = run_query(faturado_query)
+            if faturado_data:
+                df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
+
+                # Assegurar que 'Total do Dia' é numérico
+                df_fat["Total do Dia"] = pd.to_numeric(df_fat["Total do Dia"], errors='coerce').fillna(0)
+
+                # Calcular a soma
+                total_geral = df_fat["Total do Dia"].sum()
+
+                # Formatar a coluna para exibição
+                df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
+
+                # Selecionar apenas as colunas desejadas
+                df_fat = df_fat[["Data", "Total do Dia"]]
+
+                # Resetar o índice e remover
+                df_fat = df_fat.reset_index(drop=True)
+
+                # Estilização da tabela
+                styled_df_fat = df_fat.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
+
+                st.write(styled_df_fat)
+
+                # Exibir o total geral formatado
+                st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(total_geral)}")
+            else:
+                st.info("Nenhum dado de faturamento encontrado.")
 
 def orders_page():
     """Página para gerenciar pedidos."""
@@ -1437,12 +1474,12 @@ def sidebar_navigation():
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash",
-                 "Calendário de Eventos", "Programa de Fidelidade"
+                 "Calendário de Eventos"
             ],
             icons=[
                 "house", "file-text", "box", "list-task", "layers",
                 "receipt",
-                "gift", "calendar", "star"
+                "gift", "calendar"
             ],
             menu_icon="cast",
             default_index=0,
@@ -1665,8 +1702,5 @@ def login_page():
         unsafe_allow_html=True
     )
 
-###############################################################################
-#                            MAIN EXECUTION
-###############################################################################
 if __name__ == "__main__":
     main()
