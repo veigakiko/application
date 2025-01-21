@@ -356,7 +356,7 @@ def home_page():
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
-                    df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
+                    
 
                     # Selecionar apenas as colunas desejadas
                     df_display = df_display[["Product", "Total_in_Stock_display"]]
