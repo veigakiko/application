@@ -17,10 +17,6 @@ from sklearn.linear_model import LinearRegression
 import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
-import warnings
-
-# Suppress SyntaxWarnings from external libraries
-warnings.filterwarnings("ignore", category=SyntaxWarning)
 
 # Configuração da página para layout wide
 st.set_page_config(layout="wide")
@@ -202,10 +198,10 @@ def load_all_data():
     data = {}
     try:
         data["orders"] = run_query(
-            'SELECT "Cliente","Produto","Quantidade","Data","status" FROM public.tb_pedido ORDER BY "Data" DESC'
+            'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
-            'SELECT supplier,product,quantity,unit_value,total_value,creation_date, image_url FROM public.tb_products ORDER BY creation_date DESC'
+            'SELECT supplier,product,quantity,unit_value,total_value,creation_date FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
         data["clients"] = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
@@ -238,8 +234,28 @@ def refresh_data():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-    st.title("🎾 Boituva Beach Club 🎾")
+    st.title("Boituva Beach Club")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
+
+    # Adicionando Calendar View acima de Open Orders Summary
+    st.subheader("Eventos do Mês Atual")
+    current_date = date.today()
+    ano_atual = current_date.year
+    mes_atual = current_date.month
+
+    # Obter eventos do banco de dados para o mês atual
+    events_query = """
+        SELECT nome, descricao, data_evento 
+        FROM public.tb_eventos 
+        WHERE EXTRACT(YEAR FROM data_evento) = %s AND EXTRACT(MONTH FROM data_evento) = %s
+        ORDER BY data_evento
+    """
+    events_data = run_query(events_query, (ano_atual, mes_atual))
+    if events_data:
+        df_events = pd.DataFrame(events_data, columns=["Nome do Evento", "Descrição", "Data do Evento"])
+        st.write(df_events)
+    else:
+        st.info("Nenhum evento registrado para este mês.")
 
     notification_placeholder = st.empty()
     client_count_query = """
@@ -247,12 +263,7 @@ def home_page():
         FROM public.tb_pedido
         WHERE status=%s
     """
-    client_count = run_query(client_count_query, ('em aberto',))
-    if client_count and client_count[0][0] > 0:
-        notification_placeholder.success(f"Há {client_count[0][0]} clientes com pedidos em aberto!")
-    else:
-        notification_placeholder.info("Nenhum cliente com pedido em aberto no momento.")
-
+    
     if st.session_state.get("username") == "admin":
         # Expander para agrupar relatórios administrativos
         with st.expander("Open Orders Summary"):
@@ -301,7 +312,7 @@ def home_page():
                     )
 
                     st.subheader("Enviar esse PDF via WhatsApp")
-                    phone_number = st.text_input("Número (ex: 5511999999999)", label_visibility="visible")
+                    phone_number = st.text_input("Número (ex: 5511999999999)")
                     if st.button("Upload e Enviar"):
                         link = upload_pdf_to_fileio(pdf_bytes)
                         if link and phone_number:
@@ -315,7 +326,7 @@ def home_page():
                 st.info("Erro ao gerar resumo Stock vs. Orders.")
 
         # NOVO ITEM: Total Faturado
-        with st.expander("Total Faturado"):
+        with st.expander("Amount Invoiced"):
             faturado_query = """
                 SELECT date("Data") as dt, SUM("total") as total_dia
                 FROM public.vw_pedido_produto
@@ -351,11 +362,11 @@ def orders_page():
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                customer_name = st.selectbox("Cliente", customer_list, label_visibility="visible")
+                customer_name = st.selectbox("Cliente", customer_list)
             with col2:
-                product = st.selectbox("Produto", product_list, label_visibility="visible")
+                product = st.selectbox("Produto", product_list)
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
+                quantity = st.number_input("Quantidade", min_value=1, step=1)
 
             submit_button = st.form_submit_button("Registrar Pedido")
 
@@ -370,6 +381,16 @@ def orders_page():
                 refresh_data()
             else:
                 st.warning("Preencha todos os campos.")
+
+        # Adicionando tabela com os últimos 5 pedidos abaixo do formulário
+        st.subheader("Últimos 5 Pedidos Registrados")
+        orders_data = st.session_state.data.get("orders", [])
+        if orders_data:
+            df_recent_orders = pd.DataFrame(orders_data, columns=["Cliente","Produto","Quantidade","Data","Status"])
+            df_recent_orders = df_recent_orders.head(5)
+            st.table(df_recent_orders)
+        else:
+            st.info("Nenhum pedido encontrado.")
 
     # ======================= ABA: Listagem de Pedidos =======================
     with tabs[1]:
@@ -389,7 +410,7 @@ def orders_page():
                     axis=1
                 )
                 unique_keys = df_orders["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys, label_visibility="visible")
+                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys)
 
                 if selected_key:
                     match = df_orders[df_orders["unique_key"] == selected_key]
@@ -413,9 +434,9 @@ def orders_page():
                                     prod_index = product_list.index(original_product)
                                 else:
                                     prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index, label_visibility="visible")
+                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty), label_visibility="visible")
+                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
                                 status_opts = [
                                     "em aberto", "Received - Debited", "Received - Credit",
@@ -425,7 +446,7 @@ def orders_page():
                                     s_index = status_opts.index(original_status)
                                 else:
                                     s_index = 0
-                                edit_status = st.selectbox("Status", status_opts, index=s_index, label_visibility="visible")
+                                edit_status = st.selectbox("Status", status_opts, index=s_index)
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -470,14 +491,14 @@ def products_page():
         with st.form(key='product_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                supplier = st.text_input("Fornecedor", label_visibility="visible")
+                supplier = st.text_input("Fornecedor")
             with col2:
-                product = st.text_input("Produto", label_visibility="visible")
+                product = st.text_input("Produto")
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
+                quantity = st.number_input("Quantidade", min_value=1, step=1)
             with col4:
-                unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f", label_visibility="visible")
-            creation_date = st.date_input("Data de Criação", value=date.today(), label_visibility="visible")
+                unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f")
+            creation_date = st.date_input("Data de Criação", value=date.today())
             submit_prod = st.form_submit_button("Inserir Produto")
 
         if submit_prod:
@@ -499,9 +520,8 @@ def products_page():
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date","image_url"]
+            cols = ["Supplier","Product","Quantity","Unit Value","Total Value","Creation Date"]
             df_prod = pd.DataFrame(products_data, columns=cols)
-            df_prod["Preço"] = df_prod["Unit Value"].apply(format_currency)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
 
@@ -512,7 +532,7 @@ def products_page():
                     axis=1
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys, label_visibility="visible")
+                selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -528,19 +548,19 @@ def products_page():
                         with st.form(key='edit_product_form'):
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
-                                edit_supplier = st.text_input("Fornecedor", value=original_supplier, label_visibility="visible")
+                                edit_supplier = st.text_input("Fornecedor", value=original_supplier)
                             with col2:
-                                edit_product = st.text_input("Produto", value=original_product, label_visibility="visible")
+                                edit_product = st.text_input("Produto", value=original_product)
                             with col3:
                                 edit_quantity = st.number_input(
-                                    "Quantidade", min_value=1, step=1, value=int(original_quantity), label_visibility="visible"
+                                    "Quantidade", min_value=1, step=1, value=int(original_quantity)
                                 )
                             with col4:
                                 edit_unit_val = st.number_input(
                                     "Valor Unitário", min_value=0.0, step=0.01, format="%.2f",
-                                    value=float(original_unit_value), label_visibility="visible"
+                                    value=float(original_unit_value)
                                 )
-                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date, label_visibility="visible")
+                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date)
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -564,7 +584,7 @@ def products_page():
                             refresh_data()
 
                         if delete_btn:
-                            confirm = st.checkbox("Confirma a exclusão deste produto?", key=f"confirm_del_{selected_key}")
+                            confirm = st.checkbox("Confirma a exclusão deste produto?")
                             if confirm:
                                 q_del = """
                                     DELETE FROM public.tb_products
@@ -593,13 +613,13 @@ def stock_page():
         with st.form(key='stock_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                product = st.selectbox("Produto", product_list, label_visibility="visible")
+                product = st.selectbox("Produto", product_list)
             with col2:
-                quantity = st.number_input("Quantidade", min_value=1, step=1, label_visibility="visible")
+                quantity = st.number_input("Quantidade", min_value=1, step=1)
             with col3:
-                transaction = st.selectbox("Tipo de Transação", ["Entrada","Saída"], label_visibility="visible")
+                transaction = st.selectbox("Tipo de Transação", ["Entrada","Saída"])
             with col4:
-                date_input = st.date_input("Data", value=datetime.now().date(), label_visibility="visible")
+                date_input = st.date_input("Data", value=datetime.now().date())
             submit_st = st.form_submit_button("Registrar")
 
         if submit_st:
@@ -632,7 +652,7 @@ def stock_page():
                     axis=1
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Registro", [""] + unique_keys, label_visibility="visible")
+                selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -654,18 +674,17 @@ def stock_page():
                                     prod_index = product_list.index(original_product)
                                 else:
                                     prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index, label_visibility="visible")
+                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty), label_visibility="visible")
+                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
                                 edit_trans = st.selectbox(
                                     "Tipo", ["Entrada","Saída"],
                                     index=["Entrada","Saída"].index(original_trans)
-                                    if original_trans in ["Entrada","Saída"] else 0,
-                                    label_visibility="visible"
+                                    if original_trans in ["Entrada","Saída"] else 0
                                 )
                             with col4:
-                                edit_date = st.date_input("Data", value=original_date.date(), label_visibility="visible")
+                                edit_date = st.date_input("Data", value=original_date.date())
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -708,7 +727,7 @@ def clients_page():
     with tabs[0]:
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
-            nome_completo = st.text_input("Nome Completo", label_visibility="visible")
+            nome_completo = st.text_input("Nome Completo")
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
@@ -742,13 +761,13 @@ def clients_page():
             df_clients = pd.DataFrame(clients_data, columns=cols)
             # Exibir apenas a coluna Full Name
             st.dataframe(df_clients[["Full Name"]], use_container_width=True)
-            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clientes CSV")
+            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
 
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar / Deletar Cliente")
                 client_display = [""] + [f"{row['Full Name']} ({row['Email']})"
                                          for _, row in df_clients.iterrows()]
-                selected_display = st.selectbox("Selecione Cliente:", client_display, label_visibility="visible")
+                selected_display = st.selectbox("Selecione Cliente:", client_display)
                 if selected_display:
                     try:
                         original_name, original_email = selected_display.split(" (")
@@ -759,7 +778,7 @@ def clients_page():
 
                     sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                     with st.form(key='edit_client_form'):
-                        edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"], label_visibility="visible")
+                        edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
                         col_upd, col_del = st.columns(2)
                         with col_upd:
                             update_btn = st.form_submit_button("Atualizar Cliente")
@@ -787,187 +806,6 @@ def clients_page():
                         st.experimental_rerun()
         else:
             st.info("Nenhum cliente encontrado.")
-
-
-def loyalty_program_page():
-    """Página do programa de fidelidade."""
-    st.title("Programa de Fidelidade")
-
-    # 1) Carregar dados da view vw_cliente_sum_total
-    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
-    data = run_query(query)  # Assume que run_query retorna lista de tuplas
-
-    # 2) Exibir em dataframe
-    if data:
-        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
-        st.subheader("Clientes - Fidelidade")
-        st.dataframe(df, use_container_width=True)
-    else:
-        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
-
-    st.markdown("---")
-
-    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
-    # basta deixar o bloco abaixo. Caso não precise, remova.
-
-    st.subheader("Acumule pontos a cada compra!")
-    if 'points' not in st.session_state:
-        st.session_state.points = 0
-
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1, label_visibility="visible")
-    if st.button("Adicionar Pontos"):
-        st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
-
-    if st.button("Resgatar Prêmio"):
-        if st.session_state.points >= 100:
-            st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
-        else:
-            st.error("Pontos insuficientes.")
-
-
-def invoice_page():
-    """Página para gerar e gerenciar notas fiscais."""
-    st.title("Nota Fiscal")
-    open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
-    open_clients = run_query(open_clients_query, ('em aberto',))
-    client_list = [row[0] for row in open_clients] if open_clients else []
-    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list, label_visibility="visible")
-
-    if selected_client:
-        invoice_query = """
-            SELECT "Produto","Quantidade","total"
-            FROM public.vw_pedido_produto
-            WHERE "Cliente"=%s AND status=%s
-        """
-        invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
-        if invoice_data:
-            df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
-
-            # Converte para numeric
-            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-            total_sem_desconto = df["total"].sum()
-
-            # Cupom fixo de exemplo
-            cupons_validos = {
-                "DESCONTO10": 0.10,
-                "DESCONTO15": 0.15,
-            }
-
-            coupon_code = st.text_input("CUPOM (desconto opcional)", label_visibility="visible")
-            desconto_aplicado = 0.0
-            if coupon_code in cupons_validos:
-                desconto_aplicado = cupons_validos[coupon_code]
-                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
-
-            # Cálculo final
-            total_sem_desconto = float(total_sem_desconto or 0)
-            desconto_aplicado = float(desconto_aplicado or 0)
-            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
-
-            # Gera a nota (ainda mostrando valores sem considerar item a item o desconto, mas no final exibimos total_com_desconto)
-            generate_invoice_for_printer(df)
-
-            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
-            st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
-            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
-
-            # Botões de pagamento
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                if st.button("Debit"):
-                    process_payment(selected_client, "Received - Debited")
-                    st.success("Pagamento via Débito processado!")
-            with col2:
-                if st.button("Credit"):
-                    process_payment(selected_client, "Received - Credit")
-                    st.success("Pagamento via Crédito processado!")
-            with col3:
-                if st.button("Pix"):
-                    process_payment(selected_client, "Received - Pix")
-                    st.success("Pagamento via Pix processado!")
-            with col4:
-                if st.button("Cash"):
-                    process_payment(selected_client, "Received - Cash")
-                    st.success("Pagamento via Dinheiro processado!")
-        else:
-            st.info("Não há pedidos em aberto para esse cliente.")
-    else:
-        st.warning("Selecione um cliente.")
-
-
-###############################################################################
-#                            BACKUP (ADMIN)
-###############################################################################
-def backup_all_tables(tables):
-    """Permite o download de todas as tabelas especificadas como um único CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            frames = []
-            for table in tables:
-                df = pd.read_sql_query(f"SELECT * FROM {table};", conn)
-                df["table_name"] = table
-                frames.append(df)
-            if frames:
-                combined = pd.concat(frames, ignore_index=True)
-                csv_data = combined.to_csv(index=False)
-                st.download_button(
-                    label="Baixar Todas as Tabelas CSV",
-                    data=csv_data,
-                    file_name="backup_all_tables.csv",
-                    mime="text/csv"
-                )
-        except Exception as e:
-            st.error(f"Erro ao exportar todas as tabelas: {e}")
-        finally:
-            conn.close()
-
-
-def export_table_to_csv(table_name):
-    """Permite o download de uma tabela específica como CSV."""
-    conn = get_db_connection()
-    if conn:
-        try:
-            df = pd.read_sql_query(f"SELECT * FROM {table_name};", conn)
-            csv_data = df.to_csv(index=False)
-            st.download_button(
-                label=f"Baixar {table_name} CSV",
-                data=csv_data,
-                file_name=f"{table_name}.csv",
-                mime="text/csv"
-            )
-        except Exception as e:
-            st.error(f"Erro ao exportar a tabela {table_name}: {e}")
-        finally:
-            conn.close()
-
-
-def perform_backup():
-    """Seção de backup para administradores."""
-    st.header("Sistema de Backup")
-    st.write("Clique para baixar backups das tabelas do banco de dados.")
-
-    tables = ["tb_pedido", "tb_products", "tb_clientes", "tb_estoque"]
-
-    st.subheader("Baixar Todas as Tabelas de uma Vez")
-    if st.button("Download All Tables"):
-        backup_all_tables(tables)
-
-    st.markdown("---")
-
-    st.subheader("Baixar Tabelas Individualmente")
-    for table in tables:
-        export_table_to_csv(table)
-
-
-def admin_backup_section():
-    """Exibe a seção de backup apenas para administradores."""
-    if st.session_state.get("username") == "admin":
-        perform_backup()
-    else:
-        st.warning("Acesso restrito para administradores.")
 
 
 ###############################################################################
@@ -1026,14 +864,98 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 
 
 ###############################################################################
-#                           CALENDÁRIO DE EVENTOS
+#                          PÁGINA: NOTA FISCAL -> CASH
 ###############################################################################
-import calendar
-from datetime import datetime, date
-import pandas as pd
-import streamlit as st
-from streamlit.components.v1 import html
+def cash_page():
+    """Página para gerar e gerenciar notas fiscais."""
+    st.title("Cash")
+    open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
+    open_clients = run_query(open_clients_query, ('em aberto',))
+    client_list = [row[0] for row in open_clients] if open_clients else []
+    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
 
+    if selected_client:
+        invoice_query = """
+            SELECT "Produto","Quantidade","total"
+            FROM public.vw_pedido_produto
+            WHERE "Cliente"=%s AND status=%s
+        """
+        invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
+        if invoice_data:
+            df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
+
+            # Converte para numeric
+            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+            total_sem_desconto = df["total"].sum()
+
+            # Cupom fixo de exemplo
+            cupons_validos = {
+                "10": 0.10,
+                "15": 0.15,
+                "20": 0.20,
+                "25": 0.25,
+                "30": 0.30,
+                "35": 0.35,
+                "40": 0.40,
+                "45": 0.45,
+                "50": 0.50,
+                "55": 0.55,
+                "60": 0.60,
+                "65": 0.65,
+                "70": 0.70,
+                "75": 0.75,
+                "80": 0.80,
+                "85": 0.85,
+                "90": 0.90,
+                "95": 0.95,
+                "100": 1.00,
+            }
+
+            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            desconto_aplicado = 0.0
+            if coupon_code in cupons_validos:
+                desconto_aplicado = cupons_validos[coupon_code]
+                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+
+            # Cálculo final
+            total_sem_desconto = float(total_sem_desconto or 0)
+            desconto_aplicado = float(desconto_aplicado or 0)
+            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
+
+            # Gera a nota (ainda mostrando valores sem considerar item a item o desconto, mas no final exibimos total_com_desconto)
+            generate_invoice_for_printer(df)
+
+            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
+            st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
+            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
+
+            # Botões de pagamento
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                if st.button("Debit"):
+                    process_payment(selected_client, "Received - Debited")
+                    st.success("Pagamento via Débito processado!")
+            with col2:
+                if st.button("Credit"):
+                    process_payment(selected_client, "Received - Credit")
+                    st.success("Pagamento via Crédito processado!")
+            with col3:
+                if st.button("Pix"):
+                    process_payment(selected_client, "Received - Pix")
+                    st.success("Pagamento via Pix processado!")
+            with col4:
+                if st.button("Cash"):
+                    process_payment(selected_client, "Received - Cash")
+                    st.success("Pagamento via Dinheiro processado!")
+        else:
+            st.info("Não há pedidos em aberto para esse cliente.")
+    else:
+        st.warning("Selecione um cliente.")
+
+
+###############################################################################
+#                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
+###############################################################################
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1061,11 +983,11 @@ def events_calendar_page():
     with st.form(key="new_event_form"):
         col1, col2 = st.columns(2)
         with col1:
-            nome_evento = st.text_input("Nome do Evento", label_visibility="visible")
-            data_evento = st.date_input("Data do Evento", value=date.today(), label_visibility="visible")
+            nome_evento = st.text_input("Nome do Evento")
+            data_evento = st.date_input("Data do Evento", value=date.today())
         with col2:
-            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True, label_visibility="visible")
-            descricao_evento = st.text_area("Descrição do Evento", label_visibility="visible")
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
+            descricao_evento = st.text_area("Descrição do Evento")
         btn_cadastrar = st.form_submit_button("Agendar")
 
     if btn_cadastrar:
@@ -1075,29 +997,35 @@ def events_calendar_page():
                     (nome, descricao, data_evento, inscricao_aberta, data_criacao)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            if run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True):
-                st.success("Evento cadastrado com sucesso!")
-                st.experimental_rerun()
-            else:
-                st.error("Falha ao cadastrar o evento.")
+            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            st.success("Evento cadastrado com sucesso!")
+            st.experimental_rerun()
         else:
             st.warning("Informe ao menos o nome do evento.")
 
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 3) Seleção de Ano
+    # 3) Filtros de Mês/Ano
     # ----------------------------------------------------------------------------
     current_date = date.today()
     ano_padrao = current_date.year
+    mes_padrao = current_date.month
 
-    col_ano = st.columns([1])[0]
+    col_ano, col_mes = st.columns(2)
     with col_ano:
         ano_selecionado = st.selectbox(
             "Selecione o Ano",
             list(range(ano_padrao - 2, ano_padrao + 3)),  # Ex: de 2 anos atrás até 2 anos à frente
-            index=2,  # por padrão, seleciona o ano atual
-            label_visibility="visible"
+            index=2  # por padrão, seleciona o ano atual
+        )
+    with col_mes:
+        meses_nomes = [calendar.month_name[i] for i in range(1, 13)]
+        mes_selecionado = st.selectbox(
+            "Selecione o Mês",
+            options=list(range(1, 13)),
+            format_func=lambda x: meses_nomes[x-1],
+            index=mes_padrao - 1
         )
 
     # ----------------------------------------------------------------------------
@@ -1112,173 +1040,68 @@ def events_calendar_page():
         event_rows,
         columns=["id", "nome", "descricao", "data_evento", "inscricao_aberta", "data_criacao"]
     )
-    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors='coerce')
+    df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
-    df_filtrado = df_events[df_events["data_evento"].dt.year == ano_selecionado].copy()
-
-    # ----------------------------------------------------------------------------
-    # 5) Função para gerar HTML do calendário
-    # ----------------------------------------------------------------------------
-    def create_calendar_html(year, month, events):
-        """
-        Cria uma tabela HTML representando o calendário do mês com os eventos destacados.
-        """
-        cal = calendar.Calendar(firstweekday=0)  # Segunda-feira como primeiro dia da semana
-        month_name = calendar.month_name[month]
-        weeks = cal.monthdayscalendar(year, month)
-
-        # Mapeamento de dias para eventos
-        day_events = {}
-        for _, event in events.iterrows():
-            day = event['data_evento'].day
-            if day not in day_events:
-                day_events[day] = []
-            day_events[day].append(event)
-
-        # Início da tabela HTML
-        html_cal = f"""
-        <div class="calendar-container">
-            <h3 class="month-header">{month_name} {year}</h3>
-            <table class="calendar-table">
-                <thead>
-                    <tr>
-        """
-
-        # Cabeçalhos dos dias da semana
-        weekdays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-        for day in weekdays:
-            html_cal += f"<th>{day}</th>"
-        html_cal += "</tr></thead><tbody>"
-
-        # Linhas das semanas
-        for week in weeks:
-            html_cal += "<tr>"
-            for day in week:
-                if day == 0:
-                    html_cal += "<td class='empty'></td>"
-                else:
-                    if day in day_events:
-                        # Listar todos os eventos no dia
-                        events_html = ""
-                        for event in day_events[day]:
-                            events_html += f"<li title='{event['nome']}: {event['descricao']}'>{event['nome']}</li>"
-                        html_cal += f"""
-                        <td class='event-day'>
-                            <div class='day-number'>{day}</div>
-                            <ul class='event-list'>{events_html}</ul>
-                        </td>
-                        """
-                    else:
-                        html_cal += f"""
-                        <td>
-                            <div class='day-number'>{day}</div>
-                        </td>
-                        """
-            html_cal += "</tr>"
-        html_cal += "</tbody></table></div>"
-
-        return html_cal
+    df_filtrado = df_events[
+        (df_events["data_evento"].dt.year == ano_selecionado) &
+        (df_events["data_evento"].dt.month == mes_selecionado)
+    ].copy()
 
     # ----------------------------------------------------------------------------
-    # 6) Estilização CSS do Calendário
+    # 5) Montar o calendário
     # ----------------------------------------------------------------------------
-    calendar_css = """
-    <style>
-    .calendar-container {
-        margin-bottom: 30px;
-    }
-    .month-header {
-        text-align: center;
-        color: #1b4f72;
-        font-size: 1.5em;
-        margin-bottom: 10px;
-    }
-    .calendar-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .calendar-table th {
-        background-color: #1b4f72;
-        color: white;
-        padding: 10px;
-        text-align: center;
-    }
-    .calendar-table td {
-        border: 1px solid #1b4f72;
-        vertical-align: top;
-        height: 100px;
-        padding: 5px;
-        position: relative;
-    }
-    .empty {
-        background-color: #f0f0f0;
-    }
-    .day-number {
-        position: absolute;
-        top: 5px;
-        right: 5px;
-        font-weight: bold;
-        color: #1b4f72;
-    }
-    .event-day {
-        background-color: #e6f2ff;
-    }
-    .event-list {
-        list-style-type: none;
-        padding-left: 0;
-        margin-top: 25px;
-        max-height: 60px;
-        overflow-y: auto;
-    }
-    .event-list li {
-        background-color: #1b4f72;
-        color: white;
-        padding: 2px 4px;
-        margin-bottom: 2px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.85em;
-    }
-    .event-list li:hover {
-        background-color: #145a7c;
-    }
-    @media (max-width: 768px) {
-        .calendar-table th, .calendar-table td {
-            padding: 5px;
-        }
-        .day-number {
-            font-size: 0.8em;
-        }
-        .event-list li {
-            font-size: 0.75em;
-        }
-    }
-    </style>
-    """
+    st.subheader("Visualização do Calendário")
 
-    st.markdown(calendar_css, unsafe_allow_html=True)
+    cal = calendar.HTMLCalendar(firstweekday=0)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+
+    # Destacar dias com eventos
+    for _, ev in df_filtrado.iterrows():
+        dia = ev["data_evento"].day
+        # Ajustamos a cor de fundo para azul e o texto para branco
+        highlight_str = (
+            f' style="background-color:blue; color:white; font-weight:bold;" '
+            f'title="{ev["nome"]}: {ev["descricao"]}"'
+        )
+        # Substituir as tags <td> correspondentes ao dia
+        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        html_calendario = html_calendario.replace(
+            f'<td class="mon">{dia}</td>',
+            f'<td class="mon"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="tue">{dia}</td>',
+            f'<td class="tue"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="wed">{dia}</td>',
+            f'<td class="wed"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="thu">{dia}</td>',
+            f'<td class="thu"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="fri">{dia}</td>',
+            f'<td class="fri"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sat">{dia}</td>',
+            f'<td class="sat"{highlight_str}>{dia}</td>'
+        )
+        html_calendario = html_calendario.replace(
+            f'<td class="sun">{dia}</td>',
+            f'<td class="sun"{highlight_str}>{dia}</td>'
+        )
+
+    st.markdown(html_calendario, unsafe_allow_html=True)
 
     # ----------------------------------------------------------------------------
-    # 7) Gerar e Exibir Calendários para Todos os Meses
+    # 6) Listagem dos eventos no mês selecionado
     # ----------------------------------------------------------------------------
-    st.subheader(f"Calendário de Eventos para {ano_selecionado}")
-
-    # Configurar número de colunas para exibir os calendários
-    num_cols = 3
-    cols = st.columns(num_cols)
-
-    for month in range(1, 13):
-        col_index = (month - 1) % num_cols
-        with cols[col_index]:
-            html_calendar = create_calendar_html(ano_selecionado, month, df_filtrado[df_filtrado["data_evento"].dt.month == month])
-            html(html_calendar, height=300, scrolling=True)
-
-    # ----------------------------------------------------------------------------
-    # 8) Listagem dos Eventos no Ano Selecionado
-    # ----------------------------------------------------------------------------
-    st.subheader(f"Eventos de {ano_selecionado}")
-    if df_filtrado.empty:
-        st.info("Nenhum evento neste ano.")
+    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
+    if len(df_filtrado) == 0:
+        st.info("Nenhum evento neste mês.")
     else:
         df_display = df_filtrado.copy()
         df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
@@ -1295,7 +1118,7 @@ def events_calendar_page():
     st.markdown("---")
 
     # ----------------------------------------------------------------------------
-    # 9) Edição e Exclusão de Eventos
+    # 7) Edição e Exclusão de Eventos (sem confirmação extra)
     # ----------------------------------------------------------------------------
     st.subheader("Editar / Excluir Eventos")
 
@@ -1304,16 +1127,16 @@ def events_calendar_page():
         axis=1
     )
     events_list = [""] + df_events["evento_label"].tolist()
-    selected_event = st.selectbox("Selecione um evento:", events_list, label_visibility="visible")
+    selected_event = st.selectbox("Selecione um evento:", events_list)
 
     if selected_event:
         # Extrair ID do formato "123 - Evento X (2025-01-01)"
+        event_id_str = selected_event.split(" - ")[0]
         try:
-            event_id_str = selected_event.split(" - ")[0]
             event_id = int(event_id_str)
-        except (ValueError, IndexError):
+        except ValueError:
             st.error("Falha ao interpretar ID do evento.")
-            st.stop()
+            return
 
         # Carrega dados do evento selecionado
         ev_row = df_events[df_events["id"] == event_id].iloc[0]
@@ -1325,11 +1148,11 @@ def events_calendar_page():
         with st.expander("Editar Evento", expanded=True):
             col1, col2 = st.columns(2)
             with col1:
-                new_nome = st.text_input("Nome do Evento", value=original_nome, label_visibility="visible")
-                new_data = st.date_input("Data do Evento", value=original_data.date(), label_visibility="visible")
+                new_nome = st.text_input("Nome do Evento", value=original_nome)
+                new_data = st.date_input("Data do Evento", value=original_data.date())
             with col2:
-                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc, label_visibility="visible")
-                new_desc = st.text_area("Descrição do Evento", value=original_desc, label_visibility="visible")
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
+                new_desc = st.text_area("Descrição do Evento", value=original_desc)
 
             col_btn1, col_btn2 = st.columns(2)
             with col_btn1:
@@ -1340,203 +1163,68 @@ def events_calendar_page():
                             SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
                             WHERE id=%s
                         """
-                        if run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True):
-                            st.success("Evento atualizado com sucesso!")
-                            st.experimental_rerun()
-                        else:
-                            st.error("Falha ao atualizar o evento.")
+                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        st.success("Evento atualizado com sucesso!")
+                        st.experimental_rerun()
                     else:
                         st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
-                # Exclusão imediata com confirmação
+                # Exclusão imediata sem checkbox de confirmação
                 if st.button("Excluir Evento"):
-                    confirm = st.checkbox("Confirma a exclusão deste evento?", key=f"confirm_del_{event_id}")
-                    if confirm:
-                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                        if run_query(q_delete, (event_id,), commit=True):
-                            st.success(f"Evento ID={event_id} excluído!")
-                            st.experimental_rerun()
-                        else:
-                            st.error("Falha ao excluir o evento.")
+                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                    run_query(q_delete, (event_id,), commit=True)
+                    st.success(f"Evento ID={event_id} excluído!")
+                    st.experimental_rerun()
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
 
-def analytics_page():
-    """Página de Analytics contendo gráficos de faturamento."""
-    st.title("Analytics")
+###############################################################################
+#                     PROGRAMA DE FIDELIDADE (AJUSTADO)
+###############################################################################
+def loyalty_program_page():
+    """Página do programa de fidelidade."""
+    st.title("Programa de Fidelidade")
 
-    # 1) Carregar dados de faturamento
-    faturamento_query = """
-        SELECT date("Data") as dt, SUM("total") as total_dia
-        FROM public.vw_pedido_produto
-        WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-        GROUP BY date("Data")
-        ORDER BY date("Data")
-    """
-    faturamento_data = run_query(faturamento_query)
-    if faturamento_data:
-        df_faturamento = pd.DataFrame(faturamento_data, columns=["Data", "Total do Dia"])
-        df_faturamento["Data"] = pd.to_datetime(df_faturamento["Data"])
-    else:
-        df_faturamento = pd.DataFrame(columns=["Data", "Total do Dia"])
+    # 1) Carregar dados da view vw_cliente_sum_total
+    query = 'SELECT "Cliente", total_geral FROM public.vw_cliente_sum_total;'
+    data = run_query(query)  # Assume que run_query retorna lista de tuplas
 
-    # 2) Exibir gráfico de faturamento
-    st.subheader("Faturamento ao Longo do Tempo")
-    if not df_faturamento.empty:
-        chart = alt.Chart(df_faturamento).mark_line(point=True).encode(
-            x='Data:T',
-            y=alt.Y('Total do Dia:Q', axis=alt.Axis(title='Total Faturado (R$)')),
-            tooltip=['Data:T', 'Total do Dia:Q']
-        ).properties(
-            width=800,
-            height=400
-        )
-        st.altair_chart(chart, use_container_width=True)
+    # 2) Exibir em dataframe
+    if data:
+        df = pd.DataFrame(data, columns=["Cliente", "Total Geral"])
+        st.subheader("Clientes - Fidelidade")
+        st.dataframe(df, use_container_width=True)
     else:
-        st.info("Nenhum dado de faturamento para exibir.")
+        st.info("Nenhum dado encontrado na view vw_cliente_sum_total.")
 
     st.markdown("---")
 
-    # 3) Gráfico de Previsão de Faturamento usando Regressão Linear
-    st.subheader("Previsão de Faturamento para os Próximos 30 Dias")
-    if not df_faturamento.empty:
-        df_faturamento = df_faturamento.sort_values("Data")
-        df_faturamento['Timestamp'] = df_faturamento['Data'].map(datetime.timestamp)
+    # 3) (Opcional) Se desejar manter a lógica de acumular pontos localmente,
+    # basta deixar o bloco abaixo. Caso não precise, remova.
 
-        # Modelo de Regressão Linear
-        X = df_faturamento[['Timestamp']]
-        y = df_faturamento['Total do Dia']
-        model = LinearRegression()
-        model.fit(X, y)
+    st.subheader("Acumule pontos a cada compra!")
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
 
-        # Previsão para os próximos 30 dias
-        last_date = df_faturamento['Data'].max()
-        future_dates = [last_date + timedelta(days=i) for i in range(1, 31)]
-        future_timestamps = [[datetime.timestamp(d)] for d in future_dates]
-        predictions = model.predict(future_timestamps)
+    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    if st.button("Adicionar Pontos"):
+        st.session_state.points += points_earned
+        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
 
-        df_pred = pd.DataFrame({
-            "Data": future_dates,
-            "Previsão de Faturamento": predictions
-        })
-
-        # Gráfico
-        chart_pred = alt.Chart(pd.concat([df_faturamento, df_pred])).mark_line().encode(
-            x='Data:T',
-            y=alt.Y('Total do Dia:Q', title='Total Faturado (R$)'),
-            color=alt.condition(
-                alt.datum.Data <= last_date,
-                alt.value('steelblue'),  # cor para dados reais
-                alt.value('orange')      # cor para previsões
-            ),
-            tooltip=['Data:T', 'Total do Dia:Q']
-        ).properties(
-            width=800,
-            height=400
-        )
-        st.altair_chart(chart_pred, use_container_width=True)
-    else:
-        st.info("Nenhum dado de faturamento para realizar previsão.")
-
-    st.markdown("---")
-
-    # 4) Seção MitoSheet para edição de dados de tb_pedido
-    st.subheader("Editar Pedidos com MitoSheet")
-
-    # Função para carregar dados de tb_pedido
-    @st.cache_data(show_spinner=False)
-    def load_pedido_data():
-        query = 'SELECT "Cliente", "Produto", "Quantidade", "Data", status, id FROM public.tb_pedido;'
-        results = run_query(query)
-        if results:
-            df = pd.DataFrame(results, columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-            # Converte a coluna "Data" para datetime
-            df["Data"] = pd.to_datetime(df["Data"], errors='coerce')
-            return df
+    if st.button("Resgatar Prêmio"):
+        if st.session_state.points >= 100:
+            st.session_state.points -= 100
+            st.success("Prêmio resgatado!")
         else:
-            return pd.DataFrame(columns=["Cliente", "Produto", "Quantidade", "Data", "Status", "ID"])
-
-    pedido_data = load_pedido_data()
-
-    if not pedido_data.empty:
-        # Inicializa MitoSheet com os dados de tb_pedido
-        new_dfs, code = spreadsheet(pedido_data)
-        code = code if code else "# Edite a planilha acima para gerar código"
-        st.code(code)
-
-        # Função para limpar o cache do MitoSheet periodicamente
-        def clear_mito_backend_cache():
-            _get_mito_backend.clear()
-
-        # Função para armazenar o tempo da última execução
-        @st.cache_resource
-        def get_cached_time():
-            return {"last_executed_time": None}
-
-        def try_clear_cache():
-            CLEAR_DELTA = timedelta(hours=12)
-            current_time = datetime.now()
-            cached_time = get_cached_time()
-            if cached_time["last_executed_time"] is None or cached_time["last_executed_time"] + CLEAR_DELTA < current_time:
-                clear_mito_backend_cache()
-                cached_time["last_executed_time"] = current_time
-
-        try_clear_cache()
-
-        # (Opcional) Implementar lógica para salvar alterações de volta ao banco de dados
-        # Isto exigiria mapear as alterações feitas no MitoSheet e executar as queries correspondentes
-        st.markdown("---")
-        st.info("**Nota:** As alterações feitas na planilha acima não são salvas automaticamente no banco de dados. Para implementar essa funcionalidade, será necessário mapear as mudanças e executar as queries apropriadas usando `run_query`.")
-    else:
-        st.info("Nenhum pedido encontrado para editar.")
+            st.error("Pontos insuficientes.")
 
 
-def menu_page():
-    """Página do cardápio."""
-    st.title("Cardápio")
-
-    product_data = run_query("""
-        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
-        FROM public.tb_products
-        ORDER BY creation_date DESC
-    """)
-    if not product_data:
-        st.warning("Nenhum produto encontrado no cardápio.")
-        return
-
-    df_products = pd.DataFrame(
-        product_data,
-        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
-    )
-    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
-
-    tabs = st.tabs(["Ver Cardápio"])
-
-    with tabs[0]:
-        st.subheader("Itens Disponíveis")
-        for idx, row in df_products.iterrows():
-            product_name = row["Product"]
-            price_text   = row["Preço"]
-            image_url    = row["image_url"] if row["image_url"] else ""
-
-            if not image_url:
-                image_url = "https://via.placeholder.com/120"
-
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                try:
-                    st.image(image_url, width=120)
-                except:
-                    st.image("https://via.placeholder.com/120", width=120)
-
-            with col2:
-                st.subheader(product_name)
-                st.write(f"Preço: {price_text}")
-
-            st.markdown("---")
-
+###############################################################################
+#                          PÁGINA: ANALYTICS REMOVIDA
+###############################################################################
+# A página Analytics foi removida conforme solicitado.
 
 ###############################################################################
 #                            LOGIN PAGE
@@ -1598,23 +1286,7 @@ def login_page():
             font-size: 0.875rem;
         }
         /* Google login button */
-        .gmail-login {
-            background-color: #db4437;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            padding: 8px 16px;
-            font-size: 0.875rem;
-            font-weight: bold;
-            cursor: pointer;
-            text-align: center;
-            margin-top: 10px;
-            display: block;
-            width: 100%;
-        }
-        .gmail-login:hover {
-            background-color: #c33d30;
-        }
+        /* Removido conforme solicitação */
         /* Remove espaço entre os input boxes */
         .css-1siy2j8 input {
             margin-bottom: 0 !important; /* Sem margem entre os campos */
@@ -1648,20 +1320,20 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Campos de entrada com labels
-        username_input = st.text_input("Username", placeholder="Digite seu usuário", label_visibility="visible")
-        password_input = st.text_input("Password", type="password", placeholder="Digite sua senha", label_visibility="visible")
+        # Campos de entrada
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
 
         # Botão de login
         btn_login = st.form_submit_button("Log in")
 
-        # Botão de login com Google (fora do formulário)
-        st.markdown(
-            """
-            <button class='gmail-login'>Log in with Google</button>
-            """,
-            unsafe_allow_html=True
-        )
+        # Botão de login com Google (fora do formulário) - REMOVIDO
+        # st.markdown(
+        #     """
+        #     <button class='gmail-login'>Log in with Google</button>
+        #     """,
+        #     unsafe_allow_html=True
+        # )
 
     # ---------------------------------------------------------------------
     # 4) Ação: Login
@@ -1713,7 +1385,7 @@ def login_page():
 
 
 ###############################################################################
-#                     INICIALIZAÇÃO E MAIN
+#                            INICIALIZAÇÃO E MAIN
 ###############################################################################
 def initialize_session_state():
     """Inicializa variáveis no session_state do Streamlit."""
@@ -1721,10 +1393,6 @@ def initialize_session_state():
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
-    if 'username' not in st.session_state:
-        st.session_state.username = ""
-    if 'login_time' not in st.session_state:
-        st.session_state.login_time = ""
 
 
 def apply_custom_css():
@@ -1767,18 +1435,18 @@ def apply_custom_css():
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
+        # Novo texto acima do menu
+
         selected = option_menu(
             "Beach Menu",
             [
                 "Home","Orders","Products","Stock","Clients",
-                "Nota Fiscal","Backup","Cardápio",
-                "Analytics",
+                "Cash","Cardápio",
                 "Programa de Fidelidade","Calendário de Eventos"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
-                "receipt","cloud-upload","list",
-                "bar-chart-line",
+                "receipt","list",
                 "gift","calendar"
             ],
             menu_icon="cast",
@@ -1793,24 +1461,124 @@ def sidebar_navigation():
                 "nav-link-selected": {"background-color":"#145a7c","color":"white"},
             }
         )
-
-        st.markdown("---")
-
-        # Logout button
-        if st.button("Logout"):
-            for key in ["data", "logged_in", "username", "login_time"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
-            st.experimental_rerun()
-
-        # Mostrar informação de login abaixo do logout
-        if st.session_state.get("username") and st.session_state.get("login_time"):
-            login_time_str = st.session_state.login_time.strftime("%I:%M %p")
-            st.write(f"{st.session_state.username.capitalize()} logado às {login_time_str}")
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
+    return selected
 
 
+def menu_page():
+    """Página do cardápio."""
+    st.title("Cardápio")
+
+    product_data = run_query("""
+        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
+        FROM public.tb_products
+        ORDER BY creation_date DESC
+    """)
+    if not product_data:
+        st.warning("Nenhum produto encontrado no cardápio.")
+        return
+
+    df_products = pd.DataFrame(
+        product_data,
+        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
+    )
+    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
+
+    tabs = st.tabs(["Ver Cardápio", "Gerenciar Imagens"])
+
+    with tabs[0]:
+        st.subheader("Itens Disponíveis")
+        for idx, row in df_products.iterrows():
+            product_name = row["Product"]
+            price_text   = row["Preço"]
+            image_url    = row["image_url"] if row["image_url"] else ""
+
+            if not image_url:
+                image_url = "https://via.placeholder.com/120"
+
+            col1, col2 = st.columns([1, 3])
+            with col1:
+                try:
+                    st.image(image_url, width=120)
+                except:
+                    st.image("https://via.placeholder.com/120", width=120)
+
+            with col2:
+                st.subheader(product_name)
+                st.write(f"Preço: {price_text}")
+
+            st.markdown("---")
+
+    with tabs[1]:
+        st.subheader("Fazer upload/editar imagem de cada produto")
+
+        product_names = df_products["Product"].unique().tolist()
+        chosen_product = st.selectbox("Selecione o produto", options=[""] + product_names)
+
+        if chosen_product:
+            df_sel = df_products[df_products["Product"] == chosen_product].head(1)
+            if not df_sel.empty:
+                current_image = df_sel.iloc[0]["image_url"] or ""
+            else:
+                current_image = ""
+
+            st.write("Imagem atual:")
+            if current_image:
+                try:
+                    st.image(current_image, width=200)
+                except:
+                    st.image("https://via.placeholder.com/200", width=200)
+            else:
+                st.image("https://via.placeholder.com/200", width=200)
+
+            uploaded_file = st.file_uploader("Carregar nova imagem do produto (PNG/JPG)", type=["png", "jpg", "jpeg"])
+
+            if st.button("Salvar Imagem"):
+                if not uploaded_file:
+                    st.warning("Selecione um arquivo antes de salvar.")
+                else:
+                    file_ext = os.path.splitext(uploaded_file.name)[1]
+                    new_filename = f"{uuid.uuid4()}{file_ext}"
+                    os.makedirs("uploaded_images", exist_ok=True)
+                    save_path = os.path.join("uploaded_images", new_filename)
+                    with open(save_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+
+                    update_query = """
+                        UPDATE public.tb_products
+                        SET image_url=%s
+                        WHERE product=%s
+                    """
+                    run_query(update_query, (save_path, chosen_product), commit=True)
+                    st.success("Imagem atualizada com sucesso!")
+                    refresh_data()
+                    st.experimental_rerun()
+
+
+###############################################################################
+#                     NOVA PÁGINA: ANALYTICS REMOVIDA
+###############################################################################
+# A página Analytics foi removida conforme solicitado.
+
+
+###############################################################################
+#                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
+###############################################################################
+# A página Calendário de Eventos já está incluída acima.
+
+
+###############################################################################
+#                     NOVA PÁGINA: CASH ADICIONADA
+###############################################################################
+# A página Cash já foi adicionada e renomeada a partir da página Invoice.
+
+
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
+###############################################################################
 def main():
     """Função principal que controla a execução do aplicativo."""
     apply_custom_css()
@@ -1838,18 +1606,23 @@ def main():
         stock_page()
     elif selected_page == "Clients":
         clients_page()
-    elif selected_page == "Nota Fiscal":
-        invoice_page()
-    elif selected_page == "Backup":
-        admin_backup_section()
+    elif selected_page == "Cash":
+        cash_page()
     elif selected_page == "Cardápio":
         menu_page()
-    elif selected_page == "Analytics":
-        analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
     elif selected_page == "Calendário de Eventos":
         events_calendar_page()
+
+    with st.sidebar:
+        if st.button("Logout"):
+            for key in ["home_page_initialized"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.logged_in = False
+            st.success("Desconectado com sucesso!")
+            st.experimental_rerun()
 
 
 if __name__ == "__main__":
