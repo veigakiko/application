@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
-st.set_page_config(layout="wide")  # Ensure the layout is wide for better responsiveness
+ # Ensure the layout is wide for better responsiveness
 
 
 #############################################################################
