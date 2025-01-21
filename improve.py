@@ -20,7 +20,6 @@ from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
 
-
 #############################################################################
 #                                   UTILIDADES
 ###############################################################################
