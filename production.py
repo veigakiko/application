@@ -172,6 +172,7 @@ def run_query(query: str, values=None, commit: bool = False):
     """
     conn = get_db_connection()
     if not conn:
+        st.error("Falha na conexão com o banco de dados.")
         return None
     try:
         with conn.cursor() as cursor:
@@ -268,18 +269,20 @@ def home_page():
             )
             # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
             for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                # Evitar substituir múltiplas vezes para o mesmo dia
                 target = f'<td class="{day_class}">{dia}</td>'
                 replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
                 html_calendario = html_calendario.replace(target, replacement)
 
-        # Adicionar CSS para estilizar o calendário
+        # Adicionar CSS para estilizar o calendário e reduzir seu tamanho
         st.markdown(
             """
             <style>
             table {
-                width: 100%;
+                width: 80%;  /* Reduz a largura do calendário */
+                margin-left: auto;
+                margin-right: auto;
                 border-collapse: collapse;
+                font-size: 12px;  /* Reduz o tamanho da fonte */
             }
             th {
                 background-color: #1b4f72;
@@ -288,7 +291,7 @@ def home_page():
             }
             td {
                 width: 14.28%;
-                height: 80px;
+                height: 60px;  /* Reduz a altura das células */
                 text-align: center;
                 vertical-align: top;
                 border: 1px solid #ddd;
@@ -299,6 +302,9 @@ def home_page():
         )
 
         st.markdown(html_calendario, unsafe_allow_html=True)
+
+        # Adicionar uma quebra de linha para espaçamento
+        st.markdown("<br>", unsafe_allow_html=True)
     else:
         st.info("Nenhum evento registrado para este mês.")
 
@@ -533,7 +539,7 @@ def products_page():
 
     # ======================= ABA: Novo Produto =======================
     with tabs[0]:
-        st.subheader("Adicionar novo produto")
+        st.subheader("Novo Produto")
         with st.form(key='product_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
@@ -1119,8 +1125,11 @@ def events_calendar_page():
         """
         <style>
         table {
-            width: 100%;
+            width: 80%;  /* Reduz a largura do calendário */
+            margin-left: auto;
+            margin-right: auto;
             border-collapse: collapse;
+            font-size: 12px;  /* Reduz o tamanho da fonte */
         }
         th {
             background-color: #1b4f72;
@@ -1129,7 +1138,7 @@ def events_calendar_page():
         }
         td {
             width: 14.28%;
-            height: 80px;
+            height: 60px;  /* Reduz a altura das células */
             text-align: center;
             vertical-align: top;
             border: 1px solid #ddd;
@@ -1140,6 +1149,9 @@ def events_calendar_page():
     )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
+
+    # Adicionar uma quebra de linha para espaçamento
+    st.markdown("<br>", unsafe_allow_html=True)
 
     # ----------------------------------------------------------------------------
     # 6) Listagem dos eventos no mês selecionado
