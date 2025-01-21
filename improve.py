@@ -165,8 +165,11 @@ def run_query(query: str, values=None, commit: bool = False):
                     return True
                 else:
                     return cursor.fetchall()
+    except psycopg2.Error as e:
+        st.error(f"Erro ao executar query: {e.pgcode} - {e.pgerror}")
+        return None
     except Exception as e:
-        st.error(f"Erro ao executar query: {e}")
+        st.error(f"Erro inesperado: {e}")
         return None
     finally:
         if conn and not conn.closed:
@@ -437,13 +440,11 @@ def orders_page():
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
     tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
 
-    # Mapeamento de países para fusos horários
-    country_timezones = {
-        "Brasil": "America/Sao_Paulo",
-        "Estados Unidos": "America/New_York",
-        "Canadá": "America/Toronto",
-        "Outros": "UTC"
-    }
+    # Definir o fuso horário de São Paulo
+    try:
+        timezone = ZoneInfo("America/Sao_Paulo")  # Para Python 3.9+
+    except Exception:
+        timezone = pytz.timezone("America/Sao_Paulo")  # Fallback usando pytz
 
     # ======================= ABA: Novo Pedido =======================
     with tabs[0]:
@@ -468,21 +469,7 @@ def orders_page():
 
         if submit_button:
             if customer_name and product and quantity > 0:
-                # Recupera o país do cliente
-                cliente_pais_query = 'SELECT pais FROM public.tb_clientes WHERE nome_completo = %s LIMIT 1'
-                cliente_pais = run_query(cliente_pais_query, (customer_name,))
-                if cliente_pais:
-                    pais = cliente_pais[0][0]
-                    timezone_str = country_timezones.get(pais, "UTC")
-                else:
-                    pais = "Outros"
-                    timezone_str = "UTC"
-
-                try:
-                    timezone = ZoneInfo(timezone_str)  # Para Python 3.9+
-                except Exception:
-                    timezone = pytz.timezone("UTC")  # Fallback usando pytz
-
+                # Definir o timestamp para São Paulo
                 creation_datetime = datetime.now(timezone)
 
                 query_insert = """
@@ -893,11 +880,11 @@ def clients_page():
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
             nome_completo = st.text_input("Nome Completo")
-            pais = st.selectbox("País", ["Brasil", "Estados Unidos", "Canadá", "Outros"])
+            # Removido o campo 'pais' para evitar erros
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
-            if nome_completo and pais:
+            if nome_completo:
                 try:
                     data_nasc = date(2000, 1, 1)  # Valor padrão ou pode ser adaptado para incluir no formulário
                     genero = "Other"  # Valor padrão ou pode ser adaptado para incluir no formulário
@@ -909,11 +896,11 @@ def clients_page():
                     q_ins = """
                         INSERT INTO public.tb_clientes(
                             nome_completo, data_nascimento, genero, telefone,
-                            email, endereco, pais, data_cadastro
+                            email, endereco, data_cadastro
                         )
-                        VALUES(%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """
-                    success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco, pais), commit=True)
+                    success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
                     if success:
                         st.toast("Cliente registrado com sucesso!")
                         refresh_data()
@@ -922,7 +909,7 @@ def clients_page():
                 except Exception as e:
                     st.error(f"Erro ao registrar cliente: {e}")
             else:
-                st.warning("Informe o nome completo e o país.")
+                st.warning("Informe o nome completo.")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
@@ -951,7 +938,7 @@ def clients_page():
                         sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                         with st.form(key='edit_client_form'):
                             edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
-                            edit_pais = st.selectbox("País", ["Brasil", "Estados Unidos", "Canadá", "Outros"], index=["Brasil", "Estados Unidos", "Canadá", "Outros"].index("Brasil") if sel_row.get("Full Name") else 0)
+                            # Removido o campo 'pais' para evitar erros
                             col_upd, col_del = st.columns(2)
                             with col_upd:
                                 update_btn = st.form_submit_button("Atualizar Cliente")
@@ -959,20 +946,20 @@ def clients_page():
                                 delete_btn = st.form_submit_button("Deletar Cliente")
 
                         if update_btn:
-                            if edit_name and edit_pais:
+                            if edit_name:
                                 q_upd = """
                                     UPDATE public.tb_clientes
-                                    SET nome_completo=%s, pais=%s
+                                    SET nome_completo=%s
                                     WHERE email=%s
                                 """
-                                success = run_query(q_upd, (edit_name, edit_pais, original_email), commit=True)
+                                success = run_query(q_upd, (edit_name, original_email), commit=True)
                                 if success:
                                     st.toast("Cliente atualizado com sucesso!")
                                     refresh_data()
                                 else:
                                     st.error("Falha ao atualizar cliente.")
                             else:
-                                st.warning("Nome completo e país não podem ficar vazios.")
+                                st.warning("Nome completo não pode ficar vazio.")
 
                         if delete_btn:
                             try:
@@ -990,148 +977,6 @@ def clients_page():
                 st.info("Nenhum cliente encontrado.")
         except Exception as e:
             st.error(f"Erro ao carregar clientes: {e}")
-
-###############################################################################
-#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
-###############################################################################
-def process_payment(client, payment_status):
-    """Processa o pagamento atualizando o status do pedido."""
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s, "Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
-    """
-    success = run_query(query, (payment_status, client), commit=True)
-    if success:
-        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
-    else:
-        st.error("Falha ao processar pagamento.")
-
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """Gera uma representação textual da nota fiscal para impressão."""
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
-
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    # Garante que df["total"] seja numérico
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade': 'sum', 'total': 'sum'}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
-
-###############################################################################
-#                          PÁGINA: NOTA FISCAL -> CASH
-###############################################################################
-def cash_page():
-    """Página para gerar e gerenciar notas fiscais."""
-    st.title("Cash")
-    open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
-    open_clients = run_query(open_clients_query, ('em aberto',))
-    client_list = [row[0] for row in open_clients] if open_clients else []
-    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
-
-    if selected_client:
-        invoice_query = """
-            SELECT "Produto", "Quantidade", "total"
-            FROM public.vw_pedido_produto
-            WHERE "Cliente"=%s AND status=%s
-        """
-        invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
-        if invoice_data:
-            df = pd.DataFrame(invoice_data, columns=["Produto", "Quantidade", "total"])
-
-            # Converte para numeric
-            df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-            total_sem_desconto = df["total"].sum()
-
-            # Cupom fixo de exemplo
-            cupons_validos = {
-                "10": 0.10,
-                "15": 0.15,
-                "20": 0.20,
-                "25": 0.25,
-                "30": 0.30,
-                "35": 0.35,
-                "40": 0.40,
-                "45": 0.45,
-                "50": 0.50,
-                "55": 0.55,
-                "60": 0.60,
-                "65": 0.65,
-                "70": 0.70,
-                "75": 0.75,
-                "80": 0.80,
-                "85": 0.85,
-                "90": 0.90,
-                "95": 0.95,
-                "100": 1.00,
-            }
-
-            coupon_code = st.text_input("CUPOM (desconto opcional)")
-            desconto_aplicado = 0.0
-            if coupon_code in cupons_validos:
-                desconto_aplicado = cupons_validos[coupon_code]
-                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
-
-            # Cálculo final
-            total_sem_desconto = float(total_sem_desconto or 0)
-            desconto_aplicado = float(desconto_aplicado or 0)
-            total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
-
-            # Gera a nota (apenas para exibição)
-            generate_invoice_for_printer(df)
-
-            st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
-            st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
-            st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
-
-            # Botões de pagamento
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                if st.button("Debit"):
-                    process_payment(selected_client, "Received - Debited")
-            with col2:
-                if st.button("Credit"):
-                    process_payment(selected_client, "Received - Credit")
-            with col3:
-                if st.button("Pix"):
-                    process_payment(selected_client, "Received - Pix")
-            with col4:
-                if st.button("Cash"):
-                    process_payment(selected_client, "Received - Cash")
-        else:
-            st.info("Não há pedidos em aberto para esse cliente.")
-    else:
-        st.warning("Selecione um cliente.")
 
 ###############################################################################
 #                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
