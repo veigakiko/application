@@ -232,6 +232,27 @@ def refresh_data():
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
+class EventCalendar(calendar.HTMLCalendar):
+    """Classe personalizada para destacar dias com eventos."""
+
+    def __init__(self, events):
+        super().__init__()
+        self.events = events  # Dicionário com dias como chaves e listas de eventos como valores
+
+    def formatday(self, day, weekday):
+        if day != 0:
+            if day in self.events:
+                # Exibir múltiplos eventos no tooltip
+                tooltip = "<br>".join([f"{event['nome']}: {event['descricao']}" for event in self.events[day]])
+                return f"<td style='background-color:blue; color:white; font-weight:bold;' title='{tooltip}'>{day}</td>"
+            else:
+                return f"<td>{day}</td>"
+        return "<td></td>"
+
+    def formatmonth(self, year, month):
+        return super().formatmonth(year, month)
+
+
 def home_page():
     """Página inicial do aplicativo."""
     st.title("Boituva Beach Club")
@@ -252,27 +273,44 @@ def home_page():
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
     if events_data:
-        df_events = pd.DataFrame(events_data, columns=["Nome do Evento", "Descrição", "Data do Evento"])
-        
+        # Organizar eventos por dia
+        events_by_day = {}
+        for event in events_data:
+            nome, descricao, data_evento = event
+            dia = data_evento.day
+            if dia not in events_by_day:
+                events_by_day[dia] = []
+            events_by_day[dia].append({"nome": nome, "descricao": descricao})
+
         # Gerar o calendário HTML com dias de eventos destacados
-        cal = calendar.HTMLCalendar(firstweekday=0)
+        cal = EventCalendar(events_by_day)
         html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
-        # Destacar dias com eventos em azul
-        for _, ev in df_events.iterrows():
-            dia = ev["Data do Evento"].day
-            # Adicionar estilo para destacar o dia
-            highlight_str = (
-                f' style="background-color:blue; color:white; font-weight:bold;" '
-                f'title="{ev["Nome do Evento"]}: {ev["Descrição"]}"'
-            )
-            # Substituir as tags <td> correspondentes ao dia
-            # Esta abordagem pode sobrescrever múltiplos dias iguais; para uma solução mais robusta, seria necessário parsing do HTML
-            html_calendario = html_calendario.replace(
-                f'<td>{dia}</td>',
-                f'<td{highlight_str}>{dia}</td>'
-            )
-        
+        # Adicionar CSS para estilizar o calendário
+        st.markdown(
+            """
+            <style>
+            table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            th {
+                background-color: #1b4f72;
+                color: white;
+                padding: 5px;
+            }
+            td {
+                width: 14.28%;
+                height: 80px;
+                text-align: center;
+                vertical-align: top;
+                border: 1px solid #ddd;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+
         st.markdown(html_calendario, unsafe_allow_html=True)
     else:
         st.info("Nenhum evento registrado para este mês.")
@@ -422,6 +460,84 @@ def orders_page():
             st.markdown('<div class="small-font">', unsafe_allow_html=True)
             st.table(df_recent_orders)
             st.markdown('</div>', unsafe_allow_html=True)
+        else:
+            st.info("Nenhum pedido encontrado.")
+
+    # ======================= ABA: Listagem de Pedidos =======================
+    with tabs[1]:
+        st.subheader("Listagem de Pedidos")
+        orders_data = st.session_state.data.get("orders", [])
+        if orders_data:
+            cols = ["Cliente","Produto","Quantidade","Data","Status"]
+            df_orders = pd.DataFrame(orders_data, columns=cols)
+            st.dataframe(df_orders, use_container_width=True)
+            download_df_as_csv(df_orders, "orders.csv", label="Baixar Pedidos CSV")
+
+            # Só exibe form de edição se for admin
+            if st.session_state.get("username") == "admin":
+                st.markdown("### Editar ou Deletar Pedido")
+                df_orders["unique_key"] = df_orders.apply(
+                    lambda row: f"{row['Cliente']}|{row['Produto']}|{row['Data'].strftime('%Y-%m-%d %H:%M:%S')}",
+                    axis=1
+                )
+                unique_keys = df_orders["unique_key"].unique().tolist()
+                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys)
+
+                if selected_key:
+                    match = df_orders[df_orders["unique_key"] == selected_key]
+                    if len(match) > 1:
+                        st.warning("Múltiplos registros com a mesma chave.")
+                    else:
+                        sel = match.iloc[0]
+                        original_client = sel["Cliente"]
+                        original_product = sel["Produto"]
+                        original_qty = sel["Quantidade"]
+                        original_date = sel["Data"]
+                        original_status = sel["Status"]
+
+                        with st.form(key='edit_order_form'):
+                            col1, col2, col3 = st.columns(3)
+                            product_data = st.session_state.data.get("products", [])
+                            product_list = [row[1] for row in product_data] if product_data else ["No products"]
+
+                            with col1:
+                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                            with col2:
+                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+                            with col3:
+                                status_opts = [
+                                    "em aberto", "Received - Debited", "Received - Credit",
+                                    "Received - Pix", "Received - Cash"
+                                ]
+                                edit_status = st.selectbox("Status", status_opts, index=status_opts.index(original_status) if original_status in status_opts else 0)
+
+                            col_upd, col_del = st.columns(2)
+                            with col_upd:
+                                update_btn = st.form_submit_button("Atualizar Pedido")
+                            with col_del:
+                                delete_btn = st.form_submit_button("Deletar Pedido")
+
+                        if delete_btn:
+                            q_del = """
+                                DELETE FROM public.tb_pedido
+                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                            """
+                            run_query(q_del, (original_client, original_product, original_date), commit=True)
+                            st.success("Pedido deletado!")
+                            refresh_data()
+
+                        if update_btn:
+                            q_upd = """
+                                UPDATE public.tb_pedido
+                                SET "Produto"=%s,"Quantidade"=%s,status=%s
+                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                            """
+                            run_query(q_upd, (
+                                edit_prod, edit_qty, edit_status,
+                                original_client, original_product, original_date
+                            ), commit=True)
+                            st.success("Pedido atualizado!")
+                            refresh_data()
         else:
             st.info("Nenhum pedido encontrado.")
 
@@ -999,23 +1115,42 @@ def events_calendar_page():
     # ----------------------------------------------------------------------------
     st.subheader("Visualização do Calendário")
 
-    cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
-
-    # Destacar dias com eventos em azul
+    # Organizar eventos por dia
+    events_by_day = {}
     for _, ev in df_filtrado.iterrows():
         dia = ev["data_evento"].day
-        # Adicionar estilo para destacar o dia
-        highlight_str = (
-            f' style="background-color:blue; color:white; font-weight:bold;" '
-            f'title="{ev["nome"]}: {ev["descricao"]}"'
-        )
-        # Substituir as tags <td> correspondentes ao dia
-        # Esta abordagem pode sobrescrever múltiplos dias iguais; para uma solução mais robusta, seria necessário parsing do HTML
-        html_calendario = html_calendario.replace(
-            f'<td>{dia}</td>',
-            f'<td{highlight_str}>{dia}</td>'
-        )
+        if dia not in events_by_day:
+            events_by_day[dia] = []
+        events_by_day[dia].append({"nome": ev["nome"], "descricao": ev["descricao"]})
+
+    # Gerar o calendário HTML com dias de eventos destacados
+    cal = EventCalendar(events_by_day)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+
+    # Adicionar CSS para estilizar o calendário
+    st.markdown(
+        """
+        <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background-color: #1b4f72;
+            color: white;
+            padding: 5px;
+        }
+        td {
+            width: 14.28%;
+            height: 80px;
+            text-align: center;
+            vertical-align: top;
+            border: 1px solid #ddd;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
 
