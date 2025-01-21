@@ -19,8 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
- # Ensure the layout is wide for better responsiveness
-
+# Ensure the layout is wide for better responsiveness
 
 #############################################################################
 #                                   UTILIDADES
@@ -56,7 +55,6 @@ def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar
         file_name=filename,
         mime="application/octet-stream"
     )
-
 
 ###############################################################################
 #                      FUNÇÕES PARA PDF E UPLOAD (OPCIONAIS)
@@ -98,7 +96,6 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     except:
         return ""
 
-
 ###############################################################################
 #                               TWILIO (WHATSAPP)
 ###############################################################################
@@ -129,7 +126,6 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
             )
     except Exception as e:
         st.error(f"Erro ao enviar WhatsApp: {e}")
-
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
@@ -175,7 +171,6 @@ def run_query(query: str, values=None, commit: bool = False):
             conn.close()
     return None
 
-
 ###############################################################################
 #                         CARREGAMENTO DE DADOS (CACHE)
 ###############################################################################
@@ -188,7 +183,7 @@ def load_all_data():
             'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
-            'SELECT supplier,product,quantity,unit_value,total_value,creation_date FROM public.tb_products ORDER BY creation_date DESC'
+            'SELECT supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
         data["clients"] = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
@@ -214,15 +209,12 @@ def refresh_data():
     load_all_data.clear()
     st.session_state.data = load_all_data()
 
-
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-    
    
-
     # Adicionando Calendar View e Lista de Eventos lado a lado
     st.subheader("Home")
     current_date = date.today()
@@ -438,7 +430,6 @@ def home_page():
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
-
 def orders_page():
     """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
@@ -590,7 +581,6 @@ def orders_page():
         else:
             st.info("Nenhum pedido encontrado.")
 
-
 def products_page():
     """Página para gerenciar produtos."""
     st.title("Produtos")
@@ -601,7 +591,7 @@ def products_page():
     with tabs[0]:
         st.subheader("Novo Produto")
         with st.form(key='product_form'):
-            col1, col2, col3, col4 = st.columns(4)
+            col1, col2, col3, col4, col5 = st.columns(5)
             with col1:
                 supplier = st.text_input("Fornecedor")
             with col2:
@@ -610,32 +600,34 @@ def products_page():
                 quantity = st.number_input("Quantidade", min_value=1, step=1)
             with col4:
                 unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f")
+            with col5:
+                custo_unitario = st.number_input("Custo Unitário", min_value=0.0, step=0.01, format="%.2f")
             creation_date = st.date_input("Data de Criação", value=date.today())
             submit_prod = st.form_submit_button("Inserir Produto")
 
         if submit_prod:
-            if supplier and product and quantity > 0 and unit_value >= 0:
+            if supplier and product and quantity > 0 and unit_value >= 0 and custo_unitario >= 0:
                 total_value = quantity * unit_value
                 q_ins = """
                     INSERT INTO public.tb_products
-                    (supplier, product, quantity, unit_value, total_value, creation_date)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    (supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
-                success = run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
+                success = run_query(q_ins, (supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date), commit=True)
                 if success:
                     st.toast("Produto adicionado com sucesso!")
                     refresh_data()
                 else:
                     st.error("Falha ao adicionar produto.")
             else:
-                st.warning("Preencha todos os campos.")
+                st.warning("Preencha todos os campos corretamente.")
 
     # ======================= ABA: Listagem de Produtos =======================
     with tabs[1]:
         st.subheader("Todos os Produtos")
         products_data = st.session_state.data.get("products", [])
         if products_data:
-            cols = ["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date"]
+            cols = ["Supplier", "Product", "Quantity", "Unit Value", "Custo Unitário", "Total Value", "Creation Date"]
             df_prod = pd.DataFrame(products_data, columns=cols)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
@@ -658,10 +650,11 @@ def products_page():
                         original_product = sel["Product"]
                         original_quantity = sel["Quantity"]
                         original_unit_value = sel["Unit Value"]
+                        original_custo_unitario = sel["Custo Unitário"]
                         original_creation_date = sel["Creation Date"]
 
                         with st.form(key='edit_product_form'):
-                            col1, col2, col3, col4 = st.columns(4)
+                            col1, col2, col3, col4, col5 = st.columns(5)
                             with col1:
                                 edit_supplier = st.text_input("Fornecedor", value=original_supplier)
                             with col2:
@@ -674,6 +667,11 @@ def products_page():
                                 edit_unit_val = st.number_input(
                                     "Valor Unitário", min_value=0.0, step=0.01, format="%.2f",
                                     value=float(original_unit_value)
+                                )
+                            with col5:
+                                edit_custo_unitario = st.number_input(
+                                    "Custo Unitário", min_value=0.0, step=0.01, format="%.2f",
+                                    value=float(original_custo_unitario)
                                 )
                             edit_creation_date = st.date_input("Data de Criação", value=original_creation_date)
 
@@ -689,12 +687,13 @@ def products_page():
                             q_upd = """
                                 UPDATE public.tb_products
                                 SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
-                                    total_value=%s, creation_date=%s
+                                    custo_unitario=%s, total_value=%s, creation_date=%s
                                 WHERE supplier=%s AND product=%s AND creation_date=%s
                             """
                             success = run_query(q_upd, (
-                                edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
-                                edit_creation_date, original_supplier, original_product, original_creation_date
+                                edit_supplier, edit_product, edit_quantity, edit_unit_val,
+                                edit_custo_unitario, edit_total_val, edit_creation_date,
+                                original_supplier, original_product, original_creation_date
                             ), commit=True)
                             if success:
                                 st.toast("Produto atualizado com sucesso!")
@@ -718,8 +717,6 @@ def products_page():
                                 st.error("Falha ao deletar produto.")
         else:
             st.info("Nenhum produto encontrado.")
-
-
 
 def stock_page():
     """Página para gerenciar estoque."""
@@ -844,7 +841,6 @@ def stock_page():
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
 
-
 def clients_page():
     """Página para gerenciar clientes."""
     st.title("Clientes")
@@ -949,7 +945,6 @@ def clients_page():
         except Exception as e:
             st.error(f"Erro ao carregar clientes: {e}")
 
-
 ###############################################################################
 #                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
 ###############################################################################
@@ -965,7 +960,6 @@ def process_payment(client, payment_status):
         st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
     else:
         st.error("Falha ao processar pagamento.")
-
 
 def generate_invoice_for_printer(df: pd.DataFrame):
     """Gera uma representação textual da nota fiscal para impressão."""
@@ -1007,7 +1001,6 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("==================================================")
 
     st.text("\n".join(invoice))
-
 
 ###############################################################################
 #                          PÁGINA: NOTA FISCAL -> CASH
@@ -1093,7 +1086,6 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
-
 
 ###############################################################################
 #                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
@@ -1354,7 +1346,6 @@ def events_calendar_page():
     else:
         st.info("Selecione um evento para editar ou excluir.")
 
-
 def loyalty_program_page():
     """Página do programa de fidelidade."""
     st.title("Programa de Fidelidade")
@@ -1391,7 +1382,6 @@ def loyalty_program_page():
             st.toast("Prêmio resgatado com sucesso!")
         else:
             st.error("Pontos insuficientes.")
-
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1505,16 +1495,14 @@ def sidebar_navigation():
         )
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logged in {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username} logged in at {st.session_state.login_time.strftime('%H:%M')}"
             )
     return selected
-
 
 ###############################################################################
 #                     PÁGINAS REMOVIDAS
 ###############################################################################
 # A página "Cardápio" foi removida completamente, incluindo sua função e referências.
-
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1561,7 +1549,6 @@ def main():
             st.session_state.logged_in = False
             st.toast("Desconectado com sucesso!")
             st.experimental_rerun()
-
 
 ###############################################################################
 #                            LOGIN PAGE
@@ -1714,7 +1701,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 if __name__ == "__main__":
     main()
