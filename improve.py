@@ -1480,7 +1480,7 @@ def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
         selected = option_menu(
-            "Beach Menu",
+            "Bar Menu",
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash",
@@ -1505,7 +1505,7 @@ def sidebar_navigation():
         )
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username} logged in {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
     return selected
 
