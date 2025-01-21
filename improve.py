@@ -222,7 +222,7 @@ def home_page():
     st.title("Beach Club Bar")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
-    # Adicionando Calendar View acima de Open Orders Summary
+    # Adicionando Calendar View e Lista de Eventos lado a lado
     st.subheader("Eventos do Mês Atual")
     current_date = date.today()
     ano_atual = current_date.year
@@ -236,60 +236,75 @@ def home_page():
         ORDER BY data_evento
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
-    if events_data:
-        # Gerar o calendário HTML com dias de eventos destacados
-        cal = calendar.HTMLCalendar(firstweekday=0)
-        html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
-        # Destacar dias com eventos em azul
-        for ev in events_data:
-            nome, descricao, data_evento = ev
-            dia = data_evento.day
-            # Ajustar a cor de fundo para azul e o texto para branco
-            highlight_str = (
-                f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
-                f'title="{nome}: {descricao}"'
+    # Criar duas colunas: uma para o calendário e outra para a lista de eventos
+    col_calendar, col_events = st.columns([3, 1], gap="large")  # Proporção 75% para calendário e 25% para eventos
+
+    with col_calendar:
+        if events_data:
+            # Gerar o calendário HTML com dias de eventos destacados
+            cal = calendar.HTMLCalendar(firstweekday=0)
+            html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+            # Destacar dias com eventos em azul
+            for ev in events_data:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                # Ajustar a cor de fundo para azul e o texto para branco
+                highlight_str = (
+                    f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
+                    f'title="{nome}: {descricao}"'
+                )
+                # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
+                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+                    target = f'<td class="{day_class}">{dia}</td>'
+                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                    html_calendario = html_calendario.replace(target, replacement)
+
+            # Adicionar CSS para estilizar o calendário
+            st.markdown(
+                """
+                <style>
+                table {
+                    width: 100%;  /* Ocupa toda a largura da coluna */
+                    border-collapse: collapse;
+                    font-size: 12px;  /* Mantém o tamanho da fonte */
+                }
+                th {
+                    background-color: #1b4f72;
+                    color: white;
+                    padding: 5px;
+                }
+                td {
+                    width: 14.28%;
+                    height: 45px;  /* Reduzida a altura das células */
+                    text-align: center;
+                    vertical-align: top;
+                    border: 1px solid #ddd;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
             )
-            # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
-            for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                target = f'<td class="{day_class}">{dia}</td>'
-                replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-                html_calendario = html_calendario.replace(target, replacement)
 
-        # Adicionar CSS para estilizar o calendário, reduzir seu tamanho e posicioná-lo à esquerda
-        st.markdown(
-            """
-            <style>
-            table {
-                width: 40%;  /* Reduzida pela metade a largura do calendário */
-                margin-left: 1%;  /* Adiciona margem à esquerda para deslocar o calendário */
-                margin-right: 0;    /* Remove a margem à direita */
-                border-collapse: collapse;
-                font-size: 12px;  /* Mantém o tamanho da fonte */
-            }
-            th {
-                background-color: #1b4f72;
-                color: white;
-                padding: 5px;
-            }
-            td {
-                width: 14.28%;
-                height: 45px;  /* Reduzida a altura das células */
-                text-align: center;
-                vertical-align: top;
-                border: 1px solid #ddd;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(html_calendario, unsafe_allow_html=True)
 
-        st.markdown(html_calendario, unsafe_allow_html=True)
+        else:
+            st.info("Nenhum evento registrado para este mês.")
 
-        # Adicionar uma quebra de linha para espaçamento
-        st.markdown("<br>", unsafe_allow_html=True)
-    else:
-        st.info("Nenhum evento registrado para este mês.")
+    with col_events:
+        st.markdown("### Lista de Eventos")
+
+        if events_data:
+            # Ordenar eventos por dia
+            events_sorted = sorted(events_data, key=lambda x: x[2].day)
+
+            for ev in events_sorted:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                st.write(f"**{dia}** - {nome}: {descricao}")
+        else:
+            st.write("Nenhum evento para este mês.")
 
     # Placeholder para notificações futuras (se necessário)
     notification_placeholder = st.empty()
@@ -348,8 +363,7 @@ def home_page():
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     
-                    # Manter Total_in_Stock como numérico, sem formatação de moeda
-                    # Se desejar, você pode formatar com separadores de milhares sem o símbolo de moeda
+                    # Formatar a coluna para exibição
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
 
                     # Resetar o índice e remover
@@ -367,8 +381,6 @@ def home_page():
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
 
-                    # Remover as seções de download PDF e envio via WhatsApp
-                    # As linhas abaixo foram removidas conforme solicitado
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
