@@ -391,6 +391,7 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -471,12 +472,14 @@ def orders_page():
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
                     VALUES (%s,%s,%s,%s,'em aberto')
                 """
-                run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
-                st.toast("Pedido registrado com sucesso!")
-                st.balloons()  # Celebrate the successful order registration
-                refresh_data()
+                success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
+                if success:
+                    st.toast("Pedido registrado com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao registrar pedido.")
             else:
-                st.toast("Por favor, preencha todos os campos corretamente.", icon="⚠️")
+                st.warning("Preencha todos os campos.")
 
         # Adicionando tabela com os últimos 5 pedidos abaixo do formulário com texto reduzido
         st.subheader("Últimos 5 Pedidos Registrados")
@@ -538,10 +541,9 @@ def orders_page():
 
                         with st.form(key='edit_order_form'):
                             col1, col2, col3 = st.columns(3)
-                            product_data = st.session_state.data.get("products", [])
-                            product_list = [row[1] for row in product_data] if product_data else ["No products"]
-
                             with col1:
+                                product_data = st.session_state.data.get("products", [])
+                                product_list = [row[1] for row in product_data] if product_data else ["No products"]
                                 edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
@@ -563,9 +565,12 @@ def orders_page():
                                 DELETE FROM public.tb_pedido
                                 WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
                             """
-                            run_query(q_del, (original_client, original_product, original_date), commit=True)
-                            st.toast("Pedido deletado com sucesso!", icon="🚫")
-                            refresh_data()
+                            success = run_query(q_del, (original_client, original_product, original_date), commit=True)
+                            if success:
+                                st.toast("Pedido deletado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao deletar pedido.")
 
                         if update_btn:
                             q_upd = """
@@ -573,12 +578,15 @@ def orders_page():
                                 SET "Produto"=%s, "Quantidade"=%s, status=%s
                                 WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
                             """
-                            run_query(q_upd, (
+                            success = run_query(q_upd, (
                                 edit_prod, edit_qty, edit_status,
                                 original_client, original_product, original_date
                             ), commit=True)
-                            st.toast("Pedido atualizado com sucesso!", icon="✅")
-                            refresh_data()
+                            if success:
+                                st.toast("Pedido atualizado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao atualizar pedido.")
         else:
             st.info("Nenhum pedido encontrado.")
 
@@ -613,12 +621,14 @@ def products_page():
                     (supplier, product, quantity, unit_value, total_value, creation_date)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
-                st.toast("Produto adicionado com sucesso!", icon="✅")
-                st.balloons()  # Celebrate the successful product addition
-                refresh_data()
+                success = run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
+                if success:
+                    st.toast("Produto adicionado com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao adicionar produto.")
             else:
-                st.toast("Por favor, preencha todos os campos corretamente.", icon="⚠️")
+                st.warning("Preencha todos os campos.")
 
     # ======================= ABA: Listagem de Produtos =======================
     with tabs[1]:
@@ -638,7 +648,6 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
-
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -682,12 +691,15 @@ def products_page():
                                     total_value=%s, creation_date=%s
                                 WHERE supplier=%s AND product=%s AND creation_date=%s
                             """
-                            run_query(q_upd, (
+                            success = run_query(q_upd, (
                                 edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
                                 edit_creation_date, original_supplier, original_product, original_creation_date
                             ), commit=True)
-                            st.toast("Produto atualizado com sucesso!", icon="✅")
-                            refresh_data()
+                            if success:
+                                st.toast("Produto atualizado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao atualizar produto.")
 
                         if delete_btn:
                             confirm = st.checkbox("Confirma a exclusão deste produto?")
@@ -696,11 +708,14 @@ def products_page():
                                     DELETE FROM public.tb_products
                                     WHERE supplier=%s AND product=%s AND creation_date=%s
                                 """
-                                run_query(q_del, (
+                                success = run_query(q_del, (
                                     original_supplier, original_product, original_creation_date
                                 ), commit=True)
-                                st.toast("Produto deletado com sucesso!", icon="🚫")
-                                refresh_data()
+                                if success:
+                                    st.toast("Produto deletado com sucesso!")
+                                    refresh_data()
+                                else:
+                                    st.error("Falha ao deletar produto.")
         else:
             st.info("Nenhum produto encontrado.")
 
@@ -735,12 +750,14 @@ def stock_page():
                     INSERT INTO public.tb_estoque("Produto","Quantidade","Transação","Data")
                     VALUES(%s,%s,%s,%s)
                 """
-                run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
-                st.toast("Movimentação de estoque registrada com sucesso!", icon="✅")
-                st.balloons()  # Celebrate the successful stock movement registration
-                refresh_data()
+                success = run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
+                if success:
+                    st.toast("Movimentação de estoque registrada com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao registrar movimentação de estoque.")
             else:
-                st.toast("Selecione produto e quantidade > 0.", icon="⚠️")
+                st.warning("Selecione produto e quantidade > 0.")
 
     # ======================= ABA: Movimentações =======================
     with tabs[1]:
@@ -761,7 +778,6 @@ def stock_page():
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
-
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -775,15 +791,10 @@ def stock_page():
 
                         with st.form(key='edit_stock_form'):
                             col1, col2, col3, col4 = st.columns(4)
-                            product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
-                            product_list = [row[0] for row in product_data] if product_data else ["No products"]
-
                             with col1:
-                                if original_product in product_list:
-                                    prod_index = product_list.index(original_product)
-                                else:
-                                    prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
+                                product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
+                                product_list = [row[0] for row in product_data] if product_data else ["No products"]
+                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
@@ -808,21 +819,27 @@ def stock_page():
                                 SET "Produto"=%s, "Quantidade"=%s, "Transação"=%s, "Data"=%s
                                 WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
                             """
-                            run_query(q_upd, (
+                            success = run_query(q_upd, (
                                 edit_prod, edit_qty, edit_trans, new_dt,
                                 original_product, original_trans, original_date
                             ), commit=True)
-                            st.toast("Estoque atualizado com sucesso!", icon="✅")
-                            refresh_data()
+                            if success:
+                                st.toast("Estoque atualizado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao atualizar estoque.")
 
                         if delete_btn:
                             q_del = """
                                 DELETE FROM public.tb_estoque
                                 WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
                             """
-                            run_query(q_del, (original_product, original_trans, original_date), commit=True)
-                            st.toast("Registro deletado com sucesso!", icon="🚫")
-                            refresh_data()
+                            success = run_query(q_del, (original_product, original_trans, original_date), commit=True)
+                            if success:
+                                st.toast("Registro deletado com sucesso!")
+                                refresh_data()
+                            else:
+                                st.error("Falha ao deletar registro.")
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
 
@@ -858,15 +875,14 @@ def clients_page():
                     """
                     success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
                     if success:
-                        st.toast("Cliente registrado com sucesso!", icon="🎉")
-                        st.balloons()  # Celebrate the successful client registration
+                        st.toast("Cliente registrado com sucesso!")
                         refresh_data()
                     else:
-                        st.toast("Falha ao registrar cliente.", icon="🚫")
+                        st.error("Falha ao registrar cliente.")
                 except Exception as e:
-                    st.toast(f"Erro ao registrar cliente: {e}", icon="🚫")
+                    st.error(f"Erro ao registrar cliente: {e}")
             else:
-                st.toast("Informe o nome completo.", icon="⚠️")
+                st.warning("Informe o nome completo.")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
@@ -889,7 +905,7 @@ def clients_page():
                             original_name, original_email = selected_display.split(" (")
                             original_email = original_email.rstrip(")")
                         except ValueError:
-                            st.toast("Seleção inválida.", icon="🚫")
+                            st.error("Seleção inválida.")
                             st.stop()
 
                         sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
@@ -910,27 +926,27 @@ def clients_page():
                                 """
                                 success = run_query(q_upd, (edit_name, original_email), commit=True)
                                 if success:
-                                    st.toast("Cliente atualizado com sucesso!", icon="✅")
+                                    st.toast("Cliente atualizado com sucesso!")
                                     refresh_data()
                                 else:
-                                    st.toast("Falha ao atualizar cliente.", icon="🚫")
+                                    st.error("Falha ao atualizar cliente.")
 
                         if delete_btn:
                             try:
                                 q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
                                 success = run_query(q_del, (original_email,), commit=True)
                                 if success:
-                                    st.toast("Cliente deletado com sucesso!", icon="🚫")
+                                    st.toast("Cliente deletado com sucesso!")
                                     refresh_data()
                                     st.experimental_rerun()
                                 else:
-                                    st.toast("Falha ao deletar cliente.", icon="🚫")
+                                    st.error("Falha ao deletar cliente.")
                             except Exception as e:
-                                st.toast(f"Erro ao deletar cliente: {e}", icon="🚫")
+                                st.error(f"Erro ao deletar cliente: {e}")
             else:
                 st.info("Nenhum cliente encontrado.")
         except Exception as e:
-            st.toast(f"Erro ao carregar clientes: {e}", icon="🚫")
+            st.error(f"Erro ao carregar clientes: {e}")
 
 
 ###############################################################################
@@ -943,7 +959,11 @@ def process_payment(client, payment_status):
         SET status=%s, "Data"=CURRENT_TIMESTAMP
         WHERE "Cliente"=%s AND status='em aberto'
     """
-    run_query(query, (payment_status, client), commit=True)
+    success = run_query(query, (payment_status, client), commit=True)
+    if success:
+        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
+    else:
+        st.error("Falha ao processar pagamento.")
 
 
 def generate_invoice_for_printer(df: pd.DataFrame):
@@ -1040,7 +1060,7 @@ def cash_page():
             desconto_aplicado = 0.0
             if coupon_code in cupons_validos:
                 desconto_aplicado = cupons_validos[coupon_code]
-                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%", icon="🎁")
+                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
 
             # Cálculo final
             total_sem_desconto = float(total_sem_desconto or 0)
@@ -1059,23 +1079,19 @@ def cash_page():
             with col1:
                 if st.button("Debit"):
                     process_payment(selected_client, "Received - Debited")
-                    st.toast("Pagamento via Débito processado!", icon="💳")
             with col2:
                 if st.button("Credit"):
                     process_payment(selected_client, "Received - Credit")
-                    st.toast("Pagamento via Crédito processado!", icon="💳")
             with col3:
                 if st.button("Pix"):
                     process_payment(selected_client, "Received - Pix")
-                    st.toast("Pagamento via Pix processado!", icon="📱")
             with col4:
                 if st.button("Cash"):
                     process_payment(selected_client, "Received - Cash")
-                    st.toast("Pagamento via Dinheiro processado!", icon="💵")
         else:
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
-        st.toast("Selecione um cliente.", icon="ℹ️")
+        st.warning("Selecione um cliente.")
 
 
 ###############################################################################
@@ -1122,12 +1138,14 @@ def events_calendar_page():
                     (nome, descricao, data_evento, inscricao_aberta, data_criacao)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.toast("Evento cadastrado com sucesso!", icon="🎉")
-            st.balloons()  # Celebrate the successful event scheduling
-            st.experimental_rerun()
+            success = run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            if success:
+                st.toast("Evento cadastrado com sucesso!")
+                st.experimental_rerun()
+            else:
+                st.error("Falha ao cadastrar evento.")
         else:
-            st.toast("Informe ao menos o nome do evento.", icon="⚠️")
+            st.warning("Informe ao menos o nome do evento.")
 
     st.markdown("---")
 
@@ -1285,7 +1303,7 @@ def events_calendar_page():
         try:
             event_id = int(event_id_str)
         except ValueError:
-            st.toast("Falha ao interpretar ID do evento.", icon="🚫")
+            st.error("Falha ao interpretar ID do evento.")
             return
 
         # Carrega dados do evento selecionado
@@ -1313,21 +1331,27 @@ def events_calendar_page():
                             SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
                             WHERE id=%s
                         """
-                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
-                        st.toast("Evento atualizado com sucesso!", icon="✅")
-                        st.experimental_rerun()
+                        success = run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                        if success:
+                            st.toast("Evento atualizado com sucesso!")
+                            st.experimental_rerun()
+                        else:
+                            st.error("Falha ao atualizar evento.")
                     else:
-                        st.toast("O campo Nome do Evento não pode ficar vazio.", icon="⚠️")
+                        st.warning("O campo Nome do Evento não pode ficar vazio.")
 
             with col_btn2:
                 # Exclusão imediata sem checkbox de confirmação
                 if st.button("Excluir Evento"):
                     q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    run_query(q_delete, (event_id,), commit=True)
-                    st.toast(f"Evento ID={event_id} excluído!", icon="🚫")
-                    st.experimental_rerun()
+                    success = run_query(q_delete, (event_id,), commit=True)
+                    if success:
+                        st.toast(f"Evento ID={event_id} excluído com sucesso!")
+                        st.experimental_rerun()
+                    else:
+                        st.error("Falha ao excluir evento.")
     else:
-        st.toast("Selecione um evento para editar ou excluir.", icon="ℹ️")
+        st.info("Selecione um evento para editar ou excluir.")
 
 
 def loyalty_program_page():
@@ -1358,14 +1382,14 @@ def loyalty_program_page():
     points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
     if st.button("Adicionar Pontos"):
         st.session_state.points += points_earned
-        st.toast(f"Pontos adicionados! Total: {st.session_state.points}", icon="🎁")
+        st.toast(f"Pontos adicionados! Total: {st.session_state.points}")
 
     if st.button("Resgatar Prêmio"):
         if st.session_state.points >= 100:
             st.session_state.points -= 100
-            st.toast("Prêmio resgatado!", icon="🏆")
+            st.toast("Prêmio resgatado com sucesso!")
         else:
-            st.toast("Pontos insuficientes.", icon="🚫")
+            st.error("Pontos insuficientes.")
 
 
 ###############################################################################
@@ -1377,16 +1401,13 @@ def initialize_session_state():
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
-    if 'username' not in st.session_state:
-        st.session_state.username = ""
-
 
 def apply_custom_css():
     """Aplica CSS customizado para melhorar a aparência do aplicativo."""
     st.markdown(
         """
         <style>
-        /* Estilos gerais */
+        /* Estilo geral */
         .css-1d391kg {
             font-size: 2em;
             color: #ff4c4c; /* Alterado para vermelho */
@@ -1403,9 +1424,6 @@ def apply_custom_css():
             .css-1d391kg {
                 font-size: 1.5em;
             }
-            .css-1aumxhk {
-                font-size: 12px;
-            }
         }
         .css-1v3fvcr {
             position: fixed;
@@ -1415,9 +1433,9 @@ def apply_custom_css():
             text-align: center;
             font-size: 12px;
         }
-        /* Botões personalizados */
+        /* Botões */
         .btn {
-            background-color: #ff4c4c !important; /* Alterado para vermelho */
+            background-color: #ff4c4c !important; /* Vermelho */
             padding: 8px 16px !important;
             font-size: 0.875rem !important;
             color: white !important;
@@ -1442,13 +1460,13 @@ def apply_custom_css():
             padding-top: 5px;
             padding-bottom: 5px;
         }
-        /* Melhorias de responsividade para tabelas */
+        /* Tabela responsiva */
         @media only screen and (max-width: 600px) {
             table {
                 font-size: 10px;
             }
-            td {
-                height: 35px;
+            th, td {
+                padding: 4px;
             }
         }
         </style>
@@ -1457,12 +1475,9 @@ def apply_custom_css():
         unsafe_allow_html=True
     )
 
-
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
-        # Novo texto acima do menu
-
         selected = option_menu(
             "Beach Menu",
             [
@@ -1543,8 +1558,7 @@ def main():
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.logged_in = False
-            st.session_state.username = ""
-            st.toast("Desconectado com sucesso!", icon="🔒")
+            st.toast("Desconectado com sucesso!")
             st.experimental_rerun()
 
 
@@ -1613,15 +1627,6 @@ def login_page():
             padding-top: 5px;
             padding-bottom: 5px;
         }
-        /* Melhorias de responsividade para tabelas */
-        @media only screen and (max-width: 600px) {
-            table {
-                font-size: 10px;
-            }
-            td {
-                height: 40px;
-            }
-        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1661,7 +1666,7 @@ def login_page():
     # ---------------------------------------------------------------------
     if btn_login:
         if not username_input or not password_input:
-            st.toast("Por favor, preencha todos os campos.", icon="⚠️")
+            st.error("Por favor, preencha todos os campos.")
         else:
             try:
                 # Credenciais de exemplo
@@ -1671,7 +1676,7 @@ def login_page():
                 caixa_user = creds["caixa_username"]
                 caixa_pass = creds["caixa_password"]
             except KeyError:
-                st.toast("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.", icon="🚫")
+                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
                 st.stop()
 
             # Verificação de login com tempo constante para evitar ataques de timing
@@ -1684,20 +1689,18 @@ def login_page():
                 st.session_state.logged_in = True
                 st.session_state.username = "admin"
                 st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como ADMIN!", icon="🎉")
-                st.balloons()  # Celebrate successful admin login
+                st.toast("Login bem-sucedido como ADMIN!")
                 st.experimental_rerun()
 
             elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "caixa"
                 st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como CAIXA!", icon="🎉")
-                st.balloons()  # Celebrate successful caixa login
+                st.toast("Login bem-sucedido como CAIXA!")
                 st.experimental_rerun()
 
             else:
-                st.toast("Usuário ou senha incorretos.", icon="🚫")
+                st.error("Usuário ou senha incorretos.")
 
     # ---------------------------------------------------------------------
     # 5) Rodapé / Footer
