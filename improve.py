@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
-st.set_page_config(page_title="Boituva Beach Club", layout="wide")
+# Ensure the layout is wide for better responsiveness
 
 #############################################################################
 #                                   UTILIDADES
@@ -156,13 +156,13 @@ def run_query(query: str, values=None, commit: bool = False):
     if not conn:
         return None
     try:
-        with conn:
-            with conn.cursor() as cursor:
-                cursor.execute(query, values or ())
-                if commit:
-                    return True
-                else:
-                    return cursor.fetchall()
+        with conn.cursor() as cursor:
+            cursor.execute(query, values or ())
+            if commit:
+                conn.commit()
+                return True
+            else:
+                return cursor.fetchall()
     except Exception as e:
         st.error(f"Erro ao executar query: {e}")
         return None
@@ -383,6 +383,7 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -460,7 +461,7 @@ def orders_page():
             if customer_name and product and quantity > 0:
                 query_insert = """
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
-                    VALUES (%s, %s, %s, %s,'em aberto')
+                    VALUES (%s,%s,%s,%s,'em aberto')
                 """
                 success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
                 if success:
@@ -627,22 +628,7 @@ def products_page():
         products_data = st.session_state.data.get("products", [])
         if products_data:
             cols = ["Supplier", "Product", "Quantity", "Unit Value", "Custo Unitário", "Total Value", "Creation Date"]
-            
-            # Adicione o seguinte código para depuração:
-            if products_data:
-                num_cols_returned = len(products_data[0])
-                st.write(f"Número de colunas retornadas: {num_cols_returned}")
-            else:
-                st.write("Nenhum dado retornado para produtos.")
-            st.write(f"Colunas esperadas: {cols}")
-            st.write(f"Dados retornados (exemplo): {products_data[:1]}")  # Mostra o primeiro registro para inspeção
-
-            try:
-                df_prod = pd.DataFrame(products_data, columns=cols)
-            except ValueError as ve:
-                st.error(f"Erro ao criar DataFrame: {ve}")
-                st.stop()
-
+            df_prod = pd.DataFrame(products_data, columns=cols)
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
 
@@ -654,7 +640,6 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
-
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
