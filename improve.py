@@ -19,6 +19,8 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
+st.set_page_config(layout="wide")  # Ensure the layout is wide for better responsiveness
+
 
 #############################################################################
 #                                   UTILIDADES
@@ -281,6 +283,14 @@ def home_page():
                     vertical-align: top;
                     border: 1px solid #ddd;
                 }
+                @media only screen and (max-width: 600px) {
+                    table {
+                        font-size: 10px;
+                    }
+                    td {
+                        height: 35px;
+                    }
+                }
                 </style>
                 """,
                 unsafe_allow_html=True
@@ -381,7 +391,6 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
-
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -463,10 +472,11 @@ def orders_page():
                     VALUES (%s,%s,%s,%s,'em aberto')
                 """
                 run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
-                st.success("Pedido registrado com sucesso!")
+                st.toast("Pedido registrado com sucesso!")
+                st.balloons()  # Celebrate the successful order registration
                 refresh_data()
             else:
-                st.warning("Preencha todos os campos.")
+                st.toast("Por favor, preencha todos os campos corretamente.", icon="⚠️")
 
         # Adicionando tabela com os últimos 5 pedidos abaixo do formulário com texto reduzido
         st.subheader("Últimos 5 Pedidos Registrados")
@@ -554,7 +564,7 @@ def orders_page():
                                 WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
                             """
                             run_query(q_del, (original_client, original_product, original_date), commit=True)
-                            st.success("Pedido deletado!")
+                            st.toast("Pedido deletado com sucesso!", icon="🚫")
                             refresh_data()
 
                         if update_btn:
@@ -567,7 +577,7 @@ def orders_page():
                                 edit_prod, edit_qty, edit_status,
                                 original_client, original_product, original_date
                             ), commit=True)
-                            st.success("Pedido atualizado!")
+                            st.toast("Pedido atualizado com sucesso!", icon="✅")
                             refresh_data()
         else:
             st.info("Nenhum pedido encontrado.")
@@ -604,10 +614,11 @@ def products_page():
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """
                 run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
-                st.success("Produto adicionado com sucesso!")
+                st.toast("Produto adicionado com sucesso!", icon="✅")
+                st.balloons()  # Celebrate the successful product addition
                 refresh_data()
             else:
-                st.warning("Preencha todos os campos.")
+                st.toast("Por favor, preencha todos os campos corretamente.", icon="⚠️")
 
     # ======================= ABA: Listagem de Produtos =======================
     with tabs[1]:
@@ -627,6 +638,7 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
+
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -674,7 +686,7 @@ def products_page():
                                 edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
                                 edit_creation_date, original_supplier, original_product, original_creation_date
                             ), commit=True)
-                            st.success("Produto atualizado!")
+                            st.toast("Produto atualizado com sucesso!", icon="✅")
                             refresh_data()
 
                         if delete_btn:
@@ -687,7 +699,7 @@ def products_page():
                                 run_query(q_del, (
                                     original_supplier, original_product, original_creation_date
                                 ), commit=True)
-                                st.success("Produto deletado!")
+                                st.toast("Produto deletado com sucesso!", icon="🚫")
                                 refresh_data()
         else:
             st.info("Nenhum produto encontrado.")
@@ -724,10 +736,11 @@ def stock_page():
                     VALUES(%s,%s,%s,%s)
                 """
                 run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
-                st.success("Movimentação de estoque registrada!")
+                st.toast("Movimentação de estoque registrada com sucesso!", icon="✅")
+                st.balloons()  # Celebrate the successful stock movement registration
                 refresh_data()
             else:
-                st.warning("Selecione produto e quantidade > 0.")
+                st.toast("Selecione produto e quantidade > 0.", icon="⚠️")
 
     # ======================= ABA: Movimentações =======================
     with tabs[1]:
@@ -748,6 +761,7 @@ def stock_page():
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
+
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -798,7 +812,7 @@ def stock_page():
                                 edit_prod, edit_qty, edit_trans, new_dt,
                                 original_product, original_trans, original_date
                             ), commit=True)
-                            st.success("Estoque atualizado!")
+                            st.toast("Estoque atualizado com sucesso!", icon="✅")
                             refresh_data()
 
                         if delete_btn:
@@ -807,7 +821,7 @@ def stock_page():
                                 WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
                             """
                             run_query(q_del, (original_product, original_trans, original_date), commit=True)
-                            st.success("Registro deletado!")
+                            st.toast("Registro deletado com sucesso!", icon="🚫")
                             refresh_data()
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
@@ -844,14 +858,15 @@ def clients_page():
                     """
                     success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
                     if success:
-                        st.success("Cliente registrado!")
+                        st.toast("Cliente registrado com sucesso!", icon="🎉")
+                        st.balloons()  # Celebrate the successful client registration
                         refresh_data()
                     else:
-                        st.error("Falha ao registrar cliente.")
+                        st.toast("Falha ao registrar cliente.", icon="🚫")
                 except Exception as e:
-                    st.error(f"Erro ao registrar cliente: {e}")
+                    st.toast(f"Erro ao registrar cliente: {e}", icon="🚫")
             else:
-                st.warning("Informe o nome completo.")
+                st.toast("Informe o nome completo.", icon="⚠️")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
@@ -874,7 +889,7 @@ def clients_page():
                             original_name, original_email = selected_display.split(" (")
                             original_email = original_email.rstrip(")")
                         except ValueError:
-                            st.error("Seleção inválida.")
+                            st.toast("Seleção inválida.", icon="🚫")
                             st.stop()
 
                         sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
@@ -895,27 +910,27 @@ def clients_page():
                                 """
                                 success = run_query(q_upd, (edit_name, original_email), commit=True)
                                 if success:
-                                    st.success("Cliente atualizado!")
+                                    st.toast("Cliente atualizado com sucesso!", icon="✅")
                                     refresh_data()
                                 else:
-                                    st.error("Falha ao atualizar cliente.")
+                                    st.toast("Falha ao atualizar cliente.", icon="🚫")
 
                         if delete_btn:
                             try:
                                 q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
                                 success = run_query(q_del, (original_email,), commit=True)
                                 if success:
-                                    st.success("Cliente deletado!")
+                                    st.toast("Cliente deletado com sucesso!", icon="🚫")
                                     refresh_data()
                                     st.experimental_rerun()
                                 else:
-                                    st.error("Falha ao deletar cliente.")
+                                    st.toast("Falha ao deletar cliente.", icon="🚫")
                             except Exception as e:
-                                st.error(f"Erro ao deletar cliente: {e}")
+                                st.toast(f"Erro ao deletar cliente: {e}", icon="🚫")
             else:
                 st.info("Nenhum cliente encontrado.")
         except Exception as e:
-            st.error(f"Erro ao carregar clientes: {e}")
+            st.toast(f"Erro ao carregar clientes: {e}", icon="🚫")
 
 
 ###############################################################################
@@ -1025,7 +1040,7 @@ def cash_page():
             desconto_aplicado = 0.0
             if coupon_code in cupons_validos:
                 desconto_aplicado = cupons_validos[coupon_code]
-                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%", icon="🎁")
 
             # Cálculo final
             total_sem_desconto = float(total_sem_desconto or 0)
@@ -1044,23 +1059,23 @@ def cash_page():
             with col1:
                 if st.button("Debit"):
                     process_payment(selected_client, "Received - Debited")
-                    st.success("Pagamento via Débito processado!")
+                    st.toast("Pagamento via Débito processado!", icon="💳")
             with col2:
                 if st.button("Credit"):
                     process_payment(selected_client, "Received - Credit")
-                    st.success("Pagamento via Crédito processado!")
+                    st.toast("Pagamento via Crédito processado!", icon="💳")
             with col3:
                 if st.button("Pix"):
                     process_payment(selected_client, "Received - Pix")
-                    st.success("Pagamento via Pix processado!")
+                    st.toast("Pagamento via Pix processado!", icon="📱")
             with col4:
                 if st.button("Cash"):
                     process_payment(selected_client, "Received - Cash")
-                    st.success("Pagamento via Dinheiro processado!")
+                    st.toast("Pagamento via Dinheiro processado!", icon="💵")
         else:
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
-        st.warning("Selecione um cliente.")
+        st.toast("Selecione um cliente.", icon="ℹ️")
 
 
 ###############################################################################
@@ -1108,10 +1123,11 @@ def events_calendar_page():
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
             run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.success("Evento cadastrado com sucesso!")
+            st.toast("Evento cadastrado com sucesso!", icon="🎉")
+            st.balloons()  # Celebrate the successful event scheduling
             st.experimental_rerun()
         else:
-            st.warning("Informe ao menos o nome do evento.")
+            st.toast("Informe ao menos o nome do evento.", icon="⚠️")
 
     st.markdown("---")
 
@@ -1202,6 +1218,15 @@ def events_calendar_page():
             vertical-align: top;
             border: 1px solid #ddd;
         }
+        @media only screen and (max-width: 600px) {
+            table {
+                width: 100%;
+                font-size: 10px;
+            }
+            td {
+                height: 40px;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1260,7 +1285,7 @@ def events_calendar_page():
         try:
             event_id = int(event_id_str)
         except ValueError:
-            st.error("Falha ao interpretar ID do evento.")
+            st.toast("Falha ao interpretar ID do evento.", icon="🚫")
             return
 
         # Carrega dados do evento selecionado
@@ -1289,20 +1314,20 @@ def events_calendar_page():
                             WHERE id=%s
                         """
                         run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
-                        st.success("Evento atualizado com sucesso!")
+                        st.toast("Evento atualizado com sucesso!", icon="✅")
                         st.experimental_rerun()
                     else:
-                        st.warning("O campo Nome do Evento não pode ficar vazio.")
+                        st.toast("O campo Nome do Evento não pode ficar vazio.", icon="⚠️")
 
             with col_btn2:
                 # Exclusão imediata sem checkbox de confirmação
                 if st.button("Excluir Evento"):
                     q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
                     run_query(q_delete, (event_id,), commit=True)
-                    st.success(f"Evento ID={event_id} excluído!")
+                    st.toast(f"Evento ID={event_id} excluído!", icon="🚫")
                     st.experimental_rerun()
     else:
-        st.info("Selecione um evento para editar ou excluir.")
+        st.toast("Selecione um evento para editar ou excluir.", icon="ℹ️")
 
 
 def loyalty_program_page():
@@ -1333,14 +1358,14 @@ def loyalty_program_page():
     points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
     if st.button("Adicionar Pontos"):
         st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+        st.toast(f"Pontos adicionados! Total: {st.session_state.points}", icon="🎁")
 
     if st.button("Resgatar Prêmio"):
         if st.session_state.points >= 100:
             st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
+            st.toast("Prêmio resgatado!", icon="🏆")
         else:
-            st.error("Pontos insuficientes.")
+            st.toast("Pontos insuficientes.", icon="🚫")
 
 
 ###############################################################################
@@ -1352,12 +1377,16 @@ def initialize_session_state():
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
+    if 'username' not in st.session_state:
+        st.session_state.username = ""
+
 
 def apply_custom_css():
     """Aplica CSS customizado para melhorar a aparência do aplicativo."""
     st.markdown(
         """
         <style>
+        /* Estilos gerais */
         .css-1d391kg {
             font-size: 2em;
             color: #ff4c4c; /* Alterado para vermelho */
@@ -1374,6 +1403,9 @@ def apply_custom_css():
             .css-1d391kg {
                 font-size: 1.5em;
             }
+            .css-1aumxhk {
+                font-size: 12px;
+            }
         }
         .css-1v3fvcr {
             position: fixed;
@@ -1383,11 +1415,48 @@ def apply_custom_css():
             text-align: center;
             font-size: 12px;
         }
+        /* Botões personalizados */
+        .btn {
+            background-color: #ff4c4c !important; /* Alterado para vermelho */
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #cc0000 !important; /* Vermelho mais escuro no hover */
+        }
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        /* Remove espaço entre os input boxes */
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important; /* Sem margem entre os campos */
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+        /* Melhorias de responsividade para tabelas */
+        @media only screen and (max-width: 600px) {
+            table {
+                font-size: 10px;
+            }
+            td {
+                height: 35px;
+            }
+        }
         </style>
         <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
         """,
         unsafe_allow_html=True
     )
+
 
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
@@ -1474,7 +1543,8 @@ def main():
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
+            st.session_state.username = ""
+            st.toast("Desconectado com sucesso!", icon="🔒")
             st.experimental_rerun()
 
 
@@ -1543,6 +1613,15 @@ def login_page():
             padding-top: 5px;
             padding-bottom: 5px;
         }
+        /* Melhorias de responsividade para tabelas */
+        @media only screen and (max-width: 600px) {
+            table {
+                font-size: 10px;
+            }
+            td {
+                height: 40px;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1577,20 +1656,12 @@ def login_page():
         # Botão de login
         btn_login = st.form_submit_button("Log in")
 
-        # Botão de login com Google (fora do formulário) - REMOVIDO
-        # st.markdown(
-        #     """
-        #     <button class='gmail-login'>Log in with Google</button>
-        #     """,
-        #     unsafe_allow_html=True
-        # )
-
     # ---------------------------------------------------------------------
     # 4) Ação: Login
     # ---------------------------------------------------------------------
     if btn_login:
         if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
+            st.toast("Por favor, preencha todos os campos.", icon="⚠️")
         else:
             try:
                 # Credenciais de exemplo
@@ -1600,7 +1671,7 @@ def login_page():
                 caixa_user = creds["caixa_username"]
                 caixa_pass = creds["caixa_password"]
             except KeyError:
-                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+                st.toast("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.", icon="🚫")
                 st.stop()
 
             # Verificação de login com tempo constante para evitar ataques de timing
@@ -1613,18 +1684,20 @@ def login_page():
                 st.session_state.logged_in = True
                 st.session_state.username = "admin"
                 st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como ADMIN!")
+                st.toast("Login bem-sucedido como ADMIN!", icon="🎉")
+                st.balloons()  # Celebrate successful admin login
                 st.experimental_rerun()
 
             elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "caixa"
                 st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como CAIXA!")
+                st.toast("Login bem-sucedido como CAIXA!", icon="🎉")
+                st.balloons()  # Celebrate successful caixa login
                 st.experimental_rerun()
 
             else:
-                st.error("Usuário ou senha incorretos.")
+                st.toast("Usuário ou senha incorretos.", icon="🚫")
 
     # ---------------------------------------------------------------------
     # 5) Rodapé / Footer
