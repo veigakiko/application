@@ -1391,27 +1391,25 @@ def sidebar_navigation():
         selected = option_menu(
             "Beach Menu",
             [
-                "Home","Orders","Products","Stock","Clients",
-                "Nota Fiscal","Backup","Cardápio",
-                "Analytics",                # Renomeado
-                "Programa de Fidelidade","Calendário de Eventos"
+                "Home", "Orders", "Products", "Stock", "Clients",
+                "Cash",
+                "Programa de Fidelidade", "Calendário de Eventos"
             ],
             icons=[
-                "house","file-text","box","list-task","layers",
-                "receipt","cloud-upload","list",
-                "bar-chart-line",          # Mudamos o ícone
-                "gift","calendar"
+                "house", "file-text", "box", "list-task", "layers",
+                "receipt",
+                "gift", "calendar"
             ],
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white","font-size":"18px"},
+                "container": {"background-color": "#d1cfcf"},  # Alterado para vermelho
+                "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
-                    "font-size": "14px","text-align":"left","margin":"0px",
-                    "color":"white","--hover-color":"#145a7c"
+                    "font-size": "14px", "text-align": "left", "margin": "0px",
+                    "color": "white", "--hover-color": "#ff1a1a"  # Hover vermelho mais escuro
                 },
-                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
+                "nav-link-selected": {"background-color": "#cc0000", "color": "white"},  # Seleção mais escura
             }
         )
         if 'login_time' in st.session_state:
