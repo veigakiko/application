@@ -238,7 +238,7 @@ def home_page():
     events_data = run_query(events_query, (ano_atual, mes_atual))
 
     # Criar duas colunas: uma para o calendário e outra para a lista de eventos
-    col_calendar, col_events = st.columns([3, 1], gap="large")  # Proporção 75% para calendário e 25% para eventos
+    col_calendar, col_events = st.columns([1, 1], gap="large")  # Proporção 50% para calendário e 50% para eventos
 
     with col_calendar:
         if events_data:
