@@ -17,9 +17,11 @@ from sklearn.linear_model import LinearRegression
 import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+from zoneinfo import ZoneInfo  # Disponível no Python 3.9+
+import pytz  # Fallback para versões anteriores
 
 # Configuração da página para layout wide
-# Ensure the layout is wide for better responsiveness
+st.set_page_config(page_title="Boituva Beach Club", layout="wide")
 
 #############################################################################
 #                                   UTILIDADES
@@ -156,13 +158,13 @@ def run_query(query: str, values=None, commit: bool = False):
     if not conn:
         return None
     try:
-        with conn.cursor() as cursor:
-            cursor.execute(query, values or ())
-            if commit:
-                conn.commit()
-                return True
-            else:
-                return cursor.fetchall()
+        with conn:
+            with conn.cursor() as cursor:
+                cursor.execute(query, values or ())
+                if commit:
+                    return True
+                else:
+                    return cursor.fetchall()
     except Exception as e:
         st.error(f"Erro ao executar query: {e}")
         return None
@@ -180,7 +182,7 @@ def load_all_data():
     data = {}
     try:
         data["orders"] = run_query(
-            'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
+            'SELECT "Cliente","Produto","Quantidade","Data","status" FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
         data["products"] = run_query(
             'SELECT supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date FROM public.tb_products ORDER BY creation_date DESC'
@@ -383,7 +385,6 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
-
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -436,6 +437,14 @@ def orders_page():
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
     tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
 
+    # Mapeamento de países para fusos horários
+    country_timezones = {
+        "Brasil": "America/Sao_Paulo",
+        "Estados Unidos": "America/New_York",
+        "Canadá": "America/Toronto",
+        "Outros": "UTC"
+    }
+
     # ======================= ABA: Novo Pedido =======================
     with tabs[0]:
         st.subheader("Novo Pedido")
@@ -459,11 +468,28 @@ def orders_page():
 
         if submit_button:
             if customer_name and product and quantity > 0:
+                # Recupera o país do cliente
+                cliente_pais_query = 'SELECT pais FROM public.tb_clientes WHERE nome_completo = %s LIMIT 1'
+                cliente_pais = run_query(cliente_pais_query, (customer_name,))
+                if cliente_pais:
+                    pais = cliente_pais[0][0]
+                    timezone_str = country_timezones.get(pais, "UTC")
+                else:
+                    pais = "Outros"
+                    timezone_str = "UTC"
+
+                try:
+                    timezone = ZoneInfo(timezone_str)  # Para Python 3.9+
+                except Exception:
+                    timezone = pytz.timezone("UTC")  # Fallback usando pytz
+
+                creation_datetime = datetime.now(timezone)
+
                 query_insert = """
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
-                    VALUES (%s,%s,%s,%s,'em aberto')
+                    VALUES (%s, %s, %s, %s,'em aberto')
                 """
-                success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
+                success = run_query(query_insert, (customer_name, product, quantity, creation_datetime), commit=True)
                 if success:
                     st.toast("Pedido registrado com sucesso!")
                     refresh_data()
@@ -628,7 +654,22 @@ def products_page():
         products_data = st.session_state.data.get("products", [])
         if products_data:
             cols = ["Supplier", "Product", "Quantity", "Unit Value", "Custo Unitário", "Total Value", "Creation Date"]
-            df_prod = pd.DataFrame(products_data, columns=cols)
+            
+            # Adicione o seguinte código para depuração:
+            if products_data:
+                num_cols_returned = len(products_data[0])
+                st.write(f"Número de colunas retornadas: {num_cols_returned}")
+            else:
+                st.write("Nenhum dado retornado para produtos.")
+            st.write(f"Colunas esperadas: {cols}")
+            st.write(f"Dados retornados (exemplo): {products_data[:1]}")  # Mostra o primeiro registro para inspeção
+
+            try:
+                df_prod = pd.DataFrame(products_data, columns=cols)
+            except ValueError as ve:
+                st.error(f"Erro ao criar DataFrame: {ve}")
+                st.stop()
+
             st.dataframe(df_prod, use_container_width=True)
             download_df_as_csv(df_prod, "products.csv", label="Baixar Produtos CSV")
 
@@ -640,6 +681,7 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
+
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -851,26 +893,27 @@ def clients_page():
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
             nome_completo = st.text_input("Nome Completo")
+            pais = st.selectbox("País", ["Brasil", "Estados Unidos", "Canadá", "Outros"])
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
-            if nome_completo:
+            if nome_completo and pais:
                 try:
-                    data_nasc = date(2000, 1, 1)
-                    genero = "Other"
-                    telefone = "0000-0000"
-                    endereco = "Endereço padrão"
+                    data_nasc = date(2000, 1, 1)  # Valor padrão ou pode ser adaptado para incluir no formulário
+                    genero = "Other"  # Valor padrão ou pode ser adaptado para incluir no formulário
+                    telefone = "0000-0000"  # Valor padrão ou pode ser adaptado para incluir no formulário
+                    endereco = "Endereço padrão"  # Valor padrão ou pode ser adaptado para incluir no formulário
                     unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
                     email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
 
                     q_ins = """
                         INSERT INTO public.tb_clientes(
                             nome_completo, data_nascimento, genero, telefone,
-                            email, endereco, data_cadastro
+                            email, endereco, pais, data_cadastro
                         )
-                        VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                        VALUES(%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     """
-                    success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
+                    success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco, pais), commit=True)
                     if success:
                         st.toast("Cliente registrado com sucesso!")
                         refresh_data()
@@ -879,7 +922,7 @@ def clients_page():
                 except Exception as e:
                     st.error(f"Erro ao registrar cliente: {e}")
             else:
-                st.warning("Informe o nome completo.")
+                st.warning("Informe o nome completo e o país.")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
@@ -908,6 +951,7 @@ def clients_page():
                         sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
                         with st.form(key='edit_client_form'):
                             edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
+                            edit_pais = st.selectbox("País", ["Brasil", "Estados Unidos", "Canadá", "Outros"], index=["Brasil", "Estados Unidos", "Canadá", "Outros"].index("Brasil") if sel_row.get("Full Name") else 0)
                             col_upd, col_del = st.columns(2)
                             with col_upd:
                                 update_btn = st.form_submit_button("Atualizar Cliente")
@@ -915,18 +959,20 @@ def clients_page():
                                 delete_btn = st.form_submit_button("Deletar Cliente")
 
                         if update_btn:
-                            if edit_name:
+                            if edit_name and edit_pais:
                                 q_upd = """
                                     UPDATE public.tb_clientes
-                                    SET nome_completo=%s
+                                    SET nome_completo=%s, pais=%s
                                     WHERE email=%s
                                 """
-                                success = run_query(q_upd, (edit_name, original_email), commit=True)
+                                success = run_query(q_upd, (edit_name, edit_pais, original_email), commit=True)
                                 if success:
                                     st.toast("Cliente atualizado com sucesso!")
                                     refresh_data()
                                 else:
                                     st.error("Falha ao atualizar cliente.")
+                            else:
+                                st.warning("Nome completo e país não podem ficar vazios.")
 
                         if delete_btn:
                             try:
