@@ -77,13 +77,13 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
 
     # Cabeçalhos
     for column in df.columns:
-        pdf.cell(40, 10, str(column), border=1)
+        pdf.cell(60, 10, str(column), border=1)
     pdf.ln()
 
     # Linhas
     for _, row in df.iterrows():
         for item in row:
-            pdf.cell(40, 10, str(item), border=1)
+            pdf.cell(60, 10, str(item), border=1)
         pdf.ln()
 
     return pdf.output(dest='S')
@@ -327,11 +327,14 @@ def home_page():
                     # Selecionar apenas as colunas desejadas
                     df_open = df_open[["Client", "Total_display"]]
 
-                    # Estilização da tabela via Pandas Styler
+                    # Resetar o índice e remover
+                    df_open = df_open.reset_index(drop=True)
+
+                    # Estilização da tabela
                     styled_df_open = df_open.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                    ]).hide_index()
+                    ])
 
                     st.write(styled_df_open)
 
@@ -360,11 +363,14 @@ def home_page():
                         # Selecionar apenas as colunas desejadas
                         df_display = df_display[["Product", "Total_in_Stock_display"]]
 
-                        # Estilização da tabela via Pandas Styler
+                        # Resetar o índice e remover
+                        df_display = df_display.reset_index(drop=True)
+
+                        # Estilização da tabela
                         styled_df_svo = df_display.style.set_table_styles([
                             {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
                             {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                        ]).hide_index()
+                        ])
 
                         st.write(styled_df_svo)
 
@@ -412,11 +418,14 @@ def home_page():
                     # Selecionar apenas as colunas desejadas
                     df_fat = df_fat[["Data", "Total do Dia"]]
 
-                    # Estilização da tabela via Pandas Styler
+                    # Resetar o índice e remover
+                    df_fat = df_fat.reset_index(drop=True)
+
+                    # Estilização da tabela
                     styled_df_fat = df_fat.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                    ]).hide_index()
+                    ])
 
                     st.write(styled_df_fat)
                 else:
@@ -480,7 +489,10 @@ def orders_page():
                 unsafe_allow_html=True
             )
             st.markdown('<div class="small-font">', unsafe_allow_html=True)
-            st.write(df_recent_orders.style.hide_index())
+            st.write(df_recent_orders.reset_index(drop=True).style.set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '4px')]},
+                {'selector': 'td', 'props': [('padding', '4px'), ('text-align', 'left')]}
+            ]))
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("Nenhum pedido encontrado.")
@@ -1205,13 +1217,13 @@ def events_calendar_page():
             "data_criacao": "Data Criação"
         }, inplace=True)
         # Selecionar apenas as colunas desejadas
-        df_display = df_display[["Data", "Total do Dia"]] if "Total do Dia" in df_display.columns else df_display[["Data", "Descrição"]]
+        df_display = df_display[["Data", "Descrição"]]
 
         # Estilização da tabela via Pandas Styler
         styled_df_events = df_display.style.set_table_styles([
-            {'selector': 'th', 'props': [('background-color', '#1b4f72'), ('color', 'white'), ('padding', '8px')]},
+            {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
             {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'left')]}
-        ]).hide_index()
+        ])
 
         st.write(styled_df_events)
 
