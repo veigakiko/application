@@ -434,7 +434,7 @@ def home_page():
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
-def orders_page():
+def def orders_page():
     """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
@@ -469,8 +469,12 @@ def orders_page():
 
         if submit_button:
             if customer_name and product and quantity > 0:
-                # Definir o timestamp para São Paulo
-                creation_datetime = datetime.now(timezone)
+                # Definir o timestamp para São Paulo e torná-lo naïve
+                creation_datetime = datetime.now(timezone).replace(tzinfo=None)
+
+                # Mostrar o timestamp para depuração
+                st.write(f"Horário de São Paulo: {datetime.now(timezone)}")
+                st.write(f"Timestamp registrado (naïve): {creation_datetime}")
 
                 query_insert = """
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
