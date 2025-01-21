@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 # Configuração da página para layout wide
-
+st.set_page_config(layout="wide")  # Ensure the layout is wide for better responsiveness
 
 #############################################################################
 #                                   UTILIDADES
@@ -33,23 +33,9 @@ def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV
     csv_data = df.to_csv(index=False)
     st.download_button(label=label, data=csv_data, file_name=filename, mime="text/csv")
 
-def download_df_as_excel(df: pd.DataFrame, filename: str, label: str = "Baixar Excel"):
-    """Permite o download de um DataFrame como Excel."""
-    import io
-    towrite = BytesIO()
-    with pd.ExcelWriter(towrite, engine='xlsxwriter') as writer:
-        df.to_excel(writer, index=False, sheet_name='Sheet1')
-    towrite.seek(0)
-    st.download_button(
-        label=label,
-        data=toscribe,
-        file_name=filename,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
-
 def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
     """Permite o download de um DataFrame como JSON."""
-    json_data = df.to_json(orient='records', lines=True)
+    json_data = df.to_json(orient='records', lines=False)  # Ajustado para JSON padrão
     st.download_button(label=label, data=json_data, file_name=filename, mime="application/json")
 
 def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
@@ -63,8 +49,12 @@ def download_df_as_parquet(df: pd.DataFrame, filename: str, label: str = "Baixar
     buffer = io.BytesIO()
     df.to_parquet(buffer, index=False)
     buffer.seek(0)
-    st.download_button(label=label, data=buffer.getvalue(), file_name=filename, mime="application/octet-stream")
-
+    st.download_button(
+        label=label,
+        data=buffer.getvalue(),
+        file_name=filename,
+        mime="application/octet-stream"
+    )
 
 ###############################################################################
 #                      FUNÇÕES PARA PDF E UPLOAD (OPCIONAIS)
@@ -106,7 +96,6 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     except:
         return ""
 
-
 ###############################################################################
 #                               TWILIO (WHATSAPP)
 ###############################################################################
@@ -137,7 +126,6 @@ def send_whatsapp(recipient_number: str, media_url: str = None):
             )
     except Exception as e:
         st.error(f"Erro ao enviar WhatsApp: {e}")
-
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
@@ -183,7 +171,6 @@ def run_query(query: str, values=None, commit: bool = False):
             conn.close()
     return None
 
-
 ###############################################################################
 #                         CARREGAMENTO DE DADOS (CACHE)
 ###############################################################################
@@ -222,7 +209,6 @@ def refresh_data():
     load_all_data.clear()
     st.session_state.data = load_all_data()
 
-
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
@@ -231,7 +217,7 @@ def home_page():
     st.title("Beach Club Bar")
     st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
 
-    # Adicionando Calendar View acima de Open Orders Summary
+    # Adicionando Calendar View e Lista de Eventos lado a lado
     st.subheader("Eventos do Mês Atual")
     current_date = date.today()
     ano_atual = current_date.year
@@ -245,60 +231,85 @@ def home_page():
         ORDER BY data_evento
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
-    if events_data:
-        # Gerar o calendário HTML com dias de eventos destacados
-        cal = calendar.HTMLCalendar(firstweekday=0)
-        html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
-        # Destacar dias com eventos em azul
-        for ev in events_data:
-            nome, descricao, data_evento = ev
-            dia = data_evento.day
-            # Ajustar a cor de fundo para azul e o texto para branco
-            highlight_str = (
-                f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
-                f'title="{nome}: {descricao}"'
+    # Criar duas colunas: uma para o calendário e outra para a lista de eventos
+    col_calendar, col_events = st.columns([1, 1], gap="large")  # Proporção 50% para calendário e 50% para eventos
+
+    with col_calendar:
+        if events_data:
+            # Gerar o calendário HTML com dias de eventos destacados
+            cal = calendar.HTMLCalendar(firstweekday=0)
+            html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+            # Destacar dias com eventos em azul
+            for ev in events_data:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                # Ajustar a cor de fundo para azul e o texto para branco
+                highlight_str = (
+                    f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
+                    f'title="{nome}: {descricao}"'
+                )
+                # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
+                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+                    target = f'<td class="{day_class}">{dia}</td>'
+                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                    html_calendario = html_calendario.replace(target, replacement)
+
+            # Adicionar CSS para estilizar o calendário
+            st.markdown(
+                """
+                <style>
+                table {
+                    width: 100%;  /* Ocupa toda a largura da coluna */
+                    border-collapse: collapse;
+                    font-size: 12px;  /* Mantém o tamanho da fonte */
+                }
+                th {
+                    background-color: #1b4f72;
+                    color: white;
+                    padding: 5px;
+                }
+                td {
+                    width: 14.28%;
+                    height: 45px;  /* Reduzida a altura das células */
+                    text-align: center;
+                    vertical-align: top;
+                    border: 1px solid #ddd;
+                }
+                @media only screen and (max-width: 600px) {
+                    table {
+                        font-size: 10px;
+                    }
+                    td {
+                        height: 35px;
+                    }
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
             )
-            # Substituir as tags <td class="mon">dia</td>, <td class="tue">dia</td>, etc.
-            for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                target = f'<td class="{day_class}">{dia}</td>'
-                replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-                html_calendario = html_calendario.replace(target, replacement)
 
-        # Adicionar CSS para estilizar o calendário e reduzir seu tamanho
-        st.markdown(
-            """
-            <style>
-            table {
-                width: 80%;  /* Reduz a largura do calendário */
-                margin-left: auto;
-                margin-right: auto;
-                border-collapse: collapse;
-                font-size: 12px;  /* Reduz o tamanho da fonte */
-            }
-            th {
-                background-color: #1b4f72;
-                color: white;
-                padding: 5px;
-            }
-            td {
-                width: 14.28%;
-                height: 60px;  /* Reduz a altura das células */
-                text-align: center;
-                vertical-align: top;
-                border: 1px solid #ddd;
-            }
-            </style>
-            """,
-            unsafe_allow_html=True
-        )
+            st.markdown(html_calendario, unsafe_allow_html=True)
 
-        st.markdown(html_calendario, unsafe_allow_html=True)
+        else:
+            st.info("Nenhum evento registrado para este mês.")
 
-        # Adicionar uma quebra de linha para espaçamento
-        st.markdown("<br>", unsafe_allow_html=True)
-    else:
-        st.info("Nenhum evento registrado para este mês.")
+    with col_events:
+        st.markdown("### Lista de Eventos")
+
+        if events_data:
+            # Ordenar eventos por dia
+            events_sorted = sorted(events_data, key=lambda x: x[2].day)
+
+            for ev in events_sorted:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                st.write(f"**{dia}** - {nome}: {descricao}")
+        else:
+            st.write("Nenhum evento para este mês.")
+
+    st.markdown("---")
 
     # Placeholder para notificações futuras (se necessário)
     notification_placeholder = st.empty()
@@ -357,8 +368,7 @@ def home_page():
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     
-                    # Manter Total_in_Stock como numérico, sem formatação de moeda
-                    # Se desejar, você pode formatar com separadores de milhares sem o símbolo de moeda
+                    # Formatar a coluna para exibição
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
 
                     # Resetar o índice e remover
@@ -376,26 +386,6 @@ def home_page():
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
 
-                    # Remover as seções de download PDF e envio via WhatsApp
-                    # As linhas abaixo foram removidas conforme solicitado
-                    # pdf_bytes = convert_df_to_pdf(df_svo)
-                    # st.subheader("Baixar PDF 'Stock vs Orders'")
-                    # st.download_button(
-                    #     label="Baixar PDF",
-                    #     data=pdf_bytes,
-                    #     file_name="stock_vs_orders_summary.pdf",
-                    #     mime="application/pdf"
-                    # )
-
-                    # st.subheader("Enviar esse PDF via WhatsApp")
-                    # phone_number = st.text_input("Número (ex: 5511999999999)")
-                    # if st.button("Upload e Enviar"):
-                    #     link = upload_pdf_to_fileio(pdf_bytes)
-                    #     if link and phone_number:
-                    #         send_whatsapp(phone_number, media_url=link)
-                    #         st.success("PDF enviado via WhatsApp com sucesso!")
-                    #     else:
-                    #         st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -442,7 +432,6 @@ def home_page():
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
-
 def orders_page():
     """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
@@ -462,11 +451,11 @@ def orders_page():
 
             col1, col2, col3 = st.columns(3)
             with col1:
-                customer_name = st.selectbox("Cliente", customer_list)
+                customer_name = st.selectbox("Cliente", customer_list, label_visibility="visible")
             with col2:
-                product = st.selectbox("Produto", product_list)
+                product = st.selectbox("Produto", product_list, label_visibility="visible")
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.slider("Quantidade", min_value=1, max_value=100, value=1, step=1)
 
             submit_button = st.form_submit_button("Registrar Pedido")
 
@@ -476,9 +465,12 @@ def orders_page():
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
                     VALUES (%s,%s,%s,%s,'em aberto')
                 """
-                run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
-                st.success("Pedido registrado com sucesso!")
-                refresh_data()
+                success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
+                if success:
+                    st.toast("Pedido registrado com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao registrar pedido.")
             else:
                 st.warning("Preencha todos os campos.")
 
@@ -542,50 +534,70 @@ def orders_page():
 
                         with st.form(key='edit_order_form'):
                             col1, col2, col3 = st.columns(3)
-                            product_data = st.session_state.data.get("products", [])
-                            product_list = [row[1] for row in product_data] if product_data else ["No products"]
-
                             with col1:
-                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                                product_data = st.session_state.data.get("products", [])
+                                product_list = [row[1] for row in product_data] if product_data else ["No products"]
+                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0, label_visibility="visible")
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+                                edit_qty = st.slider("Quantidade", min_value=1, max_value=100, value=int(original_qty), step=1)
                             with col3:
                                 status_opts = [
                                     "em aberto", "Received - Debited", "Received - Credit",
                                     "Received - Pix", "Received - Cash"
                                 ]
-                                edit_status = st.selectbox("Status", status_opts, index=status_opts.index(original_status) if original_status in status_opts else 0)
+                                edit_status = st.selectbox("Status", status_opts, index=status_opts.index(original_status) if original_status in status_opts else 0, label_visibility="visible")
 
-                            col_upd, col_del = st.columns(2)
-                            with col_upd:
-                                update_btn = st.form_submit_button("Atualizar Pedido")
-                            with col_del:
-                                delete_btn = st.form_submit_button("Deletar Pedido")
+                            # Integrate Confirmation Dialog for Update
+                            update_btn = st.form_submit_button("Atualizar Pedido")
+                            delete_btn = st.form_submit_button("Deletar Pedido")
 
+                        # Confirmation Modal for Deletion
                         if delete_btn:
-                            q_del = """
-                                DELETE FROM public.tb_pedido
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
-                            """
-                            run_query(q_del, (original_client, original_product, original_date), commit=True)
-                            st.success("Pedido deletado!")
-                            refresh_data()
+                            with st.modal("Confirmar Deleção"):
+                                st.warning("Tem certeza de que deseja deletar este pedido?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Confirmar"):
+                                        q_del = """
+                                            DELETE FROM public.tb_pedido
+                                            WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                                        """
+                                        success = run_query(q_del, (original_client, original_product, original_date), commit=True)
+                                        if success:
+                                            st.toast("Pedido deletado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao deletar pedido.")
+                                with col_confirm2:
+                                    if st.button("Cancelar"):
+                                        st.toast("Operação cancelada.")
 
+                        # Confirmation Modal for Update
                         if update_btn:
-                            q_upd = """
-                                UPDATE public.tb_pedido
-                                SET "Produto"=%s, "Quantidade"=%s, status=%s
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
-                            """
-                            run_query(q_upd, (
-                                edit_prod, edit_qty, edit_status,
-                                original_client, original_product, original_date
-                            ), commit=True)
-                            st.success("Pedido atualizado!")
-                            refresh_data()
+                            with st.modal("Confirmar Atualização"):
+                                st.info("Deseja realmente atualizar este pedido?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Sim"):
+                                        q_upd = """
+                                            UPDATE public.tb_pedido
+                                            SET "Produto"=%s, "Quantidade"=%s, status=%s
+                                            WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
+                                        """
+                                        success = run_query(q_upd, (
+                                            edit_prod, edit_qty, edit_status,
+                                            original_client, original_product, original_date
+                                        ), commit=True)
+                                        if success:
+                                            st.toast("Pedido atualizado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao atualizar pedido.")
+                                with col_confirm2:
+                                    if st.button("Não"):
+                                        st.toast("Operação cancelada.")
         else:
             st.info("Nenhum pedido encontrado.")
-
 
 def products_page():
     """Página para gerenciar produtos."""
@@ -599,14 +611,14 @@ def products_page():
         with st.form(key='product_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                supplier = st.text_input("Fornecedor")
+                supplier = st.text_input("Fornecedor", label_visibility="visible")
             with col2:
-                product = st.text_input("Produto")
+                product = st.text_input("Produto", label_visibility="visible")
             with col3:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.slider("Quantidade", min_value=1, max_value=1000, value=1, step=1)
             with col4:
-                unit_value = st.number_input("Valor Unitário", min_value=0.0, step=0.01, format="%.2f")
-            creation_date = st.date_input("Data de Criação", value=date.today())
+                unit_value = st.number_input("Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f", label_visibility="visible")
+            creation_date = st.date_input("Data de Criação", value=date.today(), label_visibility="visible")
             submit_prod = st.form_submit_button("Inserir Produto")
 
         if submit_prod:
@@ -617,9 +629,12 @@ def products_page():
                     (supplier, product, quantity, unit_value, total_value, creation_date)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
-                st.success("Produto adicionado com sucesso!")
-                refresh_data()
+                success = run_query(q_ins, (supplier, product, quantity, unit_value, total_value, creation_date), commit=True)
+                if success:
+                    st.toast("Produto adicionado com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao adicionar produto.")
             else:
                 st.warning("Preencha todos os campos.")
 
@@ -641,6 +656,7 @@ def products_page():
                 )
                 unique_keys = df_prod["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Produto:", [""] + unique_keys)
+
                 if selected_key:
                     match = df_prod[df_prod["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -656,56 +672,75 @@ def products_page():
                         with st.form(key='edit_product_form'):
                             col1, col2, col3, col4 = st.columns(4)
                             with col1:
-                                edit_supplier = st.text_input("Fornecedor", value=original_supplier)
+                                edit_supplier = st.text_input("Fornecedor", value=original_supplier, label_visibility="visible")
                             with col2:
-                                edit_product = st.text_input("Produto", value=original_product)
+                                edit_product = st.text_input("Produto", value=original_product, label_visibility="visible")
                             with col3:
-                                edit_quantity = st.number_input(
-                                    "Quantidade", min_value=1, step=1, value=int(original_quantity)
+                                edit_quantity = st.slider(
+                                    "Quantidade", min_value=1, max_value=1000, value=int(original_quantity), step=1, label_visibility="visible"
                                 )
                             with col4:
                                 edit_unit_val = st.number_input(
-                                    "Valor Unitário", min_value=0.0, step=0.01, format="%.2f",
-                                    value=float(original_unit_value)
+                                    "Valor Unitário (R$)", min_value=0.0, step=0.01, format="%.2f",
+                                    value=float(original_unit_value), label_visibility="visible"
                                 )
-                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date)
+                            edit_creation_date = st.date_input("Data de Criação", value=original_creation_date, label_visibility="visible")
 
-                            col_upd, col_del = st.columns(2)
-                            with col_upd:
-                                update_btn = st.form_submit_button("Atualizar Produto")
-                            with col_del:
-                                delete_btn = st.form_submit_button("Deletar Produto")
+                            # Integrate Confirmation Dialog for Update and Delete
+                            update_btn = st.form_submit_button("Atualizar Produto")
+                            delete_btn = st.form_submit_button("Deletar Produto")
 
-                        if update_btn:
-                            edit_total_val = edit_quantity * edit_unit_val
-                            q_upd = """
-                                UPDATE public.tb_products
-                                SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
-                                    total_value=%s, creation_date=%s
-                                WHERE supplier=%s AND product=%s AND creation_date=%s
-                            """
-                            run_query(q_upd, (
-                                edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
-                                edit_creation_date, original_supplier, original_product, original_creation_date
-                            ), commit=True)
-                            st.success("Produto atualizado!")
-                            refresh_data()
-
+                        # Confirmation Modal for Deletion
                         if delete_btn:
-                            confirm = st.checkbox("Confirma a exclusão deste produto?")
-                            if confirm:
-                                q_del = """
-                                    DELETE FROM public.tb_products
-                                    WHERE supplier=%s AND product=%s AND creation_date=%s
-                                """
-                                run_query(q_del, (
-                                    original_supplier, original_product, original_creation_date
-                                ), commit=True)
-                                st.success("Produto deletado!")
-                                refresh_data()
+                            with st.modal("Confirmar Deleção"):
+                                st.warning("Tem certeza de que deseja deletar este produto?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Confirmar"):
+                                        q_del = """
+                                            DELETE FROM public.tb_products
+                                            WHERE supplier=%s AND product=%s AND creation_date=%s
+                                        """
+                                        success = run_query(q_del, (
+                                            original_supplier, original_product, original_creation_date
+                                        ), commit=True)
+                                        if success:
+                                            st.toast("Produto deletado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao deletar produto.")
+                                with col_confirm2:
+                                    if st.button("Cancelar"):
+                                        st.toast("Operação cancelada.")
+
+                        # Confirmation Modal for Update
+                        if update_btn:
+                            with st.modal("Confirmar Atualização"):
+                                st.info("Deseja realmente atualizar este produto?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Sim"):
+                                        edit_total_val = edit_quantity * edit_unit_val
+                                        q_upd = """
+                                            UPDATE public.tb_products
+                                            SET supplier=%s, product=%s, quantity=%s, unit_value=%s,
+                                                total_value=%s, creation_date=%s
+                                            WHERE supplier=%s AND product=%s AND creation_date=%s
+                                        """
+                                        success = run_query(q_upd, (
+                                            edit_supplier, edit_product, edit_quantity, edit_unit_val, edit_total_val,
+                                            edit_creation_date, original_supplier, original_product, original_creation_date
+                                        ), commit=True)
+                                        if success:
+                                            st.toast("Produto atualizado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao atualizar produto.")
+                                with col_confirm2:
+                                    if st.button("Não"):
+                                        st.toast("Operação cancelada.")
         else:
             st.info("Nenhum produto encontrado.")
-
 
 def stock_page():
     """Página para gerenciar estoque."""
@@ -721,25 +756,29 @@ def stock_page():
         with st.form(key='stock_form'):
             col1, col2, col3, col4 = st.columns(4)
             with col1:
-                product = st.selectbox("Produto", product_list)
+                product = st.selectbox("Produto", product_list, label_visibility="visible")
             with col2:
-                quantity = st.number_input("Quantidade", min_value=1, step=1)
+                quantity = st.slider("Quantidade", min_value=1, max_value=1000, value=1, step=1, label_visibility="visible")
             with col3:
-                transaction = st.selectbox("Tipo de Transação", ["Entrada", "Saída"])
+                transaction = st.selectbox("Tipo de Transação", ["Entrada", "Saída"], label_visibility="visible")
             with col4:
-                date_input = st.date_input("Data", value=datetime.now().date())
+                # Integrate Date-Time Picker
+                date_input = st.datetime_input("Data e Hora", value=datetime.now(), label_visibility="visible")
             submit_st = st.form_submit_button("Registrar")
 
         if submit_st:
             if product and quantity > 0:
-                current_datetime = datetime.combine(date_input, datetime.min.time())
+                current_datetime = date_input
                 q_ins = """
                     INSERT INTO public.tb_estoque("Produto","Quantidade","Transação","Data")
                     VALUES(%s,%s,%s,%s)
                 """
-                run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
-                st.success("Movimentação de estoque registrada!")
-                refresh_data()
+                success = run_query(q_ins, (product, quantity, transaction, current_datetime), commit=True)
+                if success:
+                    st.toast("Movimentação de estoque registrada com sucesso!")
+                    refresh_data()
+                else:
+                    st.error("Falha ao registrar movimentação de estoque.")
             else:
                 st.warning("Selecione produto e quantidade > 0.")
 
@@ -762,6 +801,7 @@ def stock_page():
                 )
                 unique_keys = df_stock["unique_key"].unique().tolist()
                 selected_key = st.selectbox("Selecione Registro", [""] + unique_keys)
+
                 if selected_key:
                     match = df_stock[df_stock["unique_key"] == selected_key]
                     if len(match) > 1:
@@ -775,57 +815,75 @@ def stock_page():
 
                         with st.form(key='edit_stock_form'):
                             col1, col2, col3, col4 = st.columns(4)
-                            product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
-                            product_list = [row[0] for row in product_data] if product_data else ["No products"]
-
                             with col1:
-                                if original_product in product_list:
-                                    prod_index = product_list.index(original_product)
-                                else:
-                                    prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
+                                product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
+                                product_list = [row[0] for row in product_data] if product_data else ["No products"]
+                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0, label_visibility="visible")
                             with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+                                edit_qty = st.slider("Quantidade", min_value=1, max_value=1000, value=int(original_qty), step=1, label_visibility="visible")
                             with col3:
                                 edit_trans = st.selectbox(
                                     "Tipo", ["Entrada", "Saída"],
                                     index=["Entrada", "Saída"].index(original_trans)
-                                    if original_trans in ["Entrada", "Saída"] else 0
+                                    if original_trans in ["Entrada", "Saída"] else 0,
+                                    label_visibility="visible"
                                 )
                             with col4:
-                                edit_date = st.date_input("Data", value=datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date())
+                                # Integrate Date-Time Picker
+                                edit_date = st.datetime_input("Data e Hora", value=datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S"), label_visibility="visible")
 
-                            col_upd, col_del = st.columns(2)
-                            with col_upd:
-                                update_btn = st.form_submit_button("Atualizar")
-                            with col_del:
-                                delete_btn = st.form_submit_button("Deletar")
+                            # Integrate Confirmation Dialog for Update and Delete
+                            update_btn = st.form_submit_button("Atualizar")
+                            delete_btn = st.form_submit_button("Deletar")
 
-                        if update_btn:
-                            new_dt = datetime.combine(edit_date, datetime.min.time()).strftime("%Y-%m-%d %H:%M:%S")
-                            q_upd = """
-                                UPDATE public.tb_estoque
-                                SET "Produto"=%s, "Quantidade"=%s, "Transação"=%s, "Data"=%s
-                                WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
-                            """
-                            run_query(q_upd, (
-                                edit_prod, edit_qty, edit_trans, new_dt,
-                                original_product, original_trans, original_date
-                            ), commit=True)
-                            st.success("Estoque atualizado!")
-                            refresh_data()
-
+                        # Confirmation Modal for Deletion
                         if delete_btn:
-                            q_del = """
-                                DELETE FROM public.tb_estoque
-                                WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
-                            """
-                            run_query(q_del, (original_product, original_trans, original_date), commit=True)
-                            st.success("Registro deletado!")
-                            refresh_data()
+                            with st.modal("Confirmar Deleção"):
+                                st.warning("Tem certeza de que deseja deletar este registro de estoque?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Confirmar"):
+                                        q_del = """
+                                            DELETE FROM public.tb_estoque
+                                            WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
+                                        """
+                                        success = run_query(q_del, (original_product, original_trans, original_date), commit=True)
+                                        if success:
+                                            st.toast("Registro deletado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao deletar registro.")
+                                with col_confirm2:
+                                    if st.button("Cancelar"):
+                                        st.toast("Operação cancelada.")
+
+                        # Confirmation Modal for Update
+                        if update_btn:
+                            with st.modal("Confirmar Atualização"):
+                                st.info("Deseja realmente atualizar este registro de estoque?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Sim"):
+                                        new_dt = edit_date.strftime("%Y-%m-%d %H:%M:%S")
+                                        q_upd = """
+                                            UPDATE public.tb_estoque
+                                            SET "Produto"=%s, "Quantidade"=%s, "Transação"=%s, "Data"=%s
+                                            WHERE "Produto"=%s AND "Transação"=%s AND "Data"=%s
+                                        """
+                                        success = run_query(q_upd, (
+                                            edit_prod, edit_qty, edit_trans, new_dt,
+                                            original_product, original_trans, original_date
+                                        ), commit=True)
+                                        if success:
+                                            st.toast("Estoque atualizado com sucesso!")
+                                            refresh_data()
+                                        else:
+                                            st.error("Falha ao atualizar estoque.")
+                                with col_confirm2:
+                                    if st.button("Não"):
+                                        st.toast("Operação cancelada.")
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
-
 
 def clients_page():
     """Página para gerenciar clientes."""
@@ -836,85 +894,119 @@ def clients_page():
     with tabs[0]:
         st.subheader("Registrar Novo Cliente")
         with st.form(key='client_form'):
-            nome_completo = st.text_input("Nome Completo")
+            nome_completo = st.text_input("Nome Completo", label_visibility="visible")
             submit_client = st.form_submit_button("Registrar Cliente")
 
         if submit_client:
             if nome_completo:
-                data_nasc = date(2000, 1, 1)
-                genero = "Other"
-                telefone = "0000-0000"
-                endereco = "Endereço padrão"
-                unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
-                email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
+                try:
+                    data_nasc = date(2000, 1, 1)
+                    genero = "Other"
+                    telefone = "0000-0000"
+                    endereco = "Endereço padrão"
+                    unique_id = datetime.now().strftime("%Y%m%d%H%M%S")
+                    email = f"{nome_completo.replace(' ', '_').lower()}_{unique_id}@example.com"
 
-                q_ins = """
-                    INSERT INTO public.tb_clientes(
-                        nome_completo, data_nascimento, genero, telefone,
-                        email, endereco, data_cadastro
-                    )
-                    VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
-                """
-                run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
-                st.success("Cliente registrado!")
-                refresh_data()
+                    q_ins = """
+                        INSERT INTO public.tb_clientes(
+                            nome_completo, data_nascimento, genero, telefone,
+                            email, endereco, data_cadastro
+                        )
+                        VALUES(%s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    """
+                    success = run_query(q_ins, (nome_completo, data_nasc, genero, telefone, email, endereco), commit=True)
+                    if success:
+                        st.toast("Cliente registrado com sucesso!")
+                        refresh_data()
+                    else:
+                        st.error("Falha ao registrar cliente.")
+                except Exception as e:
+                    st.error(f"Erro ao registrar cliente: {e}")
             else:
                 st.warning("Informe o nome completo.")
 
     # ======================= ABA: Listagem de Clientes =======================
     with tabs[1]:
         st.subheader("Todos os Clientes")
-        clients_data = run_query("SELECT nome_completo, email FROM public.tb_clientes ORDER BY data_cadastro DESC;")
-        if clients_data:
-            cols = ["Full Name", "Email"]
-            df_clients = pd.DataFrame(clients_data, columns=cols)
-            # Exibir apenas a coluna Full Name
-            st.dataframe(df_clients[["Full Name"]], use_container_width=True)
-            download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
+        try:
+            clients_data = run_query("SELECT nome_completo, email FROM public.tb_clientes ORDER BY data_cadastro DESC;")
+            if clients_data:
+                cols = ["Full Name", "Email"]
+                df_clients = pd.DataFrame(clients_data, columns=cols)
+                # Exibir apenas a coluna Full Name
+                st.dataframe(df_clients[["Full Name"]], use_container_width=True)
+                download_df_as_csv(df_clients[["Full Name"]], "clients.csv", label="Baixar Clients CSV")
 
-            if st.session_state.get("username") == "admin":
-                st.markdown("### Editar / Deletar Cliente")
-                client_display = [""] + [f"{row['Full Name']} ({row['Email']})" for _, row in df_clients.iterrows()]
-                selected_display = st.selectbox("Selecione Cliente:", client_display)
-                if selected_display:
-                    try:
-                        original_name, original_email = selected_display.split(" (")
-                        original_email = original_email.rstrip(")")
-                    except ValueError:
-                        st.error("Seleção inválida.")
-                        st.stop()
+                if st.session_state.get("username") == "admin":
+                    st.markdown("### Editar / Deletar Cliente")
+                    client_display = [""] + [f"{row['Full Name']} ({row['Email']})" for _, row in df_clients.iterrows()]
+                    selected_display = st.selectbox("Selecione Cliente:", client_display)
 
-                    sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
-                    with st.form(key='edit_client_form'):
-                        edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"])
-                        col_upd, col_del = st.columns(2)
-                        with col_upd:
+                    if selected_display:
+                        try:
+                            original_name, original_email = selected_display.split(" (")
+                            original_email = original_email.rstrip(")")
+                        except ValueError:
+                            st.error("Seleção inválida.")
+                            st.stop()
+
+                        sel_row = df_clients[df_clients["Email"] == original_email].iloc[0]
+                        with st.form(key='edit_client_form'):
+                            edit_name = st.text_input("Nome Completo", value=sel_row["Full Name"], label_visibility="visible")
+                            # Integrate Confirmation Dialog for Update and Delete
                             update_btn = st.form_submit_button("Atualizar Cliente")
-                        with col_del:
                             delete_btn = st.form_submit_button("Deletar Cliente")
 
-                    if update_btn:
-                        if edit_name:
-                            q_upd = """
-                                UPDATE public.tb_clientes
-                                SET nome_completo=%s
-                                WHERE email=%s
-                            """
-                            run_query(q_upd, (edit_name, original_email), commit=True)
-                            st.success("Cliente atualizado!")
-                            refresh_data()
-                        else:
-                            st.warning("Informe o nome completo.")
+                        # Confirmation Modal for Deletion
+                        if delete_btn:
+                            with st.modal("Confirmar Deleção"):
+                                st.warning("Tem certeza de que deseja deletar este cliente?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Confirmar"):
+                                        try:
+                                            q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
+                                            success = run_query(q_del, (original_email,), commit=True)
+                                            if success:
+                                                st.toast("Cliente deletado com sucesso!")
+                                                refresh_data()
+                                                st.experimental_rerun()
+                                            else:
+                                                st.error("Falha ao deletar cliente.")
+                                        except Exception as e:
+                                            st.error(f"Erro ao deletar cliente: {e}")
+                                with col_confirm2:
+                                    if st.button("Cancelar"):
+                                        st.toast("Operação cancelada.")
 
-                    if delete_btn:
-                        q_del = "DELETE FROM public.tb_clientes WHERE email=%s"
-                        run_query(q_del, (original_email,), commit=True)
-                        st.success("Cliente deletado!")
-                        refresh_data()
-                        st.experimental_rerun()
-        else:
-            st.info("Nenhum cliente encontrado.")
-
+                        # Confirmation Modal for Update
+                        if update_btn:
+                            with st.modal("Confirmar Atualização"):
+                                st.info("Deseja realmente atualizar este cliente?")
+                                col_confirm1, col_confirm2 = st.columns(2)
+                                with col_confirm1:
+                                    if st.button("Sim"):
+                                        if edit_name:
+                                            q_upd = """
+                                                UPDATE public.tb_clientes
+                                                SET nome_completo=%s
+                                                WHERE email=%s
+                                            """
+                                            success = run_query(q_upd, (edit_name, original_email), commit=True)
+                                            if success:
+                                                st.toast("Cliente atualizado com sucesso!")
+                                                refresh_data()
+                                            else:
+                                                st.error("Falha ao atualizar cliente.")
+                                        else:
+                                            st.warning("O nome completo não pode ficar vazio.")
+                                with col_confirm2:
+                                    if st.button("Não"):
+                                        st.toast("Operação cancelada.")
+            else:
+                st.info("Nenhum cliente encontrado.")
+        except Exception as e:
+            st.error(f"Erro ao carregar clientes: {e}")
 
 ###############################################################################
 #                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
@@ -926,8 +1018,11 @@ def process_payment(client, payment_status):
         SET status=%s, "Data"=CURRENT_TIMESTAMP
         WHERE "Cliente"=%s AND status='em aberto'
     """
-    run_query(query, (payment_status, client), commit=True)
-
+    success = run_query(query, (payment_status, client), commit=True)
+    if success:
+        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
+    else:
+        st.error("Falha ao processar pagamento.")
 
 def generate_invoice_for_printer(df: pd.DataFrame):
     """Gera uma representação textual da nota fiscal para impressão."""
@@ -970,7 +1065,6 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 
     st.text("\n".join(invoice))
 
-
 ###############################################################################
 #                          PÁGINA: NOTA FISCAL -> CASH
 ###############################################################################
@@ -980,7 +1074,7 @@ def cash_page():
     open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
     open_clients = run_query(open_clients_query, ('em aberto',))
     client_list = [row[0] for row in open_clients] if open_clients else []
-    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
+    selected_client = st.selectbox("Selecione um Cliente", [""] + client_list, label_visibility="visible")
 
     if selected_client:
         invoice_query = """
@@ -1019,11 +1113,11 @@ def cash_page():
                 "100": 1.00,
             }
 
-            coupon_code = st.text_input("CUPOM (desconto opcional)")
+            coupon_code = st.text_input("CUPOM (desconto opcional)", label_visibility="visible")
             desconto_aplicado = 0.0
             if coupon_code in cupons_validos:
                 desconto_aplicado = cupons_validos[coupon_code]
-                st.success(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+                st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
 
             # Cálculo final
             total_sem_desconto = float(total_sem_desconto or 0)
@@ -1037,29 +1131,44 @@ def cash_page():
             st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
             st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
 
-            # Botões de pagamento
+            # Botões de pagamento com confirmação
             col1, col2, col3, col4 = st.columns(4)
             with col1:
                 if st.button("Debit"):
-                    process_payment(selected_client, "Received - Debited")
-                    st.success("Pagamento via Débito processado!")
+                    with st.modal("Confirmar Pagamento Debit"):
+                        st.info(f"Confirmar pagamento Debit para {selected_client}?")
+                        if st.button("Confirmar"):
+                            process_payment(selected_client, "Received - Debited")
+                        if st.button("Cancelar"):
+                            st.toast("Pagamento cancelado.")
             with col2:
                 if st.button("Credit"):
-                    process_payment(selected_client, "Received - Credit")
-                    st.success("Pagamento via Crédito processado!")
+                    with st.modal("Confirmar Pagamento Credit"):
+                        st.info(f"Confirmar pagamento Credit para {selected_client}?")
+                        if st.button("Confirmar"):
+                            process_payment(selected_client, "Received - Credit")
+                        if st.button("Cancelar"):
+                            st.toast("Pagamento cancelado.")
             with col3:
                 if st.button("Pix"):
-                    process_payment(selected_client, "Received - Pix")
-                    st.success("Pagamento via Pix processado!")
+                    with st.modal("Confirmar Pagamento Pix"):
+                        st.info(f"Confirmar pagamento Pix para {selected_client}?")
+                        if st.button("Confirmar"):
+                            process_payment(selected_client, "Received - Pix")
+                        if st.button("Cancelar"):
+                            st.toast("Pagamento cancelado.")
             with col4:
                 if st.button("Cash"):
-                    process_payment(selected_client, "Received - Cash")
-                    st.success("Pagamento via Dinheiro processado!")
+                    with st.modal("Confirmar Pagamento Cash"):
+                        st.info(f"Confirmar pagamento Cash para {selected_client}?")
+                        if st.button("Confirmar"):
+                            process_payment(selected_client, "Received - Cash")
+                        if st.button("Cancelar"):
+                            st.toast("Pagamento cancelado.")
         else:
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
-
 
 ###############################################################################
 #                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
@@ -1091,11 +1200,11 @@ def events_calendar_page():
     with st.form(key="new_event_form"):
         col1, col2 = st.columns(2)
         with col1:
-            nome_evento = st.text_input("Nome do Evento")
-            data_evento = st.date_input("Data do Evento", value=date.today())
+            nome_evento = st.text_input("Nome do Evento", label_visibility="visible")
+            data_evento = st.datetime_input("Data e Hora do Evento", value=datetime.now(), label_visibility="visible")
         with col2:
-            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True)
-            descricao_evento = st.text_area("Descrição do Evento")
+            inscricao_aberta = st.checkbox("Inscrição Aberta?", value=True, label_visibility="visible")
+            descricao_evento = st.text_area("Descrição do Evento", label_visibility="visible")
         btn_cadastrar = st.form_submit_button("Agendar")
 
     if btn_cadastrar:
@@ -1105,9 +1214,12 @@ def events_calendar_page():
                     (nome, descricao, data_evento, inscricao_aberta, data_criacao)
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
             """
-            run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
-            st.success("Evento cadastrado com sucesso!")
-            st.experimental_rerun()
+            success = run_query(q_insert, (nome_evento, descricao_evento, data_evento, inscricao_aberta), commit=True)
+            if success:
+                st.toast("Evento cadastrado com sucesso!")
+                st.experimental_rerun()
+            else:
+                st.error("Falha ao cadastrar evento.")
         else:
             st.warning("Informe ao menos o nome do evento.")
 
@@ -1200,6 +1312,15 @@ def events_calendar_page():
             vertical-align: top;
             border: 1px solid #ddd;
         }
+        @media only screen and (max-width: 600px) {
+            table {
+                width: 100%;
+                font-size: 10px;
+            }
+            td {
+                height: 40px;
+            }
+        }
         </style>
         """,
         unsafe_allow_html=True
@@ -1218,7 +1339,7 @@ def events_calendar_page():
         st.info("Nenhum evento neste mês.")
     else:
         df_display = df_filtrado.copy()
-        df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d")
+        df_display["data_evento"] = df_display["data_evento"].dt.strftime("%Y-%m-%d %H:%M:%S")
         df_display.rename(columns={
             "id": "ID",
             "nome": "Nome do Evento",
@@ -1246,14 +1367,14 @@ def events_calendar_page():
     st.subheader("Editar / Excluir Eventos")
 
     df_events["evento_label"] = df_events.apply(
-        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d")})',
+        lambda row: f'{row["id"]} - {row["nome"]} ({row["data_evento"].strftime("%Y-%m-%d %H:%M")})',
         axis=1
     )
     events_list = [""] + df_events["evento_label"].tolist()
     selected_event = st.selectbox("Selecione um evento:", events_list)
 
     if selected_event:
-        # Extrair ID do formato "123 - Evento X (2025-01-01)"
+        # Extrair ID do formato "123 - Evento X (2025-01-01 14:00)"
         event_id_str = selected_event.split(" - ")[0]
         try:
             event_id = int(event_id_str)
@@ -1268,40 +1389,63 @@ def events_calendar_page():
         original_data = ev_row["data_evento"]
         original_insc = ev_row["inscricao_aberta"]
 
-        with st.expander("Editar Evento", expanded=True):
+        with st.form("edit_event_form"):
             col1, col2 = st.columns(2)
             with col1:
-                new_nome = st.text_input("Nome do Evento", value=original_nome)
-                new_data = st.date_input("Data do Evento", value=original_data.date())
+                new_nome = st.text_input("Nome do Evento", value=original_nome, label_visibility="visible")
+                new_data = st.datetime_input("Data e Hora do Evento", value=original_data, label_visibility="visible")
             with col2:
-                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc)
-                new_desc = st.text_area("Descrição do Evento", value=original_desc)
+                new_insc = st.checkbox("Inscrição Aberta?", value=original_insc, label_visibility="visible")
+                new_desc = st.text_area("Descrição do Evento", value=original_desc, label_visibility="visible")
 
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if st.button("Atualizar Evento"):
-                    if new_nome.strip():
-                        q_update = """
-                            UPDATE public.tb_eventos
-                            SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
-                            WHERE id=%s
-                        """
-                        run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
-                        st.success("Evento atualizado com sucesso!")
-                        st.experimental_rerun()
-                    else:
-                        st.warning("O campo Nome do Evento não pode ficar vazio.")
+            # Integrate Confirmation Dialog for Update and Delete
+            update_btn = st.form_submit_button("Atualizar Evento")
+            delete_btn = st.form_submit_button("Excluir Evento")
 
-            with col_btn2:
-                # Exclusão imediata sem checkbox de confirmação
-                if st.button("Excluir Evento"):
-                    q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
-                    run_query(q_delete, (event_id,), commit=True)
-                    st.success(f"Evento ID={event_id} excluído!")
-                    st.experimental_rerun()
+        # Confirmation Modal for Update
+        if update_btn:
+            with st.modal("Confirmar Atualização"):
+                st.info("Deseja realmente atualizar este evento?")
+                col_confirm1, col_confirm2 = st.columns(2)
+                with col_confirm1:
+                    if st.button("Sim"):
+                        if new_nome.strip():
+                            q_update = """
+                                UPDATE public.tb_eventos
+                                SET nome=%s, descricao=%s, data_evento=%s, inscricao_aberta=%s
+                                WHERE id=%s
+                            """
+                            success = run_query(q_update, (new_nome, new_desc, new_data, new_insc, event_id), commit=True)
+                            if success:
+                                st.toast("Evento atualizado com sucesso!")
+                                st.experimental_rerun()
+                            else:
+                                st.error("Falha ao atualizar evento.")
+                        else:
+                            st.warning("O campo Nome do Evento não pode ficar vazio.")
+                with col_confirm2:
+                    if st.button("Não"):
+                        st.toast("Operação cancelada.")
+
+        # Confirmation Modal for Deletion
+        if delete_btn:
+            with st.modal("Confirmar Deleção"):
+                st.warning("Tem certeza de que deseja excluir este evento?")
+                col_confirm1, col_confirm2 = st.columns(2)
+                with col_confirm1:
+                    if st.button("Confirmar"):
+                        q_delete = "DELETE FROM public.tb_eventos WHERE id=%s;"
+                        success = run_query(q_delete, (event_id,), commit=True)
+                        if success:
+                            st.toast(f"Evento ID={event_id} excluído com sucesso!")
+                            st.experimental_rerun()
+                        else:
+                            st.error("Falha ao excluir evento.")
+                with col_confirm2:
+                    if st.button("Cancelar"):
+                        st.toast("Operação cancelada.")
     else:
         st.info("Selecione um evento para editar ou excluir.")
-
 
 def loyalty_program_page():
     """Página do programa de fidelidade."""
@@ -1328,18 +1472,17 @@ def loyalty_program_page():
     if 'points' not in st.session_state:
         st.session_state.points = 0
 
-    points_earned = st.number_input("Pontos a adicionar", min_value=0, step=1)
+    points_earned = st.slider("Pontos a adicionar", min_value=0, max_value=1000, value=0, step=1, label_visibility="visible")
     if st.button("Adicionar Pontos"):
         st.session_state.points += points_earned
-        st.success(f"Pontos adicionados! Total: {st.session_state.points}")
+        st.toast(f"Pontos adicionados! Total: {st.session_state.points}")
 
     if st.button("Resgatar Prêmio"):
         if st.session_state.points >= 100:
             st.session_state.points -= 100
-            st.success("Prêmio resgatado!")
+            st.toast("Prêmio resgatado com sucesso!")
         else:
             st.error("Pontos insuficientes.")
-
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1356,33 +1499,123 @@ def apply_custom_css():
     st.markdown(
         """
         <style>
+        /* Definir uma paleta de cores consistente */
+        :root {
+            --primary-color: #1b4f72;
+            --secondary-color: #ff4c4c;
+            --text-color: #333333;
+            --background-color: #f5f5f5;
+            --button-color: #1b4f72;
+            --button-hover-color: #184563;
+            --button-text-color: white;
+            --error-color: #ff4c4c;
+            --success-color: #28a745;
+            --warning-color: #ffc107;
+            --info-color: #17a2b8;
+        }
+
+        /* Estilo geral */
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
         .css-1d391kg {
             font-size: 2em;
-            color: #ff4c4c; /* Alterado para vermelho */
+            color: var(--secondary-color); /* Consistente com a paleta */
         }
+
+        /* DataFrame styling */
         .stDataFrame table {
             width: 100%;
             overflow-x: auto;
+            border-collapse: collapse;
         }
+
+        /* Botões */
         .css-1aumxhk {
-            background-color: #ff4c4c; /* Alterado para vermelho */
+            background-color: var(--secondary-color) !important;
+            color: var(--button-text-color) !important;
+        }
+
+        /* Sidebar styling */
+        .sidebar .sidebar-content {
+            background-color: var(--primary-color);
             color: white;
         }
+
+        /* Navegação */
+        .css-1aumxhk {
+            background-color: var(--primary-color) !important;
+            color: white !important;
+        }
+
+        .css-1aumxhk:hover {
+            background-color: var(--button-hover-color) !important;
+            color: white !important;
+        }
+
+        .css-1aumxhk[aria-selected="true"] {
+            background-color: var(--button-hover-color) !important;
+            color: white !important;
+        }
+
+        /* Botões personalizados */
+        .btn {
+            background-color: var(--button-color) !important;
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: var(--button-text-color) !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: var(--button-hover-color) !important;
+        }
+
+        /* Placeholder estilizado */
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+
+        /* Remove espaço entre os input boxes */
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important; /* Sem margem entre os campos */
+            padding-top: 5px;
+            padding-bottom: 5px;
+        }
+
+        /* Tabela responsiva */
         @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
+            table {
+                font-size: 10px;
+            }
+            th, td {
+                padding: 4px;
             }
         }
-        .css-1v3fvcr {
+
+        /* Rodapé */
+        .footer {
             position: fixed;
-            left: 0;
-            bottom: 0;
+            left: 0; 
+            bottom: 0; 
             width: 100%;
             text-align: center;
             font-size: 12px;
+            color: #999;
+            background-color: var(--background-color);
+            padding: 5px 0;
         }
         </style>
-        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
+        <div class='footer'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
         """,
         unsafe_allow_html=True
     )
@@ -1390,8 +1623,6 @@ def apply_custom_css():
 def sidebar_navigation():
     """Configura a barra lateral de navegação."""
     with st.sidebar:
-        # Novo texto acima do menu
-
         selected = option_menu(
             "Beach Menu",
             [
@@ -1407,27 +1638,25 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},  # Alterado para vermelho
+                "container": {"background-color": "var(--primary-color)"},  # Consistente com a paleta
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
-                    "color": "white", "--hover-color": "#184563"  # Hover vermelho mais escuro
+                    "color": "white", "--hover-color": "var(--button-hover-color)"
                 },
-                "nav-link-selected": {"background-color": "#184563", "color": "white"},  # Seleção mais escura
+                "nav-link-selected": {"background-color": "var(--button-hover-color)", "color": "white"},
             }
         )
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+                f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
             )
     return selected
-
 
 ###############################################################################
 #                     PÁGINAS REMOVIDAS
 ###############################################################################
 # A página "Cardápio" foi removida completamente, incluindo sua função e referências.
-
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1472,9 +1701,8 @@ def main():
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
+            st.toast("Desconectado com sucesso!")
             st.experimental_rerun()
-
 
 ###############################################################################
 #                            LOGIN PAGE
@@ -1506,19 +1734,20 @@ def login_page():
         }
         /* Botão customizado */
         .btn {
-            background-color: #ff4c4c !important; /* Alterado para vermelho */
+            background-color: var(--button-color) !important;
             padding: 8px 16px !important;
             font-size: 0.875rem !important;
-            color: white !important;
+            color: var(--button-text-color) !important;
             border: none;
             border-radius: 4px;
             font-weight: bold;
             text-align: center;
             cursor: pointer;
             width: 100%;
+            transition: background-color 0.3s;
         }
         .btn:hover {
-            background-color: #cc0000 !important; /* Vermelho mais escuro no hover */
+            background-color: var(--button-hover-color) !important;
         }
         /* Mensagem de rodapé */
         .footer {
@@ -1529,6 +1758,8 @@ def login_page():
             text-align: center;
             font-size: 12px;
             color: #999;
+            background-color: var(--background-color);
+            padding: 5px 0;
         }
         /* Placeholder estilizado */
         input::placeholder {
@@ -1568,20 +1799,12 @@ def login_page():
     with st.form("login_form", clear_on_submit=False):
         st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
-        # Campos de entrada
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
+        # Campos de entrada com labels acessíveis
+        username_input = st.text_input("Username", placeholder="Digite seu usuário", label_visibility="visible")
+        password_input = st.text_input("Password", type="password", placeholder="Digite sua senha", label_visibility="visible")
 
         # Botão de login
-        btn_login = st.form_submit_button("Log in")
-
-        # Botão de login com Google (fora do formulário) - REMOVIDO
-        # st.markdown(
-        #     """
-        #     <button class='gmail-login'>Log in with Google</button>
-        #     """,
-        #     unsafe_allow_html=True
-        # )
+        btn_login = st.form_submit_button("Log in", use_container_width=True)
 
     # ---------------------------------------------------------------------
     # 4) Ação: Login
@@ -1601,19 +1824,24 @@ def login_page():
                 st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
                 st.stop()
 
-            # Verificação de login
-            if username_input == admin_user and password_input == admin_pass:
+            # Verificação de login com tempo constante para evitar ataques de timing
+            import hmac
+
+            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
+                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
+
+            if verify_credentials(username_input, password_input, admin_user, admin_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "admin"
                 st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como ADMIN!")
+                st.toast("Login bem-sucedido como ADMIN!")
                 st.experimental_rerun()
 
-            elif username_input == caixa_user and password_input == caixa_pass:
+            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "caixa"
                 st.session_state.login_time = datetime.now()
-                st.success("Login bem-sucedido como CAIXA!")
+                st.toast("Login bem-sucedido como CAIXA!")
                 st.experimental_rerun()
 
             else:
@@ -1630,7 +1858,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
 
 if __name__ == "__main__":
     main()
