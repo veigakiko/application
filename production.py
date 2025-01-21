@@ -356,9 +356,9 @@ def home_page():
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
-                    
+                    df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
 
-                    # Selecionar apenas as colunas desejadas
+                    # Selecionar apenas as colunas desejadas para exibição
                     df_display = df_display[["Product", "Total_in_Stock_display"]]
 
                     # Resetar o índice e remover
@@ -372,9 +372,11 @@ def home_page():
 
                     st.write(styled_df_svo)
 
+                    # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {format_currency(total_val)}")
 
+                    # Gerar e baixar PDF
                     pdf_bytes = convert_df_to_pdf(df_svo)
                     st.subheader("Baixar PDF 'Stock vs Orders'")
                     st.download_button(
@@ -384,6 +386,7 @@ def home_page():
                         mime="application/pdf"
                     )
 
+                    # Enviar PDF via WhatsApp
                     st.subheader("Enviar esse PDF via WhatsApp")
                     phone_number = st.text_input("Número (ex: 5511999999999)")
                     if st.button("Upload e Enviar"):
@@ -434,6 +437,7 @@ def home_page():
 
                 st.write(styled_df_fat)
 
+                # Exibir o total geral formatado
                 st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(total_geral)}")
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
@@ -1026,7 +1030,7 @@ def cash_page():
             desconto_aplicado = float(desconto_aplicado or 0)
             total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
 
-            # Gera a nota (ainda mostrando valores sem considerar item a item o desconto, mas no final exibimos total_com_desconto)
+            # Gera a nota (apenas para exibição)
             generate_invoice_for_printer(df)
 
             st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
@@ -1403,7 +1407,7 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},  # Alterado para vermelho
+                "container": {"background-color": "#ff4c4c"},  # Alterado para vermelho
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
