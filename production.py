@@ -253,7 +253,27 @@ def home_page():
     events_data = run_query(events_query, (ano_atual, mes_atual))
     if events_data:
         df_events = pd.DataFrame(events_data, columns=["Nome do Evento", "Descrição", "Data do Evento"])
-        st.write(df_events)
+        
+        # Gerar o calendário HTML com dias de eventos destacados
+        cal = calendar.HTMLCalendar(firstweekday=0)
+        html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+        # Destacar dias com eventos em azul
+        for _, ev in df_events.iterrows():
+            dia = ev["Data do Evento"].day
+            # Adicionar estilo para destacar o dia
+            highlight_str = (
+                f' style="background-color:blue; color:white; font-weight:bold;" '
+                f'title="{ev["Nome do Evento"]}: {ev["Descrição"]}"'
+            )
+            # Substituir as tags <td> correspondentes ao dia
+            # Esta abordagem pode sobrescrever múltiplos dias iguais; para uma solução mais robusta, seria necessário parsing do HTML
+            html_calendario = html_calendario.replace(
+                f'<td>{dia}</td>',
+                f'<td{highlight_str}>{dia}</td>'
+            )
+        
+        st.markdown(html_calendario, unsafe_allow_html=True)
     else:
         st.info("Nenhum evento registrado para este mês.")
 
@@ -382,99 +402,26 @@ def orders_page():
             else:
                 st.warning("Preencha todos os campos.")
 
-        # Adicionando tabela com os últimos 5 pedidos abaixo do formulário
+        # Adicionando tabela com os últimos 5 pedidos abaixo do formulário com texto reduzido
         st.subheader("Últimos 5 Pedidos Registrados")
         orders_data = st.session_state.data.get("orders", [])
         if orders_data:
             df_recent_orders = pd.DataFrame(orders_data, columns=["Cliente","Produto","Quantidade","Data","Status"])
             df_recent_orders = df_recent_orders.head(5)
+            # Aplicando CSS para reduzir o tamanho do texto
+            st.markdown(
+                """
+                <style>
+                .small-font {
+                    font-size:10px;
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown('<div class="small-font">', unsafe_allow_html=True)
             st.table(df_recent_orders)
-        else:
-            st.info("Nenhum pedido encontrado.")
-
-    # ======================= ABA: Listagem de Pedidos =======================
-    with tabs[1]:
-        st.subheader("Listagem de Pedidos")
-        orders_data = st.session_state.data.get("orders", [])
-        if orders_data:
-            cols = ["Cliente","Produto","Quantidade","Data","Status"]
-            df_orders = pd.DataFrame(orders_data, columns=cols)
-            st.dataframe(df_orders, use_container_width=True)
-            download_df_as_csv(df_orders, "orders.csv", label="Baixar Pedidos CSV")
-
-            # Só exibe form de edição se for admin
-            if st.session_state.get("username") == "admin":
-                st.markdown("### Editar ou Deletar Pedido")
-                df_orders["unique_key"] = df_orders.apply(
-                    lambda row: f"{row['Cliente']}|{row['Produto']}|{row['Data'].strftime('%Y-%m-%d %H:%M:%S')}",
-                    axis=1
-                )
-                unique_keys = df_orders["unique_key"].unique().tolist()
-                selected_key = st.selectbox("Selecione Pedido", [""] + unique_keys)
-
-                if selected_key:
-                    match = df_orders[df_orders["unique_key"] == selected_key]
-                    if len(match) > 1:
-                        st.warning("Múltiplos registros com a mesma chave.")
-                    else:
-                        sel = match.iloc[0]
-                        original_client = sel["Cliente"]
-                        original_product = sel["Produto"]
-                        original_qty = sel["Quantidade"]
-                        original_date = sel["Data"]
-                        original_status = sel["Status"]
-
-                        with st.form(key='edit_order_form'):
-                            col1, col2, col3 = st.columns(3)
-                            product_data = st.session_state.data.get("products", [])
-                            product_list = [row[1] for row in product_data] if product_data else ["No products"]
-
-                            with col1:
-                                if original_product in product_list:
-                                    prod_index = product_list.index(original_product)
-                                else:
-                                    prod_index = 0
-                                edit_prod = st.selectbox("Produto", product_list, index=prod_index)
-                            with col2:
-                                edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
-                            with col3:
-                                status_opts = [
-                                    "em aberto", "Received - Debited", "Received - Credit",
-                                    "Received - Pix", "Received - Cash"
-                                ]
-                                if original_status in status_opts:
-                                    s_index = status_opts.index(original_status)
-                                else:
-                                    s_index = 0
-                                edit_status = st.selectbox("Status", status_opts, index=s_index)
-
-                            col_upd, col_del = st.columns(2)
-                            with col_upd:
-                                update_btn = st.form_submit_button("Atualizar Pedido")
-                            with col_del:
-                                delete_btn = st.form_submit_button("Deletar Pedido")
-
-                        if delete_btn:
-                            q_del = """
-                                DELETE FROM public.tb_pedido
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
-                            """
-                            run_query(q_del, (original_client, original_product, original_date), commit=True)
-                            st.success("Pedido deletado!")
-                            refresh_data()
-
-                        if update_btn:
-                            q_upd = """
-                                UPDATE public.tb_pedido
-                                SET "Produto"=%s,"Quantidade"=%s,status=%s
-                                WHERE "Cliente"=%s AND "Produto"=%s AND "Data"=%s
-                            """
-                            run_query(q_upd, (
-                                edit_prod, edit_qty, edit_status,
-                                original_client, original_product, original_date
-                            ), commit=True)
-                            st.success("Pedido atualizado!")
-                            refresh_data()
+            st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("Nenhum pedido encontrado.")
 
@@ -1055,43 +1002,19 @@ def events_calendar_page():
     cal = calendar.HTMLCalendar(firstweekday=0)
     html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
-    # Destacar dias com eventos
+    # Destacar dias com eventos em azul
     for _, ev in df_filtrado.iterrows():
         dia = ev["data_evento"].day
-        # Ajustamos a cor de fundo para azul e o texto para branco
+        # Adicionar estilo para destacar o dia
         highlight_str = (
             f' style="background-color:blue; color:white; font-weight:bold;" '
             f'title="{ev["nome"]}: {ev["descricao"]}"'
         )
         # Substituir as tags <td> correspondentes ao dia
-        # Isso pode sobrescrever múltiplos dias iguais; uma abordagem mais robusta pode ser necessária
+        # Esta abordagem pode sobrescrever múltiplos dias iguais; para uma solução mais robusta, seria necessário parsing do HTML
         html_calendario = html_calendario.replace(
-            f'<td class="mon">{dia}</td>',
-            f'<td class="mon"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="tue">{dia}</td>',
-            f'<td class="tue"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="wed">{dia}</td>',
-            f'<td class="wed"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="thu">{dia}</td>',
-            f'<td class="thu"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="fri">{dia}</td>',
-            f'<td class="fri"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="sat">{dia}</td>',
-            f'<td class="sat"{highlight_str}>{dia}</td>'
-        )
-        html_calendario = html_calendario.replace(
-            f'<td class="sun">{dia}</td>',
-            f'<td class="sun"{highlight_str}>{dia}</td>'
+            f'<td>{dia}</td>',
+            f'<td{highlight_str}>{dia}</td>'
         )
 
     st.markdown(html_calendario, unsafe_allow_html=True)
@@ -1180,9 +1103,6 @@ def events_calendar_page():
         st.info("Selecione um evento para editar ou excluir.")
 
 
-###############################################################################
-#                     PROGRAMA DE FIDELIDADE (AJUSTADO)
-###############################################################################
 def loyalty_program_page():
     """Página do programa de fidelidade."""
     st.title("Programa de Fidelidade")
@@ -1222,9 +1142,141 @@ def loyalty_program_page():
 
 
 ###############################################################################
-#                          PÁGINA: ANALYTICS REMOVIDA
+#                     INICIALIZAÇÃO E MAIN
 ###############################################################################
-# A página Analytics foi removida conforme solicitado.
+def initialize_session_state():
+    """Inicializa variáveis no session_state do Streamlit."""
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+
+
+def apply_custom_css():
+    """Aplica CSS customizado para melhorar a aparência do aplicativo."""
+    st.markdown(
+        """
+        <style>
+        .css-1d391kg {
+            font-size: 2em;
+            color: #1b4f72;
+        }
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .css-1aumxhk {
+            background-color: #1b4f72;
+            color: white;
+        }
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+        }
+        .css-1v3fvcr {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+        }
+        </style>
+        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+def sidebar_navigation():
+    """Configura a barra lateral de navegação."""
+    with st.sidebar:
+        # Novo texto acima do menu
+
+        selected = option_menu(
+            "Beach Menu",
+            [
+                "Home","Orders","Products","Stock","Clients",
+                "Cash",
+                "Programa de Fidelidade","Calendário de Eventos"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt",
+                "gift","calendar"
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"background-color": "#1b4f72"},
+                "icon": {"color": "white","font-size":"18px"},
+                "nav-link": {
+                    "font-size": "14px","text-align":"left","margin":"0px",
+                    "color":"white","--hover-color":"#145a7c"
+                },
+                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
+            }
+        )
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
+            )
+    return selected
+
+
+###############################################################################
+#                     PÁGINAS REMOVIDAS
+###############################################################################
+# A página "Cardápio" foi removida completamente, incluindo sua função e referências.
+
+
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
+###############################################################################
+def main():
+    """Função principal que controla a execução do aplicativo."""
+    apply_custom_css()
+    initialize_session_state()
+
+    if not st.session_state.logged_in:
+        login_page()
+        return
+
+    selected_page = sidebar_navigation()
+
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = selected_page
+    elif selected_page != st.session_state.current_page:
+        refresh_data()
+        st.session_state.current_page = selected_page
+
+    if selected_page == "Home":
+        home_page()
+    elif selected_page == "Orders":
+        orders_page()
+    elif selected_page == "Products":
+        products_page()
+    elif selected_page == "Stock":
+        stock_page()
+    elif selected_page == "Clients":
+        clients_page()
+    elif selected_page == "Cash":
+        cash_page()
+    elif selected_page == "Programa de Fidelidade":
+        loyalty_program_page()
+    elif selected_page == "Calendário de Eventos":
+        events_calendar_page()
+
+    with st.sidebar:
+        if st.button("Logout"):
+            for key in ["home_page_initialized"]:
+                if key in st.session_state:
+                    del st.session_state[key]
+            st.session_state.logged_in = False
+            st.success("Desconectado com sucesso!")
+            st.experimental_rerun()
+
 
 ###############################################################################
 #                            LOGIN PAGE
@@ -1285,7 +1337,6 @@ def login_page():
             color: #bbb;
             font-size: 0.875rem;
         }
-        /* Google login button */
         /* Removido conforme solicitação */
         /* Remove espaço entre os input boxes */
         .css-1siy2j8 input {
@@ -1382,247 +1433,6 @@ def login_page():
         """,
         unsafe_allow_html=True
     )
-
-
-###############################################################################
-#                            INICIALIZAÇÃO E MAIN
-###############################################################################
-def initialize_session_state():
-    """Inicializa variáveis no session_state do Streamlit."""
-    if 'data' not in st.session_state:
-        st.session_state.data = load_all_data()
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-
-
-def apply_custom_css():
-    """Aplica CSS customizado para melhorar a aparência do aplicativo."""
-    st.markdown(
-        """
-        <style>
-        .css-1d391kg {
-            font-size: 2em;
-            color: #1b4f72;
-        }
-        .stDataFrame table {
-            width: 100%;
-            overflow-x: auto;
-        }
-        .css-1aumxhk {
-            background-color: #1b4f72;
-            color: white;
-        }
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-        }
-        .css-1v3fvcr {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-        }
-        </style>
-        <div class='css-1v3fvcr'>© Copyright 2025 - kiko Technologies</div>
-        """,
-        unsafe_allow_html=True
-    )
-
-
-def sidebar_navigation():
-    """Configura a barra lateral de navegação."""
-    with st.sidebar:
-        # Novo texto acima do menu
-
-        selected = option_menu(
-            "Beach Menu",
-            [
-                "Home","Orders","Products","Stock","Clients",
-                "Cash","Cardápio",
-                "Programa de Fidelidade","Calendário de Eventos"
-            ],
-            icons=[
-                "house","file-text","box","list-task","layers",
-                "receipt","list",
-                "gift","calendar"
-            ],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white","font-size":"18px"},
-                "nav-link": {
-                    "font-size": "14px","text-align":"left","margin":"0px",
-                    "color":"white","--hover-color":"#145a7c"
-                },
-                "nav-link-selected": {"background-color":"#145a7c","color":"white"},
-            }
-        )
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%Hh%Mmin')}"
-            )
-    return selected
-
-
-def menu_page():
-    """Página do cardápio."""
-    st.title("Cardápio")
-
-    product_data = run_query("""
-        SELECT supplier, product, quantity, unit_value, total_value, creation_date, image_url
-        FROM public.tb_products
-        ORDER BY creation_date DESC
-    """)
-    if not product_data:
-        st.warning("Nenhum produto encontrado no cardápio.")
-        return
-
-    df_products = pd.DataFrame(
-        product_data,
-        columns=["Supplier", "Product", "Quantity", "Unit Value", "Total Value", "Creation Date", "image_url"]
-    )
-    df_products["Preço"] = df_products["Unit Value"].apply(format_currency)
-
-    tabs = st.tabs(["Ver Cardápio", "Gerenciar Imagens"])
-
-    with tabs[0]:
-        st.subheader("Itens Disponíveis")
-        for idx, row in df_products.iterrows():
-            product_name = row["Product"]
-            price_text   = row["Preço"]
-            image_url    = row["image_url"] if row["image_url"] else ""
-
-            if not image_url:
-                image_url = "https://via.placeholder.com/120"
-
-            col1, col2 = st.columns([1, 3])
-            with col1:
-                try:
-                    st.image(image_url, width=120)
-                except:
-                    st.image("https://via.placeholder.com/120", width=120)
-
-            with col2:
-                st.subheader(product_name)
-                st.write(f"Preço: {price_text}")
-
-            st.markdown("---")
-
-    with tabs[1]:
-        st.subheader("Fazer upload/editar imagem de cada produto")
-
-        product_names = df_products["Product"].unique().tolist()
-        chosen_product = st.selectbox("Selecione o produto", options=[""] + product_names)
-
-        if chosen_product:
-            df_sel = df_products[df_products["Product"] == chosen_product].head(1)
-            if not df_sel.empty:
-                current_image = df_sel.iloc[0]["image_url"] or ""
-            else:
-                current_image = ""
-
-            st.write("Imagem atual:")
-            if current_image:
-                try:
-                    st.image(current_image, width=200)
-                except:
-                    st.image("https://via.placeholder.com/200", width=200)
-            else:
-                st.image("https://via.placeholder.com/200", width=200)
-
-            uploaded_file = st.file_uploader("Carregar nova imagem do produto (PNG/JPG)", type=["png", "jpg", "jpeg"])
-
-            if st.button("Salvar Imagem"):
-                if not uploaded_file:
-                    st.warning("Selecione um arquivo antes de salvar.")
-                else:
-                    file_ext = os.path.splitext(uploaded_file.name)[1]
-                    new_filename = f"{uuid.uuid4()}{file_ext}"
-                    os.makedirs("uploaded_images", exist_ok=True)
-                    save_path = os.path.join("uploaded_images", new_filename)
-                    with open(save_path, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-
-                    update_query = """
-                        UPDATE public.tb_products
-                        SET image_url=%s
-                        WHERE product=%s
-                    """
-                    run_query(update_query, (save_path, chosen_product), commit=True)
-                    st.success("Imagem atualizada com sucesso!")
-                    refresh_data()
-                    st.experimental_rerun()
-
-
-###############################################################################
-#                     NOVA PÁGINA: ANALYTICS REMOVIDA
-###############################################################################
-# A página Analytics foi removida conforme solicitado.
-
-
-###############################################################################
-#                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
-###############################################################################
-# A página Calendário de Eventos já está incluída acima.
-
-
-###############################################################################
-#                     NOVA PÁGINA: CASH ADICIONADA
-###############################################################################
-# A página Cash já foi adicionada e renomeada a partir da página Invoice.
-
-
-###############################################################################
-#                     INICIALIZAÇÃO E MAIN
-###############################################################################
-def main():
-    """Função principal que controla a execução do aplicativo."""
-    apply_custom_css()
-    initialize_session_state()
-
-    if not st.session_state.logged_in:
-        login_page()
-        return
-
-    selected_page = sidebar_navigation()
-
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = selected_page
-    elif selected_page != st.session_state.current_page:
-        refresh_data()
-        st.session_state.current_page = selected_page
-
-    if selected_page == "Home":
-        home_page()
-    elif selected_page == "Orders":
-        orders_page()
-    elif selected_page == "Products":
-        products_page()
-    elif selected_page == "Stock":
-        stock_page()
-    elif selected_page == "Clients":
-        clients_page()
-    elif selected_page == "Cash":
-        cash_page()
-    elif selected_page == "Cardápio":
-        menu_page()
-    elif selected_page == "Programa de Fidelidade":
-        loyalty_program_page()
-    elif selected_page == "Calendário de Eventos":
-        events_calendar_page()
-
-    with st.sidebar:
-        if st.button("Logout"):
-            for key in ["home_page_initialized"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
-            st.success("Desconectado com sucesso!")
-            st.experimental_rerun()
 
 
 if __name__ == "__main__":
