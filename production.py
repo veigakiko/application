@@ -1413,7 +1413,7 @@ def sidebar_navigation():
                     "font-size": "14px", "text-align": "left", "margin": "0px",
                     "color": "white", "--hover-color": "#184563"  # Hover vermelho mais escuro
                 },
-                "nav-link-selected": {"background-color": "#cc0000", "color": "white"},  # Seleção mais escura
+                "nav-link-selected": {"background-color": "#184563", "color": "white"},  # Seleção mais escura
             }
         )
         if 'login_time' in st.session_state:
