@@ -256,14 +256,14 @@ def home_page():
                 replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
                 html_calendario = html_calendario.replace(target, replacement)
 
-        # Adicionar CSS para estilizar o calendário e reduzir seu tamanho
+        # Adicionar CSS para estilizar o calendário, reduzir seu tamanho e posicioná-lo à esquerda
         st.markdown(
             """
             <style>
             table {
                 width: 40%;  /* Reduzida pela metade a largura do calendário */
-                margin-left: auto;
-                margin-right: auto;
+                margin-left: 10%;  /* Adiciona margem à esquerda para deslocar o calendário */
+                margin-right: 0;    /* Remove a margem à direita */
                 border-collapse: collapse;
                 font-size: 12px;  /* Mantém o tamanho da fonte */
             }
