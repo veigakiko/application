@@ -1411,7 +1411,7 @@ def sidebar_navigation():
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
-                    "color": "white", "--hover-color": "#ff1a1a"  # Hover vermelho mais escuro
+                    "color": "white", "--hover-color": "#184563"  # Hover vermelho mais escuro
                 },
                 "nav-link-selected": {"background-color": "#cc0000", "color": "white"},  # Seleção mais escura
             }
