@@ -305,131 +305,128 @@ def home_page():
 
     # Exibir sumários apenas para usuários admin
     if st.session_state.get("username") == "admin":
-        # Colocar os sumários lado a lado usando colunas
-        col1, col2, col3 = st.columns(3)
-
+        # Exibir as três seções uma abaixo da outra
         # ======================= Open Orders Summary =======================
-        with col1:
-            with st.expander("Open Orders Summary"):
-                open_orders_query = """
-                    SELECT "Cliente", SUM("total") AS Total
-                    FROM public.vw_pedido_produto
-                    WHERE status=%s
-                    GROUP BY "Cliente"
-                    ORDER BY "Cliente" DESC
-                """
-                open_orders_data = run_query(open_orders_query, ('em aberto',))
-                if open_orders_data:
-                    df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
-                    total_open = df_open["Total"].sum()
-                    df_open["Total_display"] = df_open["Total"].apply(format_currency)
+        with st.expander("Open Orders Summary"):
+            open_orders_query = """
+                SELECT "Cliente", SUM("total") AS Total
+                FROM public.vw_pedido_produto
+                WHERE status=%s
+                GROUP BY "Cliente"
+                ORDER BY "Cliente" DESC
+            """
+            open_orders_data = run_query(open_orders_query, ('em aberto',))
+            if open_orders_data:
+                df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
+                total_open = df_open["Total"].sum()
+                df_open["Total_display"] = df_open["Total"].apply(format_currency)
 
-                    # Selecionar apenas as colunas desejadas
-                    df_open = df_open[["Client", "Total_display"]]
+                # Selecionar apenas as colunas desejadas
+                df_open = df_open[["Client", "Total_display"]]
 
-                    # Resetar o índice e remover
-                    df_open = df_open.reset_index(drop=True)
+                # Resetar o índice e remover
+                df_open = df_open.reset_index(drop=True)
 
-                    # Estilização da tabela
-                    styled_df_open = df_open.style.set_table_styles([
-                        {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
-                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                    ])
+                # Estilização da tabela
+                styled_df_open = df_open.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
 
-                    st.write(styled_df_open)
+                st.write(styled_df_open)
 
-                    st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
-                else:
-                    st.info("Nenhum pedido em aberto encontrado.")
+                st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
+            else:
+                st.info("Nenhum pedido em aberto encontrado.")
 
         # ======================= Stock vs. Orders Summary =======================
-        with col2:
-            with st.expander("Stock vs. Orders Summary"):
-                try:
-                    stock_vs_orders_query = """
-                        SELECT product, stock_quantity, orders_quantity, total_in_stock
-                        FROM public.vw_stock_vs_orders_summary
-                    """
-                    stock_vs_orders_data = run_query(stock_vs_orders_query)
-                    if stock_vs_orders_data:
-                        df_svo = pd.DataFrame(
-                            stock_vs_orders_data,
-                            columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
-                        )
-                        df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
-                        df_display = df_svo[["Product", "Total_in_Stock"]]
-                        df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
-
-                        # Selecionar apenas as colunas desejadas
-                        df_display = df_display[["Product", "Total_in_Stock_display"]]
-
-                        # Resetar o índice e remover
-                        df_display = df_display.reset_index(drop=True)
-
-                        # Estilização da tabela
-                        styled_df_svo = df_display.style.set_table_styles([
-                            {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
-                            {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                        ])
-
-                        st.write(styled_df_svo)
-
-                        total_val = df_svo["Total_in_Stock"].sum()
-                        st.markdown(f"**Total Geral (Stock vs. Orders):** {format_currency(total_val)}")
-
-                        pdf_bytes = convert_df_to_pdf(df_svo)
-                        st.subheader("Baixar PDF 'Stock vs Orders'")
-                        st.download_button(
-                            label="Baixar PDF",
-                            data=pdf_bytes,
-                            file_name="stock_vs_orders_summary.pdf",
-                            mime="application/pdf"
-                        )
-
-                        st.subheader("Enviar esse PDF via WhatsApp")
-                        phone_number = st.text_input("Número (ex: 5511999999999)")
-                        if st.button("Upload e Enviar"):
-                            link = upload_pdf_to_fileio(pdf_bytes)
-                            if link and phone_number:
-                                send_whatsapp(phone_number, media_url=link)
-                                st.success("PDF enviado via WhatsApp com sucesso!")
-                            else:
-                                st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
-                    else:
-                        st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
-                except Exception as e:
-                    st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
-
-        # ======================= Amount Invoiced =======================
-        with col3:
-            with st.expander("Amount Invoiced"):
-                faturado_query = """
-                    SELECT date("Data") as dt, SUM("total") as total_dia
-                    FROM public.vw_pedido_produto
-                    WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
-                    GROUP BY date("Data")
-                    ORDER BY date("Data")
+        with st.expander("Stock vs. Orders Summary"):
+            try:
+                stock_vs_orders_query = """
+                    SELECT product, stock_quantity, orders_quantity, total_in_stock
+                    FROM public.vw_stock_vs_orders_summary
                 """
-                faturado_data = run_query(faturado_query)
-                if faturado_data:
-                    df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
-                    df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
+                stock_vs_orders_data = run_query(stock_vs_orders_query)
+                if stock_vs_orders_data:
+                    df_svo = pd.DataFrame(
+                        stock_vs_orders_data,
+                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+                    )
+                    df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                    df_display = df_svo[["Product", "Total_in_Stock"]]
+                    df_display["Total_in_Stock_display"] = df_display["Total_in_Stock"].apply(format_currency)
 
                     # Selecionar apenas as colunas desejadas
-                    df_fat = df_fat[["Data", "Total do Dia"]]
+                    df_display = df_display[["Product", "Total_in_Stock_display"]]
 
                     # Resetar o índice e remover
-                    df_fat = df_fat.reset_index(drop=True)
+                    df_display = df_display.reset_index(drop=True)
 
                     # Estilização da tabela
-                    styled_df_fat = df_fat.style.set_table_styles([
-                        {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
+                    styled_df_svo = df_display.style.set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
                     ])
 
-                    st.write(styled_df_fat)
+                    st.write(styled_df_svo)
+
+                    total_val = df_svo["Total_in_Stock"].sum()
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {format_currency(total_val)}")
+
+                    pdf_bytes = convert_df_to_pdf(df_svo)
+                    st.subheader("Baixar PDF 'Stock vs Orders'")
+                    st.download_button(
+                        label="Baixar PDF",
+                        data=pdf_bytes,
+                        file_name="stock_vs_orders_summary.pdf",
+                        mime="application/pdf"
+                    )
+
+                    st.subheader("Enviar esse PDF via WhatsApp")
+                    phone_number = st.text_input("Número (ex: 5511999999999)")
+                    if st.button("Upload e Enviar"):
+                        link = upload_pdf_to_fileio(pdf_bytes)
+                        if link and phone_number:
+                            send_whatsapp(phone_number, media_url=link)
+                            st.success("PDF enviado via WhatsApp com sucesso!")
+                        else:
+                            st.warning("Informe o número e certifique-se de que o upload foi bem-sucedido.")
                 else:
-                    st.info("Nenhum dado de faturamento encontrado.")
+                    st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
+            except Exception as e:
+                st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
+
+        # ======================= Amount Invoiced =======================
+        with st.expander("Amount Invoiced"):
+            faturado_query = """
+                SELECT date("Data") as dt, SUM("total") as total_dia
+                FROM public.vw_pedido_produto
+                WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+                GROUP BY date("Data")
+                ORDER BY date("Data")
+            """
+            faturado_data = run_query(faturado_query)
+            if faturado_data:
+                df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
+                df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
+
+                # Selecionar apenas as colunas desejadas
+                df_fat = df_fat[["Data", "Total do Dia"]]
+
+                # Resetar o índice e remover
+                df_fat = df_fat.reset_index(drop=True)
+
+                # Estilização da tabela
+                styled_df_fat = df_fat.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
+
+                st.write(styled_df_fat)
+
+                st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(df_fat['Total do Dia'].str.replace('R\$ ', '').str.replace('.', '').str.replace(',', '.').astype(float).sum())}")
+            else:
+                st.info("Nenhum dado de faturamento encontrado.")
 
 
 def orders_page():
@@ -490,7 +487,7 @@ def orders_page():
             )
             st.markdown('<div class="small-font">', unsafe_allow_html=True)
             st.write(df_recent_orders.reset_index(drop=True).style.set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '4px')]},
+                {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '4px')]},
                 {'selector': 'td', 'props': [('padding', '4px'), ('text-align', 'left')]}
             ]))
             st.markdown('</div>', unsafe_allow_html=True)
@@ -1221,7 +1218,7 @@ def events_calendar_page():
 
         # Estilização da tabela via Pandas Styler
         styled_df_events = df_display.style.set_table_styles([
-            {'selector': 'th', 'props': [('background-color', '#145a7c'), ('color', 'white'), ('padding', '8px')]},
+            {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
             {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'left')]}
         ])
 
@@ -1347,14 +1344,14 @@ def apply_custom_css():
         <style>
         .css-1d391kg {
             font-size: 2em;
-            color: #1b4f72;
+            color: #ff4c4c; /* Alterado para vermelho */
         }
         .stDataFrame table {
             width: 100%;
             overflow-x: auto;
         }
         .css-1aumxhk {
-            background-color: #1b4f72;
+            background-color: #ff4c4c; /* Alterado para vermelho */
             color: white;
         }
         @media only screen and (max-width: 600px) {
@@ -1396,13 +1393,13 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},
+                "container": {"background-color": "#ff4c4c"},  # Alterado para vermelho
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
-                    "color": "white", "--hover-color": "#145a7c"
+                    "color": "white", "--hover-color": "#ff1a1a"  # Hover vermelho mais escuro
                 },
-                "nav-link-selected": {"background-color": "#145a7c", "color": "white"},
+                "nav-link-selected": {"background-color": "#cc0000", "color": "white"},  # Seleção mais escura
             }
         )
         if 'login_time' in st.session_state:
@@ -1494,7 +1491,7 @@ def login_page():
         }
         /* Botão customizado */
         .btn {
-            background-color: #004a8f !important;
+            background-color: #ff4c4c !important; /* Alterado para vermelho */
             padding: 8px 16px !important;
             font-size: 0.875rem !important;
             color: white !important;
@@ -1506,7 +1503,7 @@ def login_page():
             width: 100%;
         }
         .btn:hover {
-            background-color: #003366 !important;
+            background-color: #cc0000 !important; /* Vermelho mais escuro no hover */
         }
         /* Mensagem de rodapé */
         .footer {
