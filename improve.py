@@ -341,7 +341,7 @@ def home_page():
                 # Estilização da tabela
                 styled_df_open = df_open.style.set_table_styles([
                     {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
-                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
                 ])
 
                 st.write(styled_df_open)
@@ -365,7 +365,7 @@ def home_page():
                     )
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
-
+                    
                     # Formatar a coluna para exibição
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
 
@@ -375,7 +375,7 @@ def home_page():
                     # Estilização da tabela
                     styled_df_svo = df_display.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
-                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]},
+                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
                     ])
 
                     st.write(styled_df_svo)
@@ -389,7 +389,48 @@ def home_page():
             except Exception as e:
                 st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
-    st.markdown("---")
+        # ======================= Amount Invoiced =======================
+        with st.expander("Amount Invoiced"):
+            faturado_query = """
+                SELECT date("Data") as dt, SUM("total") as total_dia
+                FROM public.vw_pedido_produto
+                WHERE status IN ('Received - Debited','Received - Credit','Received - Pix','Received - Cash')
+                GROUP BY date("Data")
+                ORDER BY date("Data")
+            """
+            faturado_data = run_query(faturado_query)
+            if faturado_data:
+                df_fat = pd.DataFrame(faturado_data, columns=["Data", "Total do Dia"])
+
+                # Assegurar que 'Total do Dia' é numérico
+                df_fat["Total do Dia"] = pd.to_numeric(df_fat["Total do Dia"], errors='coerce').fillna(0)
+
+                # Calcular a soma
+                total_geral = df_fat["Total do Dia"].sum()
+
+                # Formatar a coluna para exibição
+                df_fat["Total do Dia"] = df_fat["Total do Dia"].apply(format_currency)
+
+                # Selecionar apenas as colunas desejadas
+                df_fat = df_fat[["Data", "Total do Dia"]]
+
+                # Resetar o índice e remover
+                df_fat = df_fat.reset_index(drop=True)
+
+                # Estilização da tabela
+                styled_df_fat = df_fat.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
+
+                st.write(styled_df_fat)
+
+                # Exibir o total geral formatado
+                st.markdown(f"**Total Geral (Amount Invoiced):** {format_currency(total_geral)}")
+            else:
+                st.info("Nenhum dado de faturamento encontrado.")
+
+def orders_page():
     """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
