@@ -19,11 +19,12 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 from zoneinfo import ZoneInfo  # Disponível no Python 3.9+
 import pytz  # Fallback para versões anteriores
+import hmac
 
 # Configuração da página para layout wide
 st.set_page_config(page_title="Boituva Beach Club", layout="wide")
 
-#############################################################################
+###############################################################################
 #                                   UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
@@ -434,7 +435,7 @@ def home_page():
             else:
                 st.info("Nenhum dado de faturamento encontrado.")
 
-def def orders_page():
+def orders_page():
     """Página para gerenciar pedidos."""
     st.title("Gerenciar Pedidos")
     # Criamos abas para separar "Novo Pedido" e "Listagem de Pedidos"
@@ -1119,7 +1120,7 @@ def events_calendar_page():
         }
         td {
             width: 14.28%;
-            height: 60px;  /* Reduz a altura das células */
+            height: 60px;  /* Reduzida a altura das células */
             text-align: center;
             vertical-align: top;
             border: 1px solid #ddd;
@@ -1278,6 +1279,11 @@ def loyalty_program_page():
         else:
             st.error("Pontos insuficientes.")
 
+def cash_page():
+    """Página para gerenciar caixa."""
+    st.title("Caixa")
+    st.write("Funcionalidade de gerenciamento de caixa ainda não implementada.")
+
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
@@ -1393,11 +1399,6 @@ def sidebar_navigation():
                 f"{st.session_state.username} logged in at {st.session_state.login_time.strftime('%H:%M')}"
             )
     return selected
-
-###############################################################################
-#                     PÁGINAS REMOVIDAS
-###############################################################################
-# A página "Cardápio" foi removida completamente, incluindo sua função e referências.
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1563,8 +1564,6 @@ def login_page():
                 st.stop()
 
             # Verificação de login com tempo constante para evitar ataques de timing
-            import hmac
-
             def verify_credentials(input_user, input_pass, actual_user, actual_pass):
                 return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
 
