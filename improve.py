@@ -306,6 +306,8 @@ def home_page():
         else:
             st.write("Nenhum evento para este mês.")
 
+    st.markdown("---")
+
     # Placeholder para notificações futuras (se necessário)
     notification_placeholder = st.empty()
 
