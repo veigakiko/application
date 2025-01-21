@@ -224,7 +224,7 @@ def home_page():
    
 
     # Adicionando Calendar View e Lista de Eventos lado a lado
-    st.subheader("Eventos do Mês Atual")
+    st.subheader("Home")
     current_date = date.today()
     ano_atual = current_date.year
     mes_atual = current_date.month
