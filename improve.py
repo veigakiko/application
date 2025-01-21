@@ -220,8 +220,8 @@ def refresh_data():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-    st.title("Beach Club Bar")
-    st.write("📍 Av. Do Trabalhador, 1879 — 🏆 5° Open BBC")
+    
+   
 
     # Adicionando Calendar View e Lista de Eventos lado a lado
     st.subheader("Eventos do Mês Atual")
