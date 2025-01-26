@@ -994,7 +994,6 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1026,13 +1025,15 @@ def analytics_page():
         # --------------------------
         st.subheader("Total de Vendas por Dia")
 
+        # Converte a coluna "Data" para o tipo datetime e formata para o padrão brasileiro
+        df["Data"] = pd.to_datetime(df["Data"]).dt.strftime("%d/%m/%Y")
+
         # Agrupa os dados por dia e calcula o total de vendas
-        df["Data"] = pd.to_datetime(df["Data"]).dt.date  # Converte para data (sem hora)
         df_daily = df.groupby("Data")["Valor_total"].sum().reset_index()
 
         # Cria o gráfico de linha com Altair
         chart = alt.Chart(df_daily).mark_line(point=True).encode(
-            x=alt.X("Data:T", title="Data"),  # T para tipo temporal
+            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
             y=alt.Y("Valor_total:Q", title="Total de Vendas (R$)"),  # Q para tipo quantitativo
             tooltip=["Data", "Valor_total"]
         ).properties(
@@ -1040,12 +1041,24 @@ def analytics_page():
             height=400
         ).interactive()
 
+        # Adiciona rótulos com os valores no gráfico
+        text = chart.mark_text(
+            align="left",
+            baseline="middle",
+            dx=10,  # Ajuste da posição horizontal
+            dy=-10  # Ajuste da posição vertical
+        ).encode(
+            text="Valor_total:Q"
+        )
+
+        # Combina o gráfico de linha com os rótulos
+        final_chart = (chart + text)
+
         # Exibe o gráfico no Streamlit
-        st.altair_chart(chart, use_container_width=True)
+        st.altair_chart(final_chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
