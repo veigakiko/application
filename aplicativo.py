@@ -1138,6 +1138,49 @@ def analytics_page():
         # Exibe o gráfico no Streamlit
         st.altair_chart(chart, use_container_width=True)
 
+        # --------------------------
+        # Gráfico de Produtos Mais Lucrativos
+        # --------------------------
+        st.subheader("Produtos Mais Lucrativos")
+
+        # Query para buscar os dados da view vw_vendas_produto
+        query_produtos = """
+            SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
+            FROM public.vw_vendas_produto;
+        """
+        data_produtos = run_query(query_produtos)
+
+        if data_produtos:
+            # Cria um DataFrame com os dados
+            df_produtos = pd.DataFrame(data_produtos, columns=[
+                "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
+            ])
+
+            # Ordena os produtos pelo lucro total (do maior para o menor)
+            df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
+
+            # Formata o lucro total como moeda brasileira (R$)
+            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
+                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+
+            # Cria o gráfico de barras horizontais com Altair
+            chart_produtos = alt.Chart(df_produtos).mark_bar().encode(
+                x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),  # Eixo X: Lucro Total
+                y=alt.Y("Produto:N", title="Produto", sort="-x"),  # Eixo Y: Produto (ordenado pelo lucro)
+                tooltip=["Produto", "Total_Lucro_formatado"]  # Tooltip com detalhes
+            ).properties(
+                width=800,
+                height=400,
+                title="Produtos Mais Lucrativos"
+            ).interactive()
+
+            # Exibe o gráfico no Streamlit
+            st.altair_chart(chart_produtos, use_container_width=True)
+
+        else:
+            st.info("Nenhum dado encontrado na view vw_vendas_produto.")
+
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
         
