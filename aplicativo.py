@@ -990,6 +990,7 @@ def cash_page():
         st.warning("Selecione um cliente.")
         
 
+-----
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1060,6 +1061,26 @@ def analytics_page():
 
         # Filtra o DataFrame com base no intervalo de datas selecionado
         df_filtered = df[(df["Data"] >= start_date) & (df["Data"] <= end_date)]
+
+        # --------------------------
+        # Exibe as métricas de Valor Total e Lucro Líquido
+        # --------------------------
+        st.subheader("Resumo do Período Selecionado")
+
+        # Calcula a soma do Valor Total e do Lucro Líquido
+        soma_valor_total = df_filtered["Valor_total"].sum()
+        soma_lucro_liquido = df_filtered["Lucro_Liquido"].sum()
+
+        # Formata os valores como moeda brasileira (R$)
+        soma_valor_total_formatado = f"R$ {soma_valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        soma_lucro_liquido_formatado = f"R$ {soma_lucro_liquido:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+        # Exibe as métricas
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Soma Valor Total", soma_valor_total_formatado)
+        with col2:
+            st.metric("Soma Lucro Líquido", soma_lucro_liquido_formatado)
 
         # --------------------------
         # Gráfico de Barras Agrupadas
