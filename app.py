@@ -174,7 +174,7 @@ def run_query(query: str, values=None, commit: bool = False):
 ###############################################################################
 #                         CARREGAMENTO DE DADOS (CACHE)
 ###############################################################################
-@st.cache_data(show_spinner=False)  # Não exibir spinner
+@st.cache_data(show_spinner=False)
 def load_all_data():
     """Carrega todos os dados necessários do banco de dados e armazena no session_state."""
     data = {}
@@ -209,14 +209,40 @@ def refresh_data():
     load_all_data.clear()
     st.session_state.data = load_all_data()
 
+@st.cache_data(show_spinner=False)
+def get_latest_settings():
+    """
+    Retorna o último registro (maior id) da tabela tb_settings
+    Formato: (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
+    Se não houver registro, retorna None.
+    """
+    query = """
+        SELECT id, company, address, cnpj_cpf, email, telephone, contract_number, created_at
+        FROM public.tb_settings
+        ORDER BY id DESC
+        LIMIT 1
+    """
+    result = run_query(query)
+    if result:
+        return result[0]  # a single row
+    return None
+
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-   
-    # Adicionando Calendar View e Lista de Eventos lado a lado
-    st.subheader("Home")
+
+    # -----------------------------------------------------------------------
+    # Display the Company name from the last tb_settings record as the Title
+    # -----------------------------------------------------------------------
+    last_settings = st.session_state.get("last_settings", None)
+    if last_settings:
+        # last_settings format -> (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
+        st.title(last_settings[1])  # index=1 is "company"
+    else:
+        st.title("Home")  # fallback if no settings in DB
+
     current_date = date.today()
     ano_atual = current_date.year
     mes_atual = current_date.month
@@ -299,7 +325,6 @@ def home_page():
         if events_data:
             # Ordenar eventos por dia
             events_sorted = sorted(events_data, key=lambda x: x[2].day)
-
             for ev in events_sorted:
                 nome, descricao, data_evento = ev
                 dia = data_evento.day
@@ -315,7 +340,7 @@ def home_page():
     # Exibir sumários apenas para usuários admin
     if st.session_state.get("username") == "admin":
         # Exibir as três seções uma abaixo da outra
-        
+
         # ======================= Open Orders Summary =======================
         with st.expander("Open Orders Summary"):
             open_orders_query = """
@@ -346,7 +371,6 @@ def home_page():
                 ])
 
                 st.write(styled_df_open)
-
                 st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
@@ -384,7 +408,6 @@ def home_page():
                     # Calcular o total utilizando a coluna numérica original
                     total_val = df_svo["Total_in_Stock"].sum()
                     st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
-
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -1104,7 +1127,7 @@ def events_calendar_page():
             FROM public.tb_eventos
             ORDER BY data_evento;
         """
-        rows = run_query(query)  # Ajuste conforme suas funções de DB
+        rows = run_query(query)
         return rows if rows else []
 
     # ----------------------------------------------------------------------------
@@ -1192,7 +1215,6 @@ def events_calendar_page():
     # Destacar dias com eventos
     for ev in df_filtrado.itertuples():
         dia = ev.data_evento.day
-        # Ajustar a cor de fundo para azul e o texto para branco
         highlight_str = (
             f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
             f'title="{ev.nome}: {ev.descricao}"'
@@ -1376,8 +1398,13 @@ def loyalty_program_page():
 def settings_page():
     """Página de configurações para salvar dados da empresa."""
     st.title("Settings")
-    st.subheader("Configurações da Empresa")
 
+    # Show the last registered company (highest id)
+    last_settings = st.session_state.get("last_settings", None)
+    if last_settings:
+        st.write(f"Company: {last_settings[1]}")  # [1] = 'company'
+
+    st.subheader("Configurações da Empresa")
     with st.form(key='settings_form'):
         company = st.text_input("Company")
         address = st.text_input("Address")
@@ -1397,6 +1424,9 @@ def settings_page():
             success = run_query(q_ins, (company, address, cnpj_cpf, email, telephone, contract_number), commit=True)
             if success:
                 st.success("Record saved successfully!")
+                # Force a recache of the last_settings so it appears immediately
+                get_latest_settings.clear()
+                st.session_state.last_settings = get_latest_settings()
             else:
                 st.error("Failed to save record.")
         else:
@@ -1411,6 +1441,8 @@ def initialize_session_state():
         st.session_state.data = load_all_data()
     if 'logged_in' not in st.session_state:
         st.session_state.logged_in = False
+    if 'last_settings' not in st.session_state:
+        st.session_state.last_settings = get_latest_settings()
 
 def apply_custom_css():
     """Aplica CSS customizado para melhorar a aparência do aplicativo."""
@@ -1494,7 +1526,7 @@ def sidebar_navigation():
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash",
                 "Calendário de Eventos",
-                "Settings"  # <-- New page added here
+                "Settings" 
             ],
             icons=[
                 "house", "file-text", "box", "list-task", "layers",
@@ -1504,7 +1536,7 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},  # Alterado para vermelho
+                "container": {"background-color": "#1b4f72"},
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
@@ -1530,10 +1562,10 @@ def main():
 
     selected_page = sidebar_navigation()
 
+    # No longer automatically refresh data on page change, to reduce loading time
     if 'current_page' not in st.session_state:
         st.session_state.current_page = selected_page
     elif selected_page != st.session_state.current_page:
-        refresh_data()
         st.session_state.current_page = selected_page
 
     if selected_page == "Home":
