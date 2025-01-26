@@ -32,7 +32,7 @@ def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV
 
 def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
     """Permite o download de um DataFrame como JSON."""
-    json_data = df.to_json(orient='records', lines=False)  # Ajustado para JSON padrão
+    json_data = df.to_json(orient='records', lines=False)
     st.download_button(label=label, data=json_data, file_name=filename, mime="application/json")
 
 def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
@@ -229,7 +229,6 @@ def get_latest_settings():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-    # Verifica se temos um registro em last_settings no session_state
     last_settings = st.session_state.get("last_settings", None)
 
     if last_settings:
@@ -238,10 +237,9 @@ def home_page():
         address_value = last_settings[2]    # Column: address
         telephone_value = last_settings[5]  # Column: telephone
 
-        # 1) Center the page title
+        # Centraliza o título
         st.markdown(f"<h1 style='text-align:center;'>{company_value}</h1>", unsafe_allow_html=True)
-
-        # 2) Include a line after the telephone
+        # Linha após o número de telefone
         st.markdown(
             f"""
             <p style='font-size:14px; text-align:center; margin-top:-10px;'>
@@ -253,19 +251,15 @@ def home_page():
             unsafe_allow_html=True
         )
     else:
-        # Fallback se não houver registro em tb_settings
         st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
 
     # -----------------------------------------------------------------------
-    # A PARTIR DAQUI, O CÓDIGO ORIGINAL DA HOME (CALENDÁRIO, EVENTOS, ETC.)
+    # Calendário e eventos (código original)
     # -----------------------------------------------------------------------
-
-    # Obtém data atual e separa ano/mês para buscar eventos
     current_date = date.today()
     ano_atual = current_date.year
     mes_atual = current_date.month
 
-    # Obter eventos do banco de dados para o mês atual
     events_query = """
         SELECT nome, descricao, data_evento 
         FROM public.tb_eventos 
@@ -274,7 +268,6 @@ def home_page():
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
 
-    # Duas colunas: uma para o calendário, outra para a lista de eventos
     col_calendar, col_events = st.columns([1, 1], gap="large")
 
     with col_calendar:
@@ -283,7 +276,6 @@ def home_page():
             cal = calendar.HTMLCalendar(firstweekday=0)
             html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
-            # Destacar dias com eventos
             for ev in events_data:
                 nome, descricao, data_evento = ev
                 dia = data_evento.day
@@ -296,7 +288,6 @@ def home_page():
                     replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
                     html_calendario = html_calendario.replace(target, replacement)
 
-            # CSS para estilizar a tabela do calendário
             st.markdown(
                 """
                 <style>
@@ -348,8 +339,6 @@ def home_page():
 
     # Seções adicionais para usuários 'admin'
     if st.session_state.get("username") == "admin":
-
-        # ------------------- Open Orders Summary -------------------
         with st.expander("Open Orders Summary"):
             open_orders_query = """
                 SELECT "Cliente", SUM("total") AS Total
@@ -374,7 +363,6 @@ def home_page():
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
 
-        # ------------------- Stock vs. Orders Summary -------------------
         with st.expander("Stock vs. Orders Summary"):
             try:
                 stock_vs_orders_query = """
@@ -404,7 +392,6 @@ def home_page():
             except Exception as e:
                 st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
-        # --------------------- Profit per day ---------------------
         with st.expander("Profit per day"):
             try:
                 query_lucro = """
@@ -716,6 +703,9 @@ def stock_page():
     st.title("Estoque")
     tabs = st.tabs(["Nova Movimentação", "Movimentações"])
 
+    # ------------------------------------------------------------------------
+    # Tab [0] - Formulário de nova movimentação + Tabela "vw_stock_vs_orders_summary"
+    # ------------------------------------------------------------------------
     with tabs[0]:
         st.subheader("Registrar nova movimentação de estoque")
         product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
@@ -749,6 +739,26 @@ def stock_page():
             else:
                 st.warning("Selecione produto e quantidade > 0.")
 
+        # --------------- NOVA SEÇÃO: Tabela vw_stock_vs_orders_summary ---------------
+        st.subheader("Stock vs. Orders Summary (por total_in_stock DESC)")
+        query_svo = """
+            SELECT product, stock_quantity, orders_quantity, total_in_stock
+            FROM public.vw_stock_vs_orders_summary
+            ORDER BY total_in_stock DESC
+        """
+        data_svo = run_query(query_svo)
+        if data_svo:
+            df_svo = pd.DataFrame(
+                data_svo,
+                columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+            )
+            st.dataframe(df_svo, use_container_width=True)
+        else:
+            st.info("Nenhum dado encontrado em vw_stock_vs_orders_summary.")
+
+    # ------------------------------------------------------------------------
+    # Tab [1] - Listagem de movimentações
+    # ------------------------------------------------------------------------
     with tabs[1]:
         st.subheader("Movimentações de Estoque")
         stock_data = st.session_state.data.get("stock", [])
@@ -933,9 +943,6 @@ def clients_page():
         except Exception as e:
             st.error(f"Erro ao carregar clientes: {e}")
 
-###############################################################################
-#                     FUNÇÕES AUXILIARES PARA NOTA FISCAL
-###############################################################################
 def process_payment(client, payment_status):
     """Processa o pagamento atualizando o status do pedido."""
     query = """
@@ -989,9 +996,6 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 
     st.text("\n".join(invoice))
 
-###############################################################################
-#                          PÁGINA: NOTA FISCAL -> CASH
-###############################################################################
 def cash_page():
     """Página para gerar e gerenciar notas fiscais."""
     st.title("Cash")
@@ -1054,9 +1058,6 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
-###############################################################################
-#                     NOVA PÁGINA: CALENDÁRIO DE EVENTOS
-###############################################################################
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1304,9 +1305,6 @@ def loyalty_program_page():
         else:
             st.error("Pontos insuficientes.")
 
-###############################################################################
-#                     NOVA PÁGINA: SETTINGS
-###############################################################################
 def settings_page():
     """Página de configurações para salvar/atualizar dados da empresa."""
     st.title("Settings")
@@ -1324,7 +1322,6 @@ def settings_page():
 
     st.subheader("Configurações da Empresa")
 
-    # Preenche o form com os valores do último registro (se existir)
     with st.form(key='settings_form'):
         company = st.text_input("Company", value=last_settings[1] if last_settings else "")
         address = st.text_input("Address", value=last_settings[2] if last_settings else "")
@@ -1332,13 +1329,11 @@ def settings_page():
         email = st.text_input("Email", value=last_settings[4] if last_settings else "")
         telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
         contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
-
-        # Renomeado para "Update Registration"
         submit_settings = st.form_submit_button("Update Registration")
 
     if submit_settings:
-        # Se já existe um registro, faz UPDATE; caso contrário, INSERT
         if last_settings:
+            # Atualiza o registro existente
             q_upd = """
                 UPDATE public.tb_settings
                 SET company=%s, address=%s, cnpj_cpf=%s, email=%s,
@@ -1357,7 +1352,7 @@ def settings_page():
             else:
                 st.error("Failed to update record.")
         else:
-            # Caso não tenha nenhum registro, insere um novo
+            # Não existe registro: insere
             if company.strip():
                 q_ins = """
                     INSERT INTO public.tb_settings
@@ -1588,7 +1583,7 @@ def login_page():
         }
         /* Reduz a distância entre os campos de texto (username e password) */
         .css-1siy2j8 {
-            gap: 0.1rem !important; /* Ajuste fino de espaçamento */
+            gap: 0.1rem !important;
         }
         .css-1siy2j8 input {
             margin-bottom: 0 !important; 
@@ -1612,7 +1607,6 @@ def login_page():
     if logo:
         st.image(logo, use_column_width=True)
 
-    # Removendo st.title("") para não adicionar espaçamento extra
     st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
