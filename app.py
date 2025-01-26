@@ -18,11 +18,8 @@ import mitosheet  # Importação do MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
-# Configuração da página para layout wide
-# Ensure the layout is wide for better responsiveness
-
-#############################################################################
-#                                   UTILIDADES
+###############################################################################
+#                               UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
@@ -96,7 +93,35 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     except:
         return ""
 
+###############################################################################
+#                               TWILIO (WHATSAPP)
+###############################################################################
+def send_whatsapp(recipient_number: str, media_url: str = None):
+    """
+    Envia WhatsApp via Twilio (dados em st.secrets["twilio"]).
+    Exemplo de 'recipient_number': '5511999999999' (sem '+').
+    """
+    from twilio.rest import Client
+    try:
+        account_sid = st.secrets["twilio"]["account_sid"]
+        auth_token = st.secrets["twilio"]["auth_token"]
+        whatsapp_from = st.secrets["twilio"]["whatsapp_from"]
 
+        client = Client(account_sid, auth_token)
+        if media_url:
+            message = client.messages.create(
+                body="Segue o PDF solicitado!",
+                from_=whatsapp_from,
+                to=f"whatsapp:+{recipient_number}",
+                media_url=[media_url]
+            )
+        else:
+            message = client.messages.create(
+                body="Olá! Teste de mensagem via Twilio WhatsApp.",
+                from_=whatsapp_from,
+                to=f"whatsapp:+{recipient_number}"
+            )
+    except Exception as e:
         st.error(f"Erro ao enviar WhatsApp: {e}")
 
 ###############################################################################
@@ -213,22 +238,23 @@ def home_page():
         address_value = last_settings[2]    # Column: address
         telephone_value = last_settings[5]  # Column: telephone
 
-        # Exibe o nome da empresa como título normal
-        st.title(company_value)
+        # 1) Center the page title
+        st.markdown(f"<h1 style='text-align:center;'>{company_value}</h1>", unsafe_allow_html=True)
 
-        # Logo abaixo do título, exibe endereço e telefone em fonte menor
+        # 2) Include a line after the telephone
         st.markdown(
             f"""
-            <p style='font-size:14px; margin-top:-10px;'>
+            <p style='font-size:14px; text-align:center; margin-top:-10px;'>
                 <strong>Address:</strong> {address_value}<br>
                 <strong>Telephone:</strong> {telephone_value}
             </p>
+            <hr>
             """,
             unsafe_allow_html=True
         )
     else:
         # Fallback se não houver registro em tb_settings
-        st.title("Home")
+        st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
 
     # -----------------------------------------------------------------------
     # A PARTIR DAQUI, O CÓDIGO ORIGINAL DA HOME (CALENDÁRIO, EVENTOS, ETC.)
@@ -1282,39 +1308,71 @@ def loyalty_program_page():
 #                     NOVA PÁGINA: SETTINGS
 ###############################################################################
 def settings_page():
-    """Página de configurações para salvar dados da empresa."""
+    """Página de configurações para salvar/atualizar dados da empresa."""
     st.title("Settings")
 
     last_settings = st.session_state.get("last_settings", None)
+
+    # Mostrar texto acima do form, com valores do último registro
     if last_settings:
-        st.write(f"Company: {last_settings[1]}")
+        st.markdown(f"**Company:** {last_settings[1]}")
+        st.markdown(f"**Address:** {last_settings[2]}")
+        st.markdown(f"**CNPJ/CPF:** {last_settings[3]}")
+        st.markdown(f"**Email:** {last_settings[4]}")
+        st.markdown(f"**Telephone:** {last_settings[5]}")
+        st.markdown(f"**Contract Number:** {last_settings[6]}")
 
     st.subheader("Configurações da Empresa")
+
+    # Preenche o form com os valores do último registro (se existir)
     with st.form(key='settings_form'):
-        company = st.text_input("Company")
-        address = st.text_input("Address")
-        cnpj_cpf = st.text_input("CNPJ/CPF")
-        email = st.text_input("Email")
-        telephone = st.text_input("Telephone")
-        contract_number = st.text_input("Contract Number")
-        submit_settings = st.form_submit_button("Save record")
+        company = st.text_input("Company", value=last_settings[1] if last_settings else "")
+        address = st.text_input("Address", value=last_settings[2] if last_settings else "")
+        cnpj_cpf = st.text_input("CNPJ/CPF", value=last_settings[3] if last_settings else "")
+        email = st.text_input("Email", value=last_settings[4] if last_settings else "")
+        telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
+        contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
+
+        # Renomeado para "Update Registration"
+        submit_settings = st.form_submit_button("Update Registration")
 
     if submit_settings:
-        if company.strip():
-            q_ins = """
-                INSERT INTO public.tb_settings
-                    (company, address, cnpj_cpf, email, telephone, contract_number)
-                VALUES (%s, %s, %s, %s, %s, %s)
+        # Se já existe um registro, faz UPDATE; caso contrário, INSERT
+        if last_settings:
+            q_upd = """
+                UPDATE public.tb_settings
+                SET company=%s, address=%s, cnpj_cpf=%s, email=%s,
+                    telephone=%s, contract_number=%s, created_at=CURRENT_TIMESTAMP
+                WHERE id=%s
             """
-            success = run_query(q_ins, (company, address, cnpj_cpf, email, telephone, contract_number), commit=True)
+            success = run_query(
+                q_upd,
+                (company, address, cnpj_cpf, email, telephone, contract_number, last_settings[0]),
+                commit=True
+            )
             if success:
-                st.success("Record saved successfully!")
+                st.success("Record updated successfully!")
                 get_latest_settings.clear()
                 st.session_state.last_settings = get_latest_settings()
             else:
-                st.error("Failed to save record.")
+                st.error("Failed to update record.")
         else:
-            st.warning("Please provide at least the Company name.")
+            # Caso não tenha nenhum registro, insere um novo
+            if company.strip():
+                q_ins = """
+                    INSERT INTO public.tb_settings
+                        (company, address, cnpj_cpf, email, telephone, contract_number)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                success = run_query(q_ins, (company, address, cnpj_cpf, email, telephone, contract_number), commit=True)
+                if success:
+                    st.success("Record inserted successfully!")
+                    get_latest_settings.clear()
+                    st.session_state.last_settings = get_latest_settings()
+                else:
+                    st.error("Failed to save record.")
+            else:
+                st.warning("Please provide at least the Company name.")
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1380,11 +1438,11 @@ def apply_custom_css():
             color: #bbb;
             font-size: 0.875rem;
         }
-        /* Remove espaço entre os input boxes */
+        /* Remove espaço entre os input boxes do login */
         .css-1siy2j8 input {
             margin-bottom: 0 !important;
-            padding-top: 5px;
-            padding-bottom: 5px;
+            padding-top: 4px;
+            padding-bottom: 4px;
         }
         /* Tabela responsiva */
         @media only screen and (max-width: 600px) {
@@ -1446,7 +1504,6 @@ def main():
 
     selected_page = sidebar_navigation()
 
-    # We do NOT refresh data on every page change to speed up navigation
     if 'current_page' not in st.session_state:
         st.session_state.current_page = selected_page
     elif selected_page != st.session_state.current_page:
@@ -1524,14 +1581,19 @@ def login_page():
             font-size: 12px;
             color: #999;
         }
+        /* Placeholder estilizado */
         input::placeholder {
             color: #bbb;
             font-size: 0.875rem;
         }
+        /* Reduz a distância entre os campos de texto (username e password) */
+        .css-1siy2j8 {
+            gap: 0.1rem !important; /* Ajuste fino de espaçamento */
+        }
         .css-1siy2j8 input {
             margin-bottom: 0 !important; 
-            padding-top: 5px;
-            padding-bottom: 5px;
+            padding-top: 4px;
+            padding-bottom: 4px;
         }
         </style>
         """,
@@ -1549,10 +1611,11 @@ def login_page():
 
     if logo:
         st.image(logo, use_column_width=True)
-    st.title("")
+
+    # Removendo st.title("") para não adicionar espaçamento extra
+    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
-        st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
         username_input = st.text_input("", placeholder="Username")
         password_input = st.text_input("", type="password", placeholder="Password")
         btn_login = st.form_submit_button("Log in")
