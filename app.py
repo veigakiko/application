@@ -232,31 +232,37 @@ def get_latest_settings():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
-
-    # -----------------------------------------------------------------------
-    # Display address & telephone, then the company as the title (centered)
-    # -----------------------------------------------------------------------
+    # Verifica se temos um registro em last_settings no session_state
     last_settings = st.session_state.get("last_settings", None)
+
     if last_settings:
-        # last_settings format -> (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
-        address_value = last_settings[2]
-        telephone_value = last_settings[5]
-        company_value = last_settings[1]
+        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
+        company_value = last_settings[1]    # Column: company
+        address_value = last_settings[2]    # Column: address
+        telephone_value = last_settings[5]  # Column: telephone
 
-        # HTML block: address + telephone in smaller font, then the company name below it, centered, also in smaller font
-        st.markdown(f"""
-            <p style='text-align:center; font-size:14px;'>
-                Address: {address_value} &nbsp;|&nbsp; Telephone: {telephone_value}
+        # Exibe o nome da empresa como título normal
+        st.title(company_value)
+
+        # Logo abaixo do título, exibe endereço e telefone em fonte menor
+        st.markdown(
+            f"""
+            <p style='font-size:14px; margin-top:-10px;'>
+                <strong>Address:</strong> {address_value}<br>
+                <strong>Telephone:</strong> {telephone_value}
             </p>
-            <h3 style='text-align:center; font-size:16px;'>{company_value}</h3>
-        """, unsafe_allow_html=True)
+            """,
+            unsafe_allow_html=True
+        )
     else:
-        # Fallback if no records in tb_settings
-        st.markdown("<h3 style='text-align:center;'>Home</h3>", unsafe_allow_html=True)
+        # Fallback se não houver registro em tb_settings
+        st.title("Home")
 
-    # ---------------------------
-    # Rest of the Home Page
-    # ---------------------------
+    # -----------------------------------------------------------------------
+    # A PARTIR DAQUI, O CÓDIGO ORIGINAL DA HOME (CALENDÁRIO, EVENTOS, ETC.)
+    # -----------------------------------------------------------------------
+
+    # Obtém data atual e separa ano/mês para buscar eventos
     current_date = date.today()
     ano_atual = current_date.year
     mes_atual = current_date.month
@@ -270,13 +276,16 @@ def home_page():
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
 
-    # Criar duas colunas: uma para o calendário e outra para a lista de eventos
-    col_calendar, col_events = st.columns([1, 1], gap="large")  # 50%/50%
+    # Duas colunas: uma para o calendário, outra para a lista de eventos
+    col_calendar, col_events = st.columns([1, 1], gap="large")
 
     with col_calendar:
         if events_data:
+            import calendar
             cal = calendar.HTMLCalendar(firstweekday=0)
             html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+            # Destacar dias com eventos
             for ev in events_data:
                 nome, descricao, data_evento = ev
                 dia = data_evento.day
@@ -289,6 +298,7 @@ def home_page():
                     replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
                     html_calendario = html_calendario.replace(target, replacement)
 
+            # CSS para estilizar a tabela do calendário
             st.markdown(
                 """
                 <style>
@@ -322,7 +332,6 @@ def home_page():
                 unsafe_allow_html=True
             )
             st.markdown(html_calendario, unsafe_allow_html=True)
-
         else:
             st.info("Nenhum evento registrado para este mês.")
 
@@ -339,8 +348,10 @@ def home_page():
 
     st.markdown("---")
 
-    # Admin sumaries
+    # Seções adicionais para usuários 'admin'
     if st.session_state.get("username") == "admin":
+
+        # ------------------- Open Orders Summary -------------------
         with st.expander("Open Orders Summary"):
             open_orders_query = """
                 SELECT "Cliente", SUM("total") AS Total
@@ -354,8 +365,8 @@ def home_page():
                 df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
                 total_open = df_open["Total"].sum()
                 df_open["Total_display"] = df_open["Total"].apply(format_currency)
-                df_open = df_open[["Client", "Total_display"]]
-                df_open = df_open.reset_index(drop=True)
+                df_open = df_open[["Client", "Total_display"]].reset_index(drop=True)
+
                 styled_df_open = df_open.style.set_table_styles([
                     {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                     {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
@@ -365,6 +376,7 @@ def home_page():
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
 
+        # ------------------- Stock vs. Orders Summary -------------------
         with st.expander("Stock vs. Orders Summary"):
             try:
                 stock_vs_orders_query = """
@@ -381,6 +393,7 @@ def home_page():
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
                     df_display = df_display.reset_index(drop=True)
+
                     styled_df_svo = df_display.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
@@ -393,6 +406,7 @@ def home_page():
             except Exception as e:
                 st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
+        # --------------------- Profit per day ---------------------
         with st.expander("Profit per day"):
             try:
                 query_lucro = """
@@ -402,14 +416,19 @@ def home_page():
                 """
                 data_lucro = run_query(query_lucro)
                 if data_lucro:
-                    df_lucro = pd.DataFrame(data_lucro, columns=["Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"])
+                    df_lucro = pd.DataFrame(
+                        data_lucro,
+                        columns=["Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"]
+                    )
                     df_lucro["Soma_Valor_total"] = pd.to_numeric(df_lucro["Soma_Valor_total"], errors="coerce").fillna(0)
                     df_lucro["Soma_Custo_total"] = pd.to_numeric(df_lucro["Soma_Custo_total"], errors="coerce").fillna(0)
                     df_lucro["Soma_Lucro_Liquido"] = pd.to_numeric(df_lucro["Soma_Lucro_Liquido"], errors="coerce").fillna(0)
+
                     df_lucro.columns = ["Data", "Valor total", "Custo total", "Lucro líquido"]
                     df_lucro["Valor total"] = df_lucro["Valor total"].apply(format_currency)
                     df_lucro["Custo total"] = df_lucro["Custo total"].apply(format_currency)
                     df_lucro["Lucro líquido"] = df_lucro["Lucro líquido"].apply(format_currency)
+
                     styled_df_lucro = df_lucro.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
