@@ -1020,6 +1020,29 @@ def analytics_page():
 
         # Opção para download dos dados
         download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
+
+        # --------------------------
+        # Gráfico de Total por Dia
+        # --------------------------
+        st.subheader("Total de Vendas por Dia")
+
+        # Agrupa os dados por dia e calcula o total de vendas
+        df["Data"] = pd.to_datetime(df["Data"]).dt.date  # Converte para data (sem hora)
+        df_daily = df.groupby("Data")["Valor_total"].sum().reset_index()
+
+        # Cria o gráfico de linha com Altair
+        chart = alt.Chart(df_daily).mark_line(point=True).encode(
+            x=alt.X("Data:T", title="Data"),  # T para tipo temporal
+            y=alt.Y("Valor_total:Q", title="Total de Vendas (R$)"),  # Q para tipo quantitativo
+            tooltip=["Data", "Valor_total"]
+        ).properties(
+            width=800,
+            height=400
+        ).interactive()
+
+        # Exibe o gráfico no Streamlit
+        st.altair_chart(chart, use_container_width=True)
+
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
 
