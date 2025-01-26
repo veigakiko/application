@@ -1019,6 +1019,8 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
         
+
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1097,7 +1099,7 @@ def analytics_page():
             y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
-                range=["blue", "red"]  # Azul para Valor Total, Vermelho para Lucro Líquido
+                range=["gray", "#bcbd22"]  # Cinza para Valor Total, Verde-amarelado para Lucro Líquido
             )),
             order=alt.Order("Métrica:N", sort="ascending"),  # Ordena as barras para Valor Total ficar acima
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]  # Tooltip com detalhes
@@ -1106,7 +1108,7 @@ def analytics_page():
             height=400
         )
 
-        # Adiciona rótulos para Valor Total (acima da barra azul)
+        # Adiciona rótulos para Valor Total (acima da barra cinza)
         text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
             align="center",
             baseline="bottom",  # Posiciona o texto acima da barra
@@ -1119,7 +1121,7 @@ def analytics_page():
             text="Valor_formatado:N"  # Exibe o valor formatado como texto
         )
 
-        # Adiciona rótulos para Lucro Líquido (na parte de baixo da barra vermelha)
+        # Adiciona rótulos para Lucro Líquido (na parte de baixo da barra verde-amarelada)
         text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
             align="center",
             baseline="top",  # Posiciona o texto na parte de baixo da barra
@@ -1183,7 +1185,7 @@ def analytics_page():
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-        
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
