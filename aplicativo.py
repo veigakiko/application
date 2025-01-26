@@ -1046,7 +1046,7 @@ def analytics_page():
         download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
 
         # --------------------------
-        # Gráfico de Total por Dia e Lucro Líquido
+        # Gráfico de Barras Agrupadas
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1073,63 +1073,35 @@ def analytics_page():
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
-        # Cria o gráfico de linha com Altair para Valor Total
-        base = alt.Chart(df_daily).encode(
-            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y"))  # Formato brasileiro
+        # Transforma o DataFrame para o formato "long" (necessário para o gráfico de barras agrupadas)
+        df_long = df_daily.melt(
+            id_vars=["Data", "Data_formatada"],
+            value_vars=["Valor_total", "Lucro_Liquido"],
+            var_name="Métrica",
+            value_name="Valor"
         )
 
-        chart_valor_total = base.mark_line(color="blue", point=True).encode(
-            y=alt.Y("Valor_total:Q", title="Valor (R$)"),  # Q para tipo quantitativo
-            tooltip=["Data_formatada", "Valor_total_formatado"]
+        # Formata os valores no DataFrame longo
+        df_long["Valor_formatado"] = df_long["Valor"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
-        # Cria o gráfico de linha com Altair para Lucro Líquido
-        chart_lucro_liquido = base.mark_line(color="green", point=True).encode(
-            y=alt.Y("Lucro_Liquido:Q", title="Lucro Líquido (R$)"),  # Q para tipo quantitativo
-            tooltip=["Data_formatada", "Lucro_Liquido_formatado"]
-        )
-
-        # Adiciona rótulos com os valores no gráfico para Valor Total
-        text_valor_total = chart_valor_total.mark_text(
-            align="left",
-            baseline="middle",
-            dx=10,  # Ajuste da posição horizontal
-            dy=-10,  # Ajuste da posição vertical
-            color="white",  # Cor do texto em branco
-            fontSize=12  # Tamanho da fonte
-        ).encode(
-            text="Valor_total_formatado:N"  # Exibe o valor formatado como texto
-        )
-
-        # Adiciona rótulos com os valores no gráfico para Lucro Líquido
-        text_lucro_liquido = chart_lucro_liquido.mark_text(
-            align="left",
-            baseline="middle",
-            dx=10,  # Ajuste da posição horizontal
-            dy=-20,  # Ajuste da posição vertical (abaixo dos rótulos de Valor Total)
-            color="white",  # Cor do texto em branco
-            fontSize=12  # Tamanho da fonte
-        ).encode(
-            text="Lucro_Liquido_formatado:N"  # Exibe o valor formatado como texto
-        )
-
-        # Combina os gráficos de linha e os rótulos
-        final_chart = alt.layer(
-            chart_valor_total, text_valor_total, chart_lucro_liquido, text_lucro_liquido
-        ).resolve_scale(
-            y="independent"  # Garante que as escalas dos eixos Y sejam independentes
+        # Cria o gráfico de barras agrupadas com Altair
+        chart = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
+            x=alt.X("Data_formatada:N", title="Data"),  # Eixo X: Data formatada
+            y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
+            color=alt.Color("Métrica:N", title="Métrica"),  # Cor das barras por métrica
+            tooltip=["Data_formatada", "Métrica", "Valor_formatado"]  # Tooltip com detalhes
         ).properties(
             width=800,
             height=400
         ).interactive()
 
         # Exibe o gráfico no Streamlit
-        st.altair_chart(final_chart, use_container_width=True)
+        st.altair_chart(chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-
-
         
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
