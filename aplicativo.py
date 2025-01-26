@@ -1021,6 +1021,14 @@ def cash_page():
         
 
 
+
+
+
+import streamlit as st
+import pandas as pd
+import altair as alt
+from datetime import datetime
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1048,15 +1056,38 @@ def analytics_page():
         download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
 
         # --------------------------
+        # Seleção de intervalo de datas
+        # --------------------------
+        st.subheader("Filtrar por Intervalo de Datas")
+
+        # Obtém as datas mínima e máxima do DataFrame
+        min_date = df["Data"].min()
+        max_date = df["Data"].max()
+
+        # Cria dois campos de data para seleção do intervalo
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+        with col2:
+            end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
+
+        # Converte as datas selecionadas para o tipo datetime
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+
+        # Filtra o DataFrame com base no intervalo de datas selecionado
+        df_filtered = df[(df["Data"] >= start_date) & (df["Data"] <= end_date)]
+
+        # --------------------------
         # Gráfico de Barras Agrupadas
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         # Converte a coluna "Data" para o tipo datetime
-        df["Data"] = pd.to_datetime(df["Data"])
+        df_filtered["Data"] = pd.to_datetime(df_filtered["Data"])
 
         # Agrupa os dados por dia e calcula o total de vendas e lucro líquido
-        df_daily = df.groupby("Data").agg({
+        df_daily = df_filtered.groupby("Data").agg({
             "Valor_total": "sum",
             "Lucro_Liquido": "sum"
         }).reset_index()
