@@ -1106,27 +1106,41 @@ def analytics_page():
             height=400
         )
 
-        # Adiciona rótulos com os valores formatados em reais (R$) e na cor branca
-        text = bars.mark_text(
+        # Adiciona rótulos para Valor Total (acima da barra azul)
+        text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
             align="center",
-            baseline="bottom",  # Posiciona o texto no topo da barra
-            dy=-5,  # Ajuste fino da posição vertical
+            baseline="bottom",  # Posiciona o texto acima da barra
+            dy=-10,  # Ajuste fino da posição vertical
             color="white",  # Cor do texto em branco
             fontSize=12  # Tamanho da fonte
         ).encode(
+            x="Data_formatada:N",
+            y="Valor:Q",
+            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+        )
+
+        # Adiciona rótulos para Lucro Líquido (acima da barra vermelha)
+        text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
+            align="center",
+            baseline="bottom",  # Posiciona o texto acima da barra
+            dy=-10,  # Ajuste fino da posição vertical
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
+        ).encode(
+            x="Data_formatada:N",
+            y="Valor:Q",
             text="Valor_formatado:N"  # Exibe o valor formatado como texto
         )
 
         # Combina as barras e os rótulos
-        chart = (bars + text).interactive()
+        chart = (bars + text_valor_total + text_lucro_liquido).interactive()
 
         # Exibe o gráfico no Streamlit
         st.altair_chart(chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-
-
+        
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
