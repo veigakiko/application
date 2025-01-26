@@ -1119,11 +1119,11 @@ def analytics_page():
             text="Valor_formatado:N"  # Exibe o valor formatado como texto
         )
 
-        # Adiciona rótulos para Lucro Líquido (acima da barra vermelha)
+        # Adiciona rótulos para Lucro Líquido (na parte de baixo da barra vermelha)
         text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
             align="center",
-            baseline="bottom",  # Posiciona o texto acima da barra
-            dy=-10,  # Ajuste fino da posição vertical
+            baseline="top",  # Posiciona o texto na parte de baixo da barra
+            dy=10,  # Ajuste fino da posição vertical
             color="white",  # Cor do texto em branco
             fontSize=12  # Tamanho da fonte
         ).encode(
