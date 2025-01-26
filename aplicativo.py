@@ -93,36 +93,6 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     except:
         return ""
 
-###############################################################################
-#                               TWILIO (WHATSAPP)
-###############################################################################
-def send_whatsapp(recipient_number: str, media_url: str = None):
-    """
-    Envia WhatsApp via Twilio (dados em st.secrets["twilio"]).
-    Exemplo de 'recipient_number': '5511999999999' (sem '+').
-    """
-    from twilio.rest import Client
-    try:
-        account_sid = st.secrets["twilio"]["account_sid"]
-        auth_token = st.secrets["twilio"]["auth_token"]
-        whatsapp_from = st.secrets["twilio"]["whatsapp_from"]
-
-        client = Client(account_sid, auth_token)
-        if media_url:
-            message = client.messages.create(
-                body="Segue o PDF solicitado!",
-                from_=whatsapp_from,
-                to=f"whatsapp:+{recipient_number}",
-                media_url=[media_url]
-            )
-        else:
-            message = client.messages.create(
-                body="Olá! Teste de mensagem via Twilio WhatsApp.",
-                from_=whatsapp_from,
-                to=f"whatsapp:+{recipient_number}"
-            )
-    except Exception as e:
-        st.error(f"Erro ao enviar WhatsApp: {e}")
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
