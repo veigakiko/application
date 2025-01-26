@@ -1092,7 +1092,7 @@ def analytics_page():
         )
 
         # Cria o gráfico de barras agrupadas com Altair
-        chart = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
+        bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
             x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),  # Eixo X: Data formatada e ordenada
             y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
@@ -1104,14 +1104,29 @@ def analytics_page():
         ).properties(
             width=800,
             height=400
-        ).interactive()
+        )
+
+        # Adiciona rótulos com os valores formatados em reais (R$) e na cor branca
+        text = bars.mark_text(
+            align="center",
+            baseline="bottom",  # Posiciona o texto no topo da barra
+            dy=-5,  # Ajuste fino da posição vertical
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
+        ).encode(
+            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+        )
+
+        # Combina as barras e os rótulos
+        chart = (bars + text).interactive()
 
         # Exibe o gráfico no Streamlit
         st.altair_chart(chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-        
+
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
