@@ -1038,11 +1038,16 @@ def analytics_page():
         # Formata a data para o padrão brasileiro (DD/MM/AAAA) apenas para exibição
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
+        # Formata o valor total como moeda brasileira (R$)
+        df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+
         # Cria o gráfico de linha com Altair
         chart = alt.Chart(df_daily).mark_line(point=True).encode(
             x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
             y=alt.Y("Valor_total:Q", title="Total de Vendas (R$)"),  # Q para tipo quantitativo
-            tooltip=["Data_formatada", "Valor_total"]
+            tooltip=["Data_formatada", "Valor_total_formatado"]
         ).properties(
             width=800,
             height=400
@@ -1053,9 +1058,11 @@ def analytics_page():
             align="left",
             baseline="middle",
             dx=10,  # Ajuste da posição horizontal
-            dy=-10  # Ajuste da posição vertical
+            dy=-10,  # Ajuste da posição vertical
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
         ).encode(
-            text="Valor_total:Q"
+            text="Valor_total_formatado:N"  # Exibe o valor formatado como texto
         )
 
         # Combina o gráfico de linha com os rótulos
