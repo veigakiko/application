@@ -1050,21 +1050,20 @@ def analytics_page():
         )
 
         # Cria o gráfico de linha com Altair para Valor Total
-        chart_valor_total = alt.Chart(df_daily).mark_line(color="blue", point=True).encode(
-            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
+        base = alt.Chart(df_daily).encode(
+            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y"))  # Formato brasileiro
+        )
+
+        chart_valor_total = base.mark_line(color="blue", point=True).encode(
             y=alt.Y("Valor_total:Q", title="Valor (R$)"),  # Q para tipo quantitativo
             tooltip=["Data_formatada", "Valor_total_formatado"]
-        ).properties(
-            width=800,
-            height=400
-        ).interactive()
+        )
 
         # Cria o gráfico de linha com Altair para Lucro Líquido
-        chart_lucro_liquido = alt.Chart(df_daily).mark_line(color="green", point=True).encode(
-            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
+        chart_lucro_liquido = base.mark_line(color="green", point=True).encode(
             y=alt.Y("Lucro_Liquido:Q", title="Lucro Líquido (R$)"),  # Q para tipo quantitativo
             tooltip=["Data_formatada", "Lucro_Liquido_formatado"]
-        ).interactive()
+        )
 
         # Adiciona rótulos com os valores no gráfico para Valor Total
         text_valor_total = chart_valor_total.mark_text(
@@ -1091,13 +1090,22 @@ def analytics_page():
         )
 
         # Combina os gráficos de linha e os rótulos
-        final_chart = (chart_valor_total + text_valor_total + chart_lucro_liquido + text_lucro_liquido)
+        final_chart = alt.layer(
+            chart_valor_total, text_valor_total, chart_lucro_liquido, text_lucro_liquido
+        ).resolve_scale(
+            y="independent"  # Garante que as escalas dos eixos Y sejam independentes
+        ).properties(
+            width=800,
+            height=400
+        ).interactive()
 
         # Exibe o gráfico no Streamlit
         st.altair_chart(final_chart, use_container_width=True)
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
+
+
         
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
