@@ -716,6 +716,9 @@ def stock_page():
     st.title("Estoque")
     tabs = st.tabs(["Nova Movimentação", "Movimentações"])
 
+    # ------------------------------------------------------------------------
+    # Tab [0] - Formulário de nova movimentação + Tabela "vw_stock_vs_orders_summary"
+    # ------------------------------------------------------------------------
     with tabs[0]:
         st.subheader("Registrar nova movimentação de estoque")
         product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
@@ -749,6 +752,26 @@ def stock_page():
             else:
                 st.warning("Selecione produto e quantidade > 0.")
 
+        # --------------- NOVA SEÇÃO: Tabela vw_stock_vs_orders_summary ---------------
+        st.subheader("Stock vs. Orders Summary (por total_in_stock DESC)")
+        query_svo = """
+            SELECT product, stock_quantity, orders_quantity, total_in_stock
+            FROM public.vw_stock_vs_orders_summary
+            ORDER BY total_in_stock DESC
+        """
+        data_svo = run_query(query_svo)
+        if data_svo:
+            df_svo = pd.DataFrame(
+                data_svo,
+                columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+            )
+            st.dataframe(df_svo, use_container_width=True)
+        else:
+            st.info("Nenhum dado encontrado em vw_stock_vs_orders_summary.")
+
+    # ------------------------------------------------------------------------
+    # Tab [1] - Listagem de movimentações
+    # ------------------------------------------------------------------------
     with tabs[1]:
         st.subheader("Movimentações de Estoque")
         stock_data = st.session_state.data.get("stock", [])
@@ -831,6 +854,7 @@ def stock_page():
                                 st.error("Falha ao deletar registro.")
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
+
 
 def clients_page():
     """Página para gerenciar clientes."""
