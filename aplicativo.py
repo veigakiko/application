@@ -994,6 +994,7 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
+        
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1025,17 +1026,23 @@ def analytics_page():
         # --------------------------
         st.subheader("Total de Vendas por Dia")
 
-        # Converte a coluna "Data" para o tipo datetime e formata para o padrão brasileiro
-        df["Data"] = pd.to_datetime(df["Data"]).dt.strftime("%d/%m/%Y")
+        # Converte a coluna "Data" para o tipo datetime
+        df["Data"] = pd.to_datetime(df["Data"])
 
         # Agrupa os dados por dia e calcula o total de vendas
         df_daily = df.groupby("Data")["Valor_total"].sum().reset_index()
+
+        # Ordena os dados pela data em ordem crescente
+        df_daily = df_daily.sort_values("Data")
+
+        # Formata a data para o padrão brasileiro (DD/MM/AAAA) apenas para exibição
+        df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         # Cria o gráfico de linha com Altair
         chart = alt.Chart(df_daily).mark_line(point=True).encode(
             x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
             y=alt.Y("Valor_total:Q", title="Total de Vendas (R$)"),  # Q para tipo quantitativo
-            tooltip=["Data", "Valor_total"]
+            tooltip=["Data_formatada", "Valor_total"]
         ).properties(
             width=800,
             height=400
@@ -1059,6 +1066,7 @@ def analytics_page():
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
+        
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
