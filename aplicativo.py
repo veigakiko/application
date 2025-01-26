@@ -1020,15 +1020,6 @@ def cash_page():
         st.warning("Selecione um cliente.")
         
 
-
-
-
-
-import streamlit as st
-import pandas as pd
-import altair as alt
-from datetime import datetime
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1060,9 +1051,17 @@ def analytics_page():
         # --------------------------
         st.subheader("Filtrar por Intervalo de Datas")
 
+        # Converte a coluna "Data" para o tipo datetime
+        df["Data"] = pd.to_datetime(df["Data"])
+
         # Obtém as datas mínima e máxima do DataFrame
-        min_date = df["Data"].min()
-        max_date = df["Data"].max()
+        min_date = df["Data"].min().date()  # Convertendo para datetime.date
+        max_date = df["Data"].max().date()  # Convertendo para datetime.date
+
+        # Verifica se as datas são válidas
+        if min_date is None or max_date is None:
+            st.error("Não há dados disponíveis para exibir.")
+            return
 
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
@@ -1216,6 +1215,7 @@ def analytics_page():
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
