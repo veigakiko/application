@@ -1033,12 +1033,26 @@ def analytics_page():
             st.error("Não há dados disponíveis para exibir.")
             return
 
+        # Define o intervalo padrão como os últimos 7 dias
+        default_end_date = max_date
+        default_start_date = (default_end_date - timedelta(days=6))  # 7 dias atrás (incluindo o dia atual)
+
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+            start_date = st.date_input(
+                "Data Inicial",
+                value=default_start_date,  # Data inicial padrão
+                min_value=min_date,
+                max_value=max_date
+            )
         with col2:
-            end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
+            end_date = st.date_input(
+                "Data Final",
+                value=default_end_date,  # Data final padrão
+                min_value=min_date,
+                max_value=max_date
+            )
 
         # Converte as datas selecionadas para o tipo datetime
         start_date = pd.to_datetime(start_date)
@@ -1185,8 +1199,7 @@ def analytics_page():
 
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-
-
+        
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
