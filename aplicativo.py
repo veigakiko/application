@@ -1086,11 +1086,20 @@ def analytics_page():
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
+        # Define a ordem das métricas para garantir que o Valor Total fique acima do Lucro Líquido
+        df_long["Métrica"] = pd.Categorical(
+            df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
+        )
+
         # Cria o gráfico de barras agrupadas com Altair
         chart = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            x=alt.X("Data_formatada:N", title="Data"),  # Eixo X: Data formatada
+            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),  # Eixo X: Data formatada e ordenada
             y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
-            color=alt.Color("Métrica:N", title="Métrica"),  # Cor das barras por métrica
+            color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
+                domain=["Valor_total", "Lucro_Liquido"],
+                range=["blue", "red"]  # Azul para Valor Total, Vermelho para Lucro Líquido
+            )),
+            order=alt.Order("Métrica:N", sort="ascending"),  # Ordena as barras para Valor Total ficar acima
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]  # Tooltip com detalhes
         ).properties(
             width=800,
