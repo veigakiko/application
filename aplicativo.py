@@ -1022,15 +1022,18 @@ def analytics_page():
         download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
 
         # --------------------------
-        # Gráfico de Total por Dia
+        # Gráfico de Total por Dia e Lucro Líquido
         # --------------------------
-        st.subheader("Total de Vendas por Dia")
+        st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
 
-        # Agrupa os dados por dia e calcula o total de vendas
-        df_daily = df.groupby("Data")["Valor_total"].sum().reset_index()
+        # Agrupa os dados por dia e calcula o total de vendas e lucro líquido
+        df_daily = df.groupby("Data").agg({
+            "Valor_total": "sum",
+            "Lucro_Liquido": "sum"
+        }).reset_index()
 
         # Ordena os dados pela data em ordem crescente
         df_daily = df_daily.sort_values("Data")
@@ -1038,23 +1041,33 @@ def analytics_page():
         # Formata a data para o padrão brasileiro (DD/MM/AAAA) apenas para exibição
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
-        # Formata o valor total como moeda brasileira (R$)
+        # Formata o valor total e o lucro líquido como moeda brasileira (R$)
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
+        df_daily["Lucro_Liquido_formatado"] = df_daily["Lucro_Liquido"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
 
-        # Cria o gráfico de linha com Altair
-        chart = alt.Chart(df_daily).mark_line(point=True).encode(
+        # Cria o gráfico de linha com Altair para Valor Total
+        chart_valor_total = alt.Chart(df_daily).mark_line(color="blue", point=True).encode(
             x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
-            y=alt.Y("Valor_total:Q", title="Total de Vendas (R$)"),  # Q para tipo quantitativo
+            y=alt.Y("Valor_total:Q", title="Valor (R$)"),  # Q para tipo quantitativo
             tooltip=["Data_formatada", "Valor_total_formatado"]
         ).properties(
             width=800,
             height=400
         ).interactive()
 
-        # Adiciona rótulos com os valores no gráfico
-        text = chart.mark_text(
+        # Cria o gráfico de linha com Altair para Lucro Líquido
+        chart_lucro_liquido = alt.Chart(df_daily).mark_line(color="green", point=True).encode(
+            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato brasileiro
+            y=alt.Y("Lucro_Liquido:Q", title="Lucro Líquido (R$)"),  # Q para tipo quantitativo
+            tooltip=["Data_formatada", "Lucro_Liquido_formatado"]
+        ).interactive()
+
+        # Adiciona rótulos com os valores no gráfico para Valor Total
+        text_valor_total = chart_valor_total.mark_text(
             align="left",
             baseline="middle",
             dx=10,  # Ajuste da posição horizontal
@@ -1065,8 +1078,20 @@ def analytics_page():
             text="Valor_total_formatado:N"  # Exibe o valor formatado como texto
         )
 
-        # Combina o gráfico de linha com os rótulos
-        final_chart = (chart + text)
+        # Adiciona rótulos com os valores no gráfico para Lucro Líquido
+        text_lucro_liquido = chart_lucro_liquido.mark_text(
+            align="left",
+            baseline="middle",
+            dx=10,  # Ajuste da posição horizontal
+            dy=-20,  # Ajuste da posição vertical (abaixo dos rótulos de Valor Total)
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
+        ).encode(
+            text="Lucro_Liquido_formatado:N"  # Exibe o valor formatado como texto
+        )
+
+        # Combina os gráficos de linha e os rótulos
+        final_chart = (chart_valor_total + text_valor_total + chart_lucro_liquido + text_lucro_liquido)
 
         # Exibe o gráfico no Streamlit
         st.altair_chart(final_chart, use_container_width=True)
