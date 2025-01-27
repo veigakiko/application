@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 ###############################################################################
-#                               UTILIDADE
+#                               UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
@@ -150,19 +150,32 @@ def load_all_data():
     """
     data = {}
     try:
-        data["orders"] = run_query(
+        # Orders
+        orders = run_query(
             'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
-        data["products"] = run_query(
+        data["orders"] = orders
+
+        # Products
+        products = run_query(
             'SELECT supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
-        data["clients"] = run_query(
+        data["products"] = products
+
+        # Clients
+        clients = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
         ) or []
-        data["stock"] = run_query(
+        data["clients"] = clients
+
+        # Stock
+        stock = run_query(
             'SELECT "Produto","Quantidade","Transação","Data" FROM public.tb_estoque ORDER BY "Data" DESC'
         ) or []
-        data["revenue"] = run_query(
+        data["stock"] = stock
+
+        # Revenue
+        revenue = run_query(
             """
             SELECT date("Data") as dt, SUM("total") as total_dia
             FROM public.vw_pedido_produto
@@ -171,6 +184,7 @@ def load_all_data():
             ORDER BY date("Data")
             """
         ) or pd.DataFrame()
+        data["revenue"] = revenue
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
     return data
@@ -313,7 +327,6 @@ def home_page():
 
     with col_calendar:
         if events_data:
-            import calendar
             cal = calendar.HTMLCalendar(firstweekday=0)
             html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
@@ -325,10 +338,8 @@ def home_page():
                     f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
                     f'title="{nome}: {descricao}"'
                 )
-                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                    target = f'<td class="{day_class}">{dia}</td>'
-                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-                    html_calendario = html_calendario.replace(target, replacement)
+                # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
+                html_calendario = html_calendario.replace(f'<td>{dia}</td>', f'<td{highlight_str}>{dia}</td>', 1)
 
             # CSS para estilizar a tabela do calendário
             st.markdown(
@@ -417,10 +428,7 @@ def home_page():
                 """
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
                 if stock_vs_orders_data:
-                    df_svo = pd.DataFrame(
-                        stock_vs_orders_data,
-                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
-                    )
+                    df_svo = pd.DataFrame(stock_vs_orders_data, columns=["Product","Stock_Quantity","Orders_Quantity","Total_in_Stock"])
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
@@ -842,7 +850,11 @@ def stock_page():
                                     idx_trans = ["Entrada","Saída"].index(original_trans)
                                 edit_trans = st.selectbox("Tipo", ["Entrada","Saída"], index=idx_trans)
                             with col4:
-                                old_date = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date()
+                                try:
+                                    original_datetime = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S")
+                                    old_date = original_datetime.date()
+                                except ValueError:
+                                    old_date = date.today()
                                 edit_date = st.date_input("Data", value=old_date)
 
                             col_upd, col_del = st.columns(2)
@@ -1059,7 +1071,7 @@ def analytics_page():
     data = run_query(query)
 
     if data:
-        # Cria um DataFrame com os dados
+        # Cria um DataFrame com os dados e especifica os nomes das colunas
         df = pd.DataFrame(data, columns=[
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
@@ -1070,7 +1082,7 @@ def analytics_page():
         cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
 
         # Filtra os dados com base no cliente selecionado
-        if cliente_selecionado:
+        if cliente_selecionado and cliente_selecionado != "":
             df_filtrado = df[df["Cliente"] == cliente_selecionado]
         else:
             df_filtrado = df
@@ -1084,7 +1096,7 @@ def analytics_page():
         st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
-        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
+        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"], errors="coerce")
 
         # Obtém as datas mínima e máxima do DataFrame
         min_date = df_filtrado["Data"].min().date() if not df_filtrado.empty else None
@@ -1296,7 +1308,96 @@ def analytics_page():
         else:
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
-            
+        # --------------------------
+        # Gráfico: Lucro Líquido por Produto por Dia
+        # --------------------------
+        st.subheader("Lucro Líquido por Produto por Dia")
+
+        # Query para buscar os dados da view lucro_produto_por_dia
+        query_lucro_produto_dia = """
+            SELECT "Data", "Produto", "Total_Lucro"
+            FROM public.lucro_produto_por_dia;
+        """
+        data_lucro_produto_dia = run_query(query_lucro_produto_dia)
+        if data_lucro_produto_dia:
+            df_lucro_produto_dia = pd.DataFrame(data_lucro_produto_dia, columns=["Data", "Produto", "Total_Lucro"])
+
+            # Converter a coluna "Data" para datetime
+            df_lucro_produto_dia["Data"] = pd.to_datetime(df_lucro_produto_dia["Data"], errors="coerce")
+
+            # Remover linhas com datas inválidas
+            df_lucro_produto_dia = df_lucro_produto_dia.dropna(subset=["Data"])
+
+            # Assegurar que 'Total_Lucro' é numérico
+            df_lucro_produto_dia["Total_Lucro"] = pd.to_numeric(df_lucro_produto_dia["Total_Lucro"], errors="coerce").fillna(0)
+
+            # Verificar se há dados para plotar
+            st.write("### Dados para o Gráfico Lucro Líquido por Produto por Dia")
+            st.write(df_lucro_produto_dia.head())
+
+            # Agrupar os dados por Data e Produto
+            df_lucro_produto_dia = df_lucro_produto_dia.groupby(["Data", "Produto"]).agg({
+                "Total_Lucro": "sum"
+            }).reset_index()
+
+            # Verificar se há dados para plotar
+            if df_lucro_produto_dia.empty:
+                st.info("Nenhum dado para plotar no gráfico Lucro Líquido por Produto por Dia.")
+            else:
+                # Cria um gráfico de bolhas
+                bubble_chart = alt.Chart(df_lucro_produto_dia).mark_circle(
+                    opacity=0.8,
+                    stroke='black',
+                    strokeWidth=1,
+                    strokeOpacity=0.4
+                ).encode(
+                    alt.X(
+                        'Data:T',
+                        title=None,
+                        scale=alt.Scale(domain=[df_lucro_produto_dia["Data"].min(), df_lucro_produto_dia["Data"].max()])
+                    ),
+                    alt.Y(
+                        'Produto:N',
+                        title=None,
+                        sort=alt.EncodingSortField(field="Total_Lucro", op="sum", order='descending')
+                    ),
+                    alt.Size(
+                        'Total_Lucro:Q',
+                        scale=alt.Scale(range=[0, 500]),  # Ajuste a escala conforme necessário
+                        title='Lucro Líquido',
+                        legend=alt.Legend(clipHeight=30, format='s')
+                    ),
+                    alt.Color(
+                        'Produto:N',
+                        legend=None
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Produto:N", title="Produto"),
+                        alt.Tooltip("Data:T", title="Data", format='%d/%m/%Y'),
+                        alt.Tooltip("Total_Lucro:Q", title="Lucro Líquido", format=',.2f')
+                    ],
+                ).properties(
+                    width=1200,
+                    height=400,
+                    title=alt.Title(
+                        text="Lucro Líquido por Produto por Dia",
+                        subtitle="O tamanho da bolha representa o lucro líquido total por dia, por tipo de produto",
+                        anchor='start'
+                    )
+                ).configure_axisY(
+                    domain=False,
+                    ticks=False,
+                    offset=10
+                ).configure_axisX(
+                    grid=False,
+                ).configure_view(
+                    stroke=None
+                )
+
+                st.altair_chart(bubble_chart, use_container_width=True)
+        else:
+            st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1378,7 +1479,7 @@ def events_calendar_page():
     st.subheader("Visualização do Calendário")
 
     cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_padrao)
 
     for ev in df_filtrado.itertuples():
         dia = ev.data_evento.day
@@ -1386,10 +1487,8 @@ def events_calendar_page():
             f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
             f'title="{ev.nome}: {ev.descricao}"'
         )
-        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-            target = f'<td class="{day_class}">{dia}</td>'
-            replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-            html_calendario = html_calendario.replace(target, replacement)
+        # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
+        html_calendario = html_calendario.replace(f'<td>{dia}</td>', f'<td{highlight_str}>{dia}</td>', 1)
 
     st.markdown(
         """
@@ -1585,11 +1684,11 @@ def settings_page():
                 commit=True
             )
             if success:
-                st.success("Record updated successfully!")
+                st.success("Registro atualizado com sucesso!")
                 get_latest_settings.clear()
                 st.session_state.last_settings = get_latest_settings()
             else:
-                st.error("Failed to update record.")
+                st.error("Falha ao atualizar registro.")
         else:
             if company.strip():
                 q_ins = """
@@ -1599,13 +1698,13 @@ def settings_page():
                 """
                 success = run_query(q_ins, (company, address, cnpj_cpf, email, telephone, contract_number), commit=True)
                 if success:
-                    st.success("Record inserted successfully!")
+                    st.success("Registro inserido com sucesso!")
                     get_latest_settings.clear()
                     st.session_state.last_settings = get_latest_settings()
                 else:
-                    st.error("Failed to save record.")
+                    st.error("Falha ao salvar registro.")
             else:
-                st.warning("Please provide at least the Company name.")
+                st.warning("Por favor, forneça pelo menos o nome da empresa.")
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
@@ -1724,7 +1823,7 @@ def sidebar_navigation():
         )
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logged in at {st.session_state.login_time.strftime('%H:%M')}"
+                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%H:%M')}"
             )
     return selected
 
@@ -1897,7 +1996,7 @@ def main():
     # Botão "Logout" na sidebar
     with st.sidebar:
         if st.button("Logout"):
-            for key in ["home_page_initialized"]:
+            for key in ["data", "last_settings", "login_time"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.logged_in = False
