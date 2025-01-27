@@ -1211,6 +1211,17 @@ def analytics_page():
             )
 
         # --------------------------
+        # Tabela "Profit per Day" (Agora Abaixo dos Totais)
+        # --------------------------
+        st.subheader("Profit per Day")
+        df_daily_table = df_daily.copy()
+        df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
+        df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
+        df_daily_table["Lucro líquido"] = df_daily_table["Lucro_Liquido"].apply(format_currency)
+        df_daily_table = df_daily_table[["Data", "Valor total", "Lucro líquido"]]
+        st.table(df_daily_table)
+
+        # --------------------------
         # Gráfico "Produtos Mais Lucrativos" (Atualizado)
         # --------------------------
         st.subheader("Produtos Mais Lucrativos")
