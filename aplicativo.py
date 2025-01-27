@@ -94,6 +94,39 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
         return ""
 
 
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """
+    Gera um PDF simples a partir de um DataFrame, simulando uma 'invoice' básica,
+    e disponibiliza para download.
+    Ajuste conforme a formatação que desejar.
+    """
+    if df.empty:
+        st.warning("Não há itens para gerar invoice.")
+        return
+    pdf_bytes = convert_df_to_pdf(df)
+    st.download_button(
+        label="Baixar Nota (PDF)",
+        data=pdf_bytes,
+        file_name="invoice.pdf",
+        mime="application/pdf"
+    )
+
+def process_payment(selected_client: str, new_status: str):
+    """
+    Atualiza o status dos pedidos 'em aberto' para o status de pagamento definido.
+    """
+    query = """
+        UPDATE public.tb_pedido
+        SET status = %s
+        WHERE "Cliente" = %s AND status = 'em aberto'
+    """
+    success = run_query(query, (new_status, selected_client), commit=True)
+    if success:
+        st.toast(f"Payment processed for {selected_client} as {new_status}!")
+        refresh_data()
+    else:
+        st.error("Falha ao processar pagamento.")
+
 ###############################################################################
 #                            CONEXÃO COM BANCO
 ###############################################################################
@@ -225,10 +258,6 @@ def home_page():
     else:
         # Fallback se não houver registro em tb_settings
         st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
-
-    # -----------------------------------------------------------------------
-    # A PARTIR DAQUI, O CÓDIGO ORIGINAL DA HOME (CALENDÁRIO, EVENTOS, ETC.)
-    # -----------------------------------------------------------------------
 
     # Obtém data atual e separa ano/mês para buscar eventos
     current_date = date.today()
@@ -505,7 +534,11 @@ def orders_page():
                             with col1:
                                 product_data = st.session_state.data.get("products", [])
                                 product_list = [row[1] for row in product_data] if product_data else ["No products"]
-                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                                if original_product in product_list:
+                                    idx = product_list.index(original_product)
+                                else:
+                                    idx = 0
+                                edit_prod = st.selectbox("Produto", product_list, index=idx)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
@@ -513,7 +546,11 @@ def orders_page():
                                     "em aberto", "Received - Debited", "Received - Credit",
                                     "Received - Pix", "Received - Cash"
                                 ]
-                                edit_status = st.selectbox("Status", status_opts, index=status_opts.index(original_status) if original_status in status_opts else 0)
+                                if original_status in status_opts:
+                                    idx_st = status_opts.index(original_status)
+                                else:
+                                    idx_st = 0
+                                edit_status = st.selectbox("Status", status_opts, index=idx_st)
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -776,15 +813,17 @@ def stock_page():
                             with col1:
                                 product_data = run_query("SELECT product FROM public.tb_products ORDER BY product;")
                                 product_list = [row[0] for row in product_data] if product_data else ["No products"]
-                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                                idx_prod = product_list.index(original_product) if original_product in product_list else 0
+                                edit_prod = st.selectbox("Produto", product_list, index=idx_prod)
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
                             with col3:
-                                edit_trans = st.selectbox(
-                                    "Tipo", ["Entrada", "Saída"],
-                                    index=["Entrada", "Saída"].index(original_trans)
-                                    if original_trans in ["Entrada", "Saída"] else 0
-                                )
+                                trans_opts = ["Entrada", "Saída"]
+                                if original_trans in trans_opts:
+                                    idx_tr = trans_opts.index(original_trans)
+                                else:
+                                    idx_tr = 0
+                                edit_trans = st.selectbox("Tipo", trans_opts, index=idx_tr)
                             with col4:
                                 edit_date = st.date_input("Data", value=datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date())
 
@@ -824,7 +863,6 @@ def stock_page():
                                 st.error("Falha ao deletar registro.")
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
-
 
 def clients_page():
     """Página para gerenciar clientes."""
@@ -965,6 +1003,7 @@ def cash_page():
             desconto_aplicado = float(desconto_aplicado or 0)
             total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
 
+            # Gera e disponibiliza PDF para download
             generate_invoice_for_printer(df)
 
             st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
@@ -988,7 +1027,6 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
-        
 
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
@@ -1026,19 +1064,15 @@ def analytics_page():
         # Opção para download dos dados
         download_df_as_csv(df_filtrado, "analytics.csv", label="Baixar Dados Analytics")
 
-        # --------------------------
-        # Seleção de intervalo de datas
-        # --------------------------
         st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
         df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
-        min_date = df_filtrado["Data"].min().date()  # Convertendo para datetime.date
-        max_date = df_filtrado["Data"].max().date()  # Convertendo para datetime.date
+        min_date = df_filtrado["Data"].min().date() if not df_filtrado.empty else None
+        max_date = df_filtrado["Data"].max().date() if not df_filtrado.empty else None
 
-        # Verifica se as datas são válidas
         if min_date is None or max_date is None:
             st.error("Não há dados disponíveis para exibir.")
             return
@@ -1062,19 +1096,14 @@ def analytics_page():
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
-        # Agrupa os dados por dia e calcula o total de vendas e lucro líquido
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
             "Lucro_Liquido": "sum"
         }).reset_index()
 
-        # Ordena os dados pela data em ordem crescente
         df_daily = df_daily.sort_values("Data")
-
-        # Formata a data para o padrão brasileiro (DD/MM/AAAA) apenas para exibição
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
-        # Formata o valor total e o lucro líquido como moeda brasileira (R$)
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
@@ -1082,7 +1111,7 @@ def analytics_page():
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
-        # Transforma o DataFrame para o formato "long" (necessário para o gráfico de barras agrupadas)
+        # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
             value_vars=["Valor_total", "Lucro_Liquido"],
@@ -1090,83 +1119,65 @@ def analytics_page():
             value_name="Valor"
         )
 
-        # Formata os valores no DataFrame longo
         df_long["Valor_formatado"] = df_long["Valor"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
-        # Define a ordem das métricas para garantir que o Valor Total fique acima do Lucro Líquido
         df_long["Métrica"] = pd.Categorical(
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
-        # Cria o gráfico de barras agrupadas com Altair
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),  # Eixo X: Data formatada e ordenada
-            y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
+            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
+            y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
-                range=["gray", "#bcbd22"]  # Cinza para Valor Total, Verde-amarelado para Lucro Líquido
+                range=["gray", "#bcbd22"]
             )),
-            order=alt.Order("Métrica:N", sort="ascending"),  # Ordena as barras para Valor Total ficar acima
-            tooltip=["Data_formatada", "Métrica", "Valor_formatado"]  # Tooltip com detalhes
+            order=alt.Order("Métrica:N", sort="ascending"),
+            tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
         ).properties(
             width=800,
             height=400
         )
 
-        # Adiciona rótulos para Valor Total (acima da barra cinza)
         text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
             align="center",
-            baseline="bottom",  # Posiciona o texto acima da barra
-            dy=-10,  # Ajuste fino da posição vertical
-            color="white",  # Cor do texto em branco
-            fontSize=12  # Tamanho da fonte
+            baseline="bottom",
+            dy=-10,
+            color="white",
+            fontSize=12
         ).encode(
             x="Data_formatada:N",
             y="Valor:Q",
-            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+            text="Valor_formatado:N"
         )
 
-        # Adiciona rótulos para Lucro Líquido (na parte de baixo da barra verde-amarelada)
         text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
             align="center",
-            baseline="top",  # Posiciona o texto na parte de baixo da barra
-            dy=10,  # Ajuste fino da posição vertical
-            color="white",  # Cor do texto em branco
-            fontSize=12  # Tamanho da fonte
+            baseline="top",
+            dy=10,
+            color="white",
+            fontSize=12
         ).encode(
             x="Data_formatada:N",
             y="Valor:Q",
-            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+            text="Valor_formatado:N"
         )
 
-        # Combina as barras e os rótulos
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
-
-        # Exibe o gráfico no Streamlit
         st.altair_chart(chart, use_container_width=True)
 
-        # --------------------------
-        # Totais de Valor Total e Lucro Líquido
-        # --------------------------
         st.subheader("Totais no Intervalo Selecionado")
-
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
-
         col1, col2 = st.columns(2)
         with col1:
             st.metric("Soma Valor Total", format_currency(soma_valor_total))
         with col2:
             st.metric("Soma Lucro Líquido", format_currency(soma_lucro_liquido))
 
-        # --------------------------
-        # Gráfico de Produtos Mais Lucrativos
-        # --------------------------
         st.subheader("Produtos Mais Lucrativos")
-
-        # Query para buscar os dados da view vw_vendas_produto
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             FROM public.vw_vendas_produto;
@@ -1174,42 +1185,31 @@ def analytics_page():
         data_produtos = run_query(query_produtos)
 
         if data_produtos:
-            # Cria um DataFrame com os dados
             df_produtos = pd.DataFrame(data_produtos, columns=[
                 "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             ])
-
-            # Ordena os produtos pelo lucro total (do maior para o menor)
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
-
-            # Seleciona os 5 produtos mais lucrativos
             df_produtos_top5 = df_produtos.head(5)
-
-            # Formata o lucro total como moeda brasileira (R$)
             df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            # Cria o gráfico de barras horizontais com Altair
             chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="gray").encode(
-                x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),  # Eixo X: Lucro Total
-                y=alt.Y("Produto:N", title="Produto", sort="-x"),  # Eixo Y: Produto (ordenado pelo lucro)
-                tooltip=["Produto", "Total_Lucro_formatado"]  # Tooltip com detalhes
+                x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
+                y=alt.Y("Produto:N", title="Produto", sort="-x"),
+                tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
                 width=800,
                 height=400,
                 title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
 
-            # Exibe o gráfico no Streamlit
             st.altair_chart(chart_produtos, use_container_width=True)
-
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
-
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-        
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1474,7 +1474,6 @@ def settings_page():
 
     st.subheader("Configurações da Empresa")
 
-    # Preenche o form com os valores do último registro (se existir)
     with st.form(key='settings_form'):
         company = st.text_input("Company", value=last_settings[1] if last_settings else "")
         address = st.text_input("Address", value=last_settings[2] if last_settings else "")
@@ -1483,11 +1482,9 @@ def settings_page():
         telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
         contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
 
-        # Renomeado para "Update Registration"
         submit_settings = st.form_submit_button("Update Registration")
 
     if submit_settings:
-        # Se já existe um registro, faz UPDATE; caso contrário, INSERT
         if last_settings:
             q_upd = """
                 UPDATE public.tb_settings
@@ -1507,7 +1504,6 @@ def settings_page():
             else:
                 st.error("Failed to update record.")
         else:
-            # Caso não tenha nenhum registro, insere um novo
             if company.strip():
                 q_ins = """
                     INSERT INTO public.tb_settings
@@ -1738,7 +1734,7 @@ def login_page():
         }
         /* Reduz a distância entre os campos de texto (username e password) */
         .css-1siy2j8 {
-            gap: 0.1rem !important; /* Ajuste fino de espaçamento */
+            gap: 0.1rem !important; 
         }
         .css-1siy2j8 input {
             margin-bottom: 0 !important; 
@@ -1762,7 +1758,6 @@ def login_page():
     if logo:
         st.image(logo, use_column_width=True)
 
-    # Removendo st.title("") para não adicionar espaçamento extra
     st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
