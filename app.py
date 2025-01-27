@@ -1040,6 +1040,10 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
+
+
+
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1240,19 +1244,18 @@ def analytics_page():
                 "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             ])
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
-            df_produtos_top5 = df_produtos.head(5)
-            df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
+            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(
+            chart_produtos = alt.Chart(df_produtos).mark_bar(color="#1b4f72").encode(
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
                 width=1200,  # Aumentado o comprimento do gráfico
                 height=400,
-                title="Top 5 Produtos Mais Lucrativos"
+                title="Produtos Mais Lucrativos"
             ).interactive()
 
             st.altair_chart(chart_produtos, use_container_width=True)
@@ -1297,7 +1300,7 @@ def analytics_page():
             )
 
             # Adiciona labels com os valores em reais
-            labels = donut_chart.mark_text(radius=100, size=12, color="white").encode(
+            labels = donut_chart.mark_text(radius=100, size=12, color="white", fontWeight="bold").encode(
                 text=alt.Text("Lucro_Liquido_formatado:N")
             )
 
@@ -1379,7 +1382,6 @@ def analytics_page():
         # --------------------------
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
-
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
