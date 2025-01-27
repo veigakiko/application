@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 ###############################################################################
-#                               UTILIDADEs
+#                               UTILIDADES
 ###############################################################################
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
@@ -1192,6 +1192,16 @@ def analytics_page():
         with col2:
             st.metric("Soma Lucro Líquido", format_currency(soma_lucro_liquido))
 
+        # --------------------------
+        # Profit per Day Table
+        # --------------------------
+        st.subheader("Profit per Day")
+        df_daily_table = df_daily.copy()
+        df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
+        df_daily_table["Lucro Líquido"] = df_daily_table["Lucro_Liquido"].apply(format_currency)
+        df_daily_table = df_daily_table[["Data", "Lucro Líquido"]]
+        st.table(df_daily_table)
+
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
@@ -1224,7 +1234,6 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
     else:
         st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
-
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
@@ -1820,8 +1829,6 @@ def main():
         analytics_page()
     elif selected_page == "Calendário de Eventos":
         events_calendar_page()
-    elif selected_page == "Programa de Fidelidade":
-        loyalty_program_page()
     elif selected_page == "Settings":
         settings_page()
 
