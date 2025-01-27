@@ -370,7 +370,7 @@ def home_page():
     with col_events:
         st.markdown("### Lista de Eventos")
         if events_data:
-            events_sorted = sorted(events_data, key=lambda x: x[2].day)
+            events_sorted = sorted(events_data, key=lambda x: x[2].day, reverse=True)
             for ev in events_sorted:
                 nome, descricao, data_evento = ev
                 dia = data_evento.day
@@ -461,6 +461,9 @@ def home_page():
                     df_lucro["Custo total"] = df_lucro["Custo total"].apply(format_currency)
                     df_lucro["Lucro líquido"] = df_lucro["Lucro líquido"].apply(format_currency)
 
+                    # Ordena por Data DESC
+                    df_lucro = df_lucro.sort_values("Data", ascending=False)
+
                     styled_df_lucro = df_lucro.style.set_table_styles([
                         {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
                         {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
@@ -470,7 +473,6 @@ def home_page():
                     st.info("Nenhum dado encontrado em vw_lucro_dia.")
             except Exception as e:
                 st.error(f"Erro ao exibir dados de lucro: {e}")
-
 
 def orders_page():
     """Página de pedidos."""
@@ -1113,13 +1115,19 @@ def analytics_page():
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
+            "Custo_total": "sum",
             "Lucro_Liquido": "sum"
         }).reset_index()
 
-        df_daily = df_daily.sort_values("Data")
+        # Ordena por Data DESC
+        df_daily = df_daily.sort_values("Data", ascending=False)
+
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_daily["Custo_total_formatado"] = df_daily["Custo_total"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
         df_daily["Lucro_Liquido_formatado"] = df_daily["Lucro_Liquido"].apply(
@@ -1129,7 +1137,7 @@ def analytics_page():
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
-            value_vars=["Valor_total", "Lucro_Liquido"],
+            value_vars=["Valor_total", "Custo_total", "Lucro_Liquido"],
             var_name="Métrica",
             value_name="Valor"
         )
@@ -1139,15 +1147,15 @@ def analytics_page():
         )
 
         df_long["Métrica"] = pd.Categorical(
-            df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
+            df_long["Métrica"], categories=["Valor_total", "Custo_total", "Lucro_Liquido"], ordered=True
         )
 
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
             x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
-                domain=["Valor_total", "Lucro_Liquido"],
-                range=["gray", "#bcbd22"]
+                domain=["Valor_total", "Custo_total", "Lucro_Liquido"],
+                range=["gray", "blue", "#bcbd22"]
             )),
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
@@ -1157,6 +1165,18 @@ def analytics_page():
         )
 
         text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
+            align="center",
+            baseline="bottom",
+            dy=-10,
+            color="white",
+            fontSize=12
+        ).encode(
+            x="Data_formatada:N",
+            y="Valor:Q",
+            text="Valor_formatado:N"
+        )
+
+        text_custo_total = alt.Chart(df_long[df_long["Métrica"] == "Custo_total"]).mark_text(
             align="center",
             baseline="bottom",
             dy=-10,
@@ -1180,7 +1200,7 @@ def analytics_page():
             text="Valor_formatado:N"
         )
 
-        chart = (bars + text_valor_total + text_lucro_liquido).interactive()
+        chart = (bars + text_valor_total + text_custo_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
         st.subheader("Totais no Intervalo Selecionado")
@@ -1188,44 +1208,35 @@ def analytics_page():
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
         with col1:
-            st.metric("Soma Valor Total", format_currency(soma_valor_total))
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
         with col2:
-            st.metric("Soma Lucro Líquido", format_currency(soma_lucro_liquido))
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
 
         # --------------------------
-        # Profit per day table
+        # Profit per Day Table
         # --------------------------
         st.subheader("Profit per Day")
-        try:
-            query_lucro = """
-                SELECT "Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"
-                FROM public.vw_lucro_dia
-                ORDER BY "Data" DESC
-            """
-            data_lucro = run_query(query_lucro)
-            if data_lucro:
-                df_lucro = pd.DataFrame(
-                    data_lucro,
-                    columns=["Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"]
-                )
-                df_lucro["Soma_Valor_total"] = pd.to_numeric(df_lucro["Soma_Valor_total"], errors="coerce").fillna(0)
-                df_lucro["Soma_Custo_total"] = pd.to_numeric(df_lucro["Soma_Custo_total"], errors="coerce").fillna(0)
-                df_lucro["Soma_Lucro_Liquido"] = pd.to_numeric(df_lucro["Soma_Lucro_Liquido"], errors="coerce").fillna(0)
-
-                df_lucro.columns = ["Data", "Valor total", "Custo total", "Lucro líquido"]
-                df_lucro["Valor total"] = df_lucro["Valor total"].apply(format_currency)
-                df_lucro["Custo total"] = df_lucro["Custo total"].apply(format_currency)
-                df_lucro["Lucro líquido"] = df_lucro["Lucro líquido"].apply(format_currency)
-
-                styled_df_lucro = df_lucro.style.set_table_styles([
-                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
-                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
-                ])
-                st.write(styled_df_lucro)
-            else:
-                st.info("Nenhum dado encontrado em vw_lucro_dia.")
-        except Exception as e:
-            st.error(f"Erro ao exibir dados de lucro: {e}")
+        df_daily_table = df_daily.copy()
+        df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
+        df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
+        df_daily_table["Custo total"] = df_daily_table["Custo_total"].apply(format_currency)
+        df_daily_table["Lucro líquido"] = df_daily_table["Lucro_Liquido"].apply(format_currency)
+        df_daily_table = df_daily_table[["Data", "Valor total", "Custo total", "Lucro líquido"]]
+        st.table(df_daily_table)
 
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
