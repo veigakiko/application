@@ -1296,7 +1296,86 @@ def analytics_page():
         else:
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
-            
+        # --------------------------
+        # Novo Gráfico: Lucro Líquido por Produto por Dia
+        # --------------------------
+        st.subheader("Lucro Líquido por Produto por Dia")
+
+        # Query para buscar os dados da view lucro_produto_por_dia
+        query_lucro_produto_dia = """
+            SELECT "Data", "Produto", "Total_Lucro"
+            FROM public.lucro_produto_por_dia;
+        """
+        data_lucro_produto_dia = run_query(query_lucro_produto_dia)
+
+        if data_lucro_produto_dia:
+            df_lucro_produto_dia = pd.DataFrame(data_lucro_produto_dia, columns=["Data", "Produto", "Total_Lucro"])
+
+            # Converte a coluna "Data" para datetime
+            df_lucro_produto_dia["Data"] = pd.to_datetime(df_lucro_produto_dia["Data"], errors="coerce")
+
+            # Remove linhas com datas inválidas
+            df_lucro_produto_dia = df_lucro_produto_dia.dropna(subset=["Data"])
+
+            # Agrupa os dados por Data e Produto (caso ainda não estejam agrupados)
+            df_lucro_produto_dia = df_lucro_produto_dia.groupby(["Data", "Produto"]).agg({
+                "Total_Lucro": "sum"
+            }).reset_index()
+
+            # Cria um gráfico de bolhas similar ao primeiro exemplo
+            bubble_chart = alt.Chart(df_lucro_produto_dia).mark_circle(
+                opacity=0.8,
+                stroke='black',
+                strokeWidth=1,
+                strokeOpacity=0.4
+            ).encode(
+                alt.X(
+                    'Data:T',
+                    title=None,
+                    scale=alt.Scale(domain=[df_lucro_produto_dia["Data"].min(), df_lucro_produto_dia["Data"].max()])
+                ),
+                alt.Y(
+                    'Produto:N',
+                    title=None,
+                    sort=alt.EncodingSortField(field="Total_Lucro", op="sum", order='descending')
+                ),
+                alt.Size(
+                    'Total_Lucro:Q',
+                    scale=alt.Scale(range=[0, 2500]),
+                    title='Lucro Líquido',
+                    legend=alt.Legend(clipHeight=30, format='s')
+                ),
+                alt.Color(
+                    'Produto:N',
+                    legend=None
+                ),
+                tooltip=[
+                    alt.Tooltip("Produto:N", title="Produto"),
+                    alt.Tooltip("Data:T", title="Data", format='%Y-%m-%d'),
+                    alt.Tooltip("Total_Lucro:Q", title="Lucro Líquido", format=',.2f')
+                ],
+            ).properties(
+                width=1200,
+                height=400,
+                title=alt.Title(
+                    text="Lucro Líquido por Produto por Dia",
+                    subtitle="O tamanho da bolha representa o lucro líquido total por dia, por tipo de produto",
+                    anchor='start'
+                )
+            ).configure_axisY(
+                domain=False,
+                ticks=False,
+                offset=10
+            ).configure_axisX(
+                grid=False,
+            ).configure_view(
+                stroke=None
+            )
+
+            st.altair_chart(bubble_chart, use_container_width=True)
+        else:
+            st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
