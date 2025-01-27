@@ -1060,7 +1060,7 @@ def cash_page():
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-    st.subheader("Detalhes dos Pedidos")
+    st.subheader("")
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
@@ -1080,7 +1080,7 @@ def analytics_page():
         # --------------------------
         # Filtrar por Intervalo de Datas
         # --------------------------
-        st.subheader("Filtrar por Intervalo de Datas")
+        st.subheader("")
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1115,7 +1115,7 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-        st.subheader("Totais no Intervalo Selecionado")
+        st.subheader("")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1141,7 +1141,7 @@ def analytics_page():
         # --------------------------
         # Select a Customer
         # --------------------------
-        st.subheader("Selecione um Cliente")
+        st.subheader("")
 
         clientes = df_filtrado["Cliente"].unique().tolist()
         cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
@@ -1153,7 +1153,7 @@ def analytics_page():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-        st.subheader("Total de Vendas e Lucro Líquido por Dia")
+        st.subheader("")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
