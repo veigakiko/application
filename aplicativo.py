@@ -1119,19 +1119,18 @@ def analytics_page():
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Ajustado)
+                # Gráfico de Barras Agrupadas (Atualizado)
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
-            "Lucro_Liquido": "sum"
+            "Lucro_Liquido": "sum"  # Removido "Custo_total"
         }).reset_index()
 
         # Ordena por Data ASC para que o dia mais antigo apareça primeiro
-        df_daily = df_daily.sort_values("Data", ascending=True)
+        df_daily = df_daily.sort_values("Data", ascending=True)  # Alterado para ascending=True
 
-        # Formatação para exibição no gráfico
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
@@ -1144,7 +1143,7 @@ def analytics_page():
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
-            value_vars=["Valor_total", "Lucro_Liquido"],
+            value_vars=["Valor_total", "Lucro_Liquido"],  # Removido "Custo_total"
             var_name="Métrica",
             value_name="Valor"
         )
@@ -1157,18 +1156,17 @@ def analytics_page():
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
-        # Cria o gráfico com o eixo X formatado corretamente
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Ajuste do formato aqui
+            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
-                range=["#1b4f72", "#bcbd22"]
+                range=["#1b4f72", "#bcbd22"]  # Cor do menu para "Valor_total"
             )),
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
         ).properties(
-            width=1200,
+            width=1200,  # Aumentado o comprimento do gráfico
             height=400
         )
 
@@ -1179,7 +1177,7 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data:T",
+            x="Data_formatada:N",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
@@ -1191,7 +1189,7 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data:T",
+            x="Data_formatada:N",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
@@ -1221,7 +1219,6 @@ def analytics_page():
                 """,
                 unsafe_allow_html=True
             )
-
         # --------------------------
         # Tabela "Profit per Day" (Agora Abaixo dos Totais)
         # --------------------------
