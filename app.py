@@ -380,6 +380,7 @@ def home_page():
     st.markdown("---")
 
     # Seções adicionais para usuários 'admin'
+
     if st.session_state.get("username") == "admin":
 
         # ------------------- Open Orders Summary -------------------
@@ -1075,30 +1076,17 @@ def analytics_page():
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
 
-        # Dropdown para selecionar o cliente
-        clientes = df["Cliente"].unique().tolist()
-        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
-
-        # Filtra os dados com base no cliente selecionado
-        if cliente_selecionado and cliente_selecionado != "":
-            df_filtrado = df[df["Cliente"] == cliente_selecionado]
-        else:
-            df_filtrado = df
-
-        # Exibe o DataFrame filtrado
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        # Opção para download dos dados
-        download_df_as_csv(df_filtrado, "analytics.csv", label="Baixar Dados Analytics")
-
+        # --------------------------
+        # Filtrar por Intervalo de Datas
+        # --------------------------
         st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
-        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
+        df["Data"] = pd.to_datetime(df["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
-        min_date = df_filtrado["Data"].min().date() if not df_filtrado.empty else None
-        max_date = df_filtrado["Data"].max().date() if not df_filtrado.empty else None
+        min_date = df["Data"].min().date() if not df.empty else None
+        max_date = df["Data"].max().date() if not df.empty else None
 
         if min_date is None or max_date is None:
             st.error("Não há dados disponíveis para exibir.")
@@ -1121,10 +1109,22 @@ def analytics_page():
         end_datetime = pd.to_datetime(end_date)
 
         # Filtra o DataFrame com base no intervalo de datas selecionado
-        df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
+        df_filtrado = df[(df["Data"] >= start_datetime) & (df["Data"] <= end_datetime)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Total de Vendas e Lucro Líquido por Dia)
+        # Select a Customer
+        # --------------------------
+        st.subheader("Selecione um Cliente")
+
+        clientes = df_filtrado["Cliente"].unique().tolist()
+        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
+
+        # Filtra os dados com base no cliente selecionado
+        if cliente_selecionado and cliente_selecionado != "":
+            df_filtrado = df_filtrado[df_filtrado["Cliente"] == cliente_selecionado]
+
+        # --------------------------
+        # Total Sales and Net Profit per Day Chart
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1221,6 +1221,9 @@ def analytics_page():
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
+        # --------------------------
+        # Totals in Selected Range
+        # --------------------------
         st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
@@ -1245,7 +1248,11 @@ def analytics_page():
             )
 
         # --------------------------
-        # Tabela "Profit per Day" (Agora Abaixo dos Totais)
+        # Select a Customer (Já implementado acima)
+        # --------------------------
+
+        # --------------------------
+        # Profit per Day Table
         # --------------------------
         st.subheader("Profit per Day")
         df_daily_table = df_daily.copy()
@@ -1256,7 +1263,7 @@ def analytics_page():
         st.table(df_daily_table)
 
         # --------------------------
-        # Gráfico "Produtos Mais Lucrativos" (Atualizado)
+        # Most Profitable Products Chart
         # --------------------------
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
@@ -1290,7 +1297,7 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
 
         # --------------------------
-        # Novo Gráfico Donut Chart - Lucro Líquido por Status_Pedido
+        # Net Profit Distribution by Order Status Chart with Labels
         # --------------------------
         st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
 
@@ -1311,7 +1318,7 @@ def analytics_page():
 
             # Formata os valores monetários
             df_status_lucro["Lucro_Liquido_formatado"] = df_status_lucro["Lucro_Liquido"].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                lambda x: format_currency(x)
             )
 
             # Cria o Donut Chart usando Altair
@@ -1326,12 +1333,20 @@ def analytics_page():
                 title="Lucro Líquido por Status do Pedido"
             )
 
-            st.altair_chart(donut_chart, use_container_width=True)
+            # Adiciona labels com os valores em reais
+            labels = donut_chart.mark_text(radius=100, size=12).encode(
+                text=alt.Text("Lucro_Liquido_formatado:N")
+            )
+
+            # Combinação do Donut Chart com Labels
+            final_donut = donut_chart + labels
+
+            st.altair_chart(final_donut, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
-        # Gráfico: Lucro Líquido por Produto por Dia (Ajustado)
+        # Net Profit by Product per Day Chart
         # --------------------------
         st.subheader("Lucro Líquido por Produto por Dia")
 
