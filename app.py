@@ -1040,7 +1040,6 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1080,7 +1079,10 @@ def analytics_page():
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+            # Set Start Date to the first day of the current month
+            current_date = date.today()
+            start_date_default = current_date.replace(day=1)
+            start_date = st.date_input("Data Inicial", start_date_default, min_value=min_date, max_value=max_date)
         with col2:
             end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
