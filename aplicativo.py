@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 ###############################################################################
-#                               UTILIDADE
+#                               UTILIDADEs
 ###############################################################################
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
