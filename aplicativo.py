@@ -266,14 +266,20 @@ def generate_invoice_for_printer(df: pd.DataFrame):
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
 def home_page():
-    """Página inicial."""
+    """Página inicial do aplicativo."""
+    # Verifica se temos um registro em last_settings no session_state
     last_settings = st.session_state.get("last_settings", None)
-    if last_settings:
-        company_value = last_settings[1]
-        address_value = last_settings[2]
-        telephone_value = last_settings[5]
 
+    if last_settings:
+        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
+        company_value = last_settings[1]    # Column: company
+        address_value = last_settings[2]    # Column: address
+        telephone_value = last_settings[5]  # Column: telephone
+
+        # 1) Center the page title
         st.markdown(f"<h1 style='text-align:center;'>{company_value}</h1>", unsafe_allow_html=True)
+
+        # 2) Include a line after the telephone
         st.markdown(
             f"""
             <p style='font-size:14px; text-align:center; margin-top:-10px;'>
@@ -285,9 +291,186 @@ def home_page():
             unsafe_allow_html=True
         )
     else:
+        # Fallback se não houver registro em tb_settings
         st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
 
-    # Adicionar mais lógica do "Home" se quiser (calendário, etc.)
+    # Obtém data atual e separa ano/mês para buscar eventos
+    current_date = date.today()
+    ano_atual = current_date.year
+    mes_atual = current_date.month
+
+    # Obter eventos do banco de dados para o mês atual
+    events_query = """
+        SELECT nome, descricao, data_evento 
+        FROM public.tb_eventos 
+        WHERE EXTRACT(YEAR FROM data_evento) = %s AND EXTRACT(MONTH FROM data_evento) = %s
+        ORDER BY data_evento
+    """
+    events_data = run_query(events_query, (ano_atual, mes_atual))
+
+    # Duas colunas: uma para o calendário, outra para a lista de eventos
+    col_calendar, col_events = st.columns([1, 1], gap="large")
+
+    with col_calendar:
+        if events_data:
+            import calendar
+            cal = calendar.HTMLCalendar(firstweekday=0)
+            html_calendario = cal.formatmonth(ano_atual, mes_atual)
+
+            # Destacar dias com eventos
+            for ev in events_data:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                highlight_str = (
+                    f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
+                    f'title="{nome}: {descricao}"'
+                )
+                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+                    target = f'<td class="{day_class}">{dia}</td>'
+                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                    html_calendario = html_calendario.replace(target, replacement)
+
+            # CSS para estilizar a tabela do calendário
+            st.markdown(
+                """
+                <style>
+                table {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 12px;
+                }
+                th {
+                    background-color: #1b4f72;
+                    color: white;
+                    padding: 5px;
+                }
+                td {
+                    width: 14.28%;
+                    height: 45px;
+                    text-align: center;
+                    vertical-align: top;
+                    border: 1px solid #ddd;
+                }
+                @media only screen and (max-width: 600px) {
+                    table {
+                        font-size: 10px;
+                    }
+                    td {
+                        height: 35px;
+                    }
+                }
+                </style>
+                """,
+                unsafe_allow_html=True
+            )
+            st.markdown(html_calendario, unsafe_allow_html=True)
+        else:
+            st.info("Nenhum evento registrado para este mês.")
+
+    with col_events:
+        st.markdown("### Lista de Eventos")
+        if events_data:
+            events_sorted = sorted(events_data, key=lambda x: x[2].day)
+            for ev in events_sorted:
+                nome, descricao, data_evento = ev
+                dia = data_evento.day
+                st.write(f"**{dia}** - {nome}: {descricao}")
+        else:
+            st.write("Nenhum evento para este mês.")
+
+    st.markdown("---")
+
+    # Seções adicionais para usuários 'admin'
+    if st.session_state.get("username") == "admin":
+
+        # ------------------- Open Orders Summary -------------------
+        with st.expander("Open Orders Summary"):
+            open_orders_query = """
+                SELECT "Cliente", SUM("total") AS Total
+                FROM public.vw_pedido_produto
+                WHERE status=%s
+                GROUP BY "Cliente"
+                ORDER BY "Cliente" DESC
+            """
+            open_orders_data = run_query(open_orders_query, ('em aberto',))
+            if open_orders_data:
+                df_open = pd.DataFrame(open_orders_data, columns=["Client", "Total"])
+                total_open = df_open["Total"].sum()
+                df_open["Total_display"] = df_open["Total"].apply(format_currency)
+                df_open = df_open[["Client", "Total_display"]].reset_index(drop=True)
+
+                styled_df_open = df_open.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
+                st.write(styled_df_open)
+                st.markdown(f"**Total Geral (Open Orders):** {format_currency(total_open)}")
+            else:
+                st.info("Nenhum pedido em aberto encontrado.")
+
+        # ------------------- Stock vs. Orders Summary -------------------
+        with st.expander("Stock vs. Orders Summary"):
+            try:
+                stock_vs_orders_query = """
+                    SELECT product, stock_quantity, orders_quantity, total_in_stock
+                    FROM public.vw_stock_vs_orders_summary
+                """
+                stock_vs_orders_data = run_query(stock_vs_orders_query)
+                if stock_vs_orders_data:
+                    df_svo = pd.DataFrame(
+                        stock_vs_orders_data,
+                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+                    )
+                    df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                    df_display = df_svo[["Product", "Total_in_Stock"]]
+                    df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
+                    df_display = df_display.reset_index(drop=True)
+
+                    styled_df_svo = df_display.style.set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                    ])
+                    st.write(styled_df_svo)
+                    total_val = df_svo["Total_in_Stock"].sum()
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
+                else:
+                    st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
+            except Exception as e:
+                st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
+
+        # --------------------- Profit per day ---------------------
+        with st.expander("Profit per day"):
+            try:
+                query_lucro = """
+                    SELECT "Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"
+                    FROM public.vw_lucro_dia
+                    ORDER BY "Data" DESC
+                """
+                data_lucro = run_query(query_lucro)
+                if data_lucro:
+                    df_lucro = pd.DataFrame(
+                        data_lucro,
+                        columns=["Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"]
+                    )
+                    df_lucro["Soma_Valor_total"] = pd.to_numeric(df_lucro["Soma_Valor_total"], errors="coerce").fillna(0)
+                    df_lucro["Soma_Custo_total"] = pd.to_numeric(df_lucro["Soma_Custo_total"], errors="coerce").fillna(0)
+                    df_lucro["Soma_Lucro_Liquido"] = pd.to_numeric(df_lucro["Soma_Lucro_Liquido"], errors="coerce").fillna(0)
+
+                    df_lucro.columns = ["Data", "Valor total", "Custo total", "Lucro líquido"]
+                    df_lucro["Valor total"] = df_lucro["Valor total"].apply(format_currency)
+                    df_lucro["Custo total"] = df_lucro["Custo total"].apply(format_currency)
+                    df_lucro["Lucro líquido"] = df_lucro["Lucro líquido"].apply(format_currency)
+
+                    styled_df_lucro = df_lucro.style.set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                    ])
+                    st.write(styled_df_lucro)
+                else:
+                    st.info("Nenhum dado encontrado em vw_lucro_dia.")
+            except Exception as e:
+                st.error(f"Erro ao exibir dados de lucro: {e}")
+
 
 def orders_page():
     """Página de pedidos."""
