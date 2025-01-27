@@ -1262,54 +1262,7 @@ def analytics_page():
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
 
-        # --------------------------
-        # Net Profit Distribution by Order Status Chart with Labels
-        # --------------------------
-        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
 
-        # Query para buscar os dados da view vw_lucro_por_produto_status
-        query_status_lucro = """
-            SELECT "Status_Pedido", "Lucro_Liquido"
-            FROM public.vw_lucro_por_produto_status;
-        """
-        data_status_lucro = run_query(query_status_lucro)
-
-        if data_status_lucro:
-            df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
-
-            # Agrupa por Status_Pedido e soma o Lucro_Liquido
-            df_status_lucro = df_status_lucro.groupby("Status_Pedido").agg({
-                "Lucro_Liquido": "sum"
-            }).reset_index()
-
-            # Formata os valores monetários
-            df_status_lucro["Lucro_Liquido_formatado"] = df_status_lucro["Lucro_Liquido"].apply(
-                lambda x: format_currency(x)
-            )
-
-            # Cria o Donut Chart usando Altair
-            donut_chart = alt.Chart(df_status_lucro).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field="Lucro_Liquido", type="quantitative"),
-                color=alt.Color(field="Status_Pedido", type="nominal",
-                                scale=alt.Scale(scheme="category10")),
-                tooltip=["Status_Pedido", "Lucro_Liquido_formatado"]
-            ).properties(
-                width=300,
-                height=300,
-                title="Lucro Líquido por Status do Pedido"
-            )
-
-            # Adiciona labels com os valores em reais
-            labels = donut_chart.mark_text(radius=100, size=12, color="white", fontWeight="bold").encode(
-                text=alt.Text("Lucro_Liquido_formatado:N")
-            )
-
-            # Combinação do Donut Chart com Labels
-            final_donut = donut_chart + labels
-
-            st.altair_chart(final_donut, use_container_width=True)
-        else:
-            st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
         # Net Profit by Product per Day Chart
