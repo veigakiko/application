@@ -14,9 +14,13 @@ import calendar
 import altair as alt
 import numpy as np
 from sklearn.linear_model import LinearRegression
-import mitosheet  # Para usar o MitoSheet
+import mitosheet  # For MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 ###############################################################################
 #                               UTILIDADES
@@ -201,66 +205,46 @@ def get_latest_settings():
     return None
 
 ###############################################################################
-#                           FUNÇÕES ESPECÍFICAS
+#                           FUNÇÕES DE EMAIL
 ###############################################################################
-def process_payment(client: str, payment_status: str):
+def send_email(name, user_email, message):
     """
-    Atualiza status de pedido em aberto -> payment_status, chama refresh_data() e st.experimental_rerun().
+    Envia um email com os detalhes de registro do usuário.
     """
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s, "Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
+    # Email configuration from st.secrets
+    try:
+        sender_email = st.secrets["email"]["sender_email"]       # Sender's email
+        sender_password = st.secrets["email"]["sender_password"] # Sender's email password
+        receiver_email = st.secrets["email"]["receiver_email"]   # Receiver's email
+    except KeyError:
+        st.error("Configurações de email não encontradas em st.secrets['email'].")
+        return
+
+    # Create the email
+    subject = f"New Registration from {name}"
+    body = f"""
+    New user registration:
+
+    Name: {name}
+    Email: {user_email}
+    Message: {message}
     """
-    success = run_query(query, (payment_status, client), commit=True)
-    if success:
-        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
-        refresh_data()
-        st.experimental_rerun()
-    else:
-        st.error("Falha ao processar pagamento.")
 
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """
-    Gera texto simulando uma nota fiscal para exibição. 
-    """
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = receiver_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby("Produto").agg({"Quantidade": "sum", "total": "sum"}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row["total"]
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
+    try:
+        # Send the email using SMTP
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:  # Use Gmail's SMTP server
+            server.starttls()  # Secure the connection
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        st.success("Email enviado com sucesso!")
+    except Exception as e:
+        st.error(f"Falha ao enviar email: {e}")
 
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
@@ -1056,11 +1040,10 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-    st.subheader("")
+    st.subheader("Detalhes dos Pedidos")
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
@@ -1080,7 +1063,7 @@ def analytics_page():
         # --------------------------
         # Filtrar por Intervalo de Datas
         # --------------------------
-        st.subheader("")
+        st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1115,7 +1098,7 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-        st.subheader("")
+        st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1141,7 +1124,7 @@ def analytics_page():
         # --------------------------
         # Select a Customer
         # --------------------------
-        st.subheader("")
+        st.subheader("Selecione um Cliente")
 
         clientes = df_filtrado["Cliente"].unique().tolist()
         cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
@@ -1153,7 +1136,7 @@ def analytics_page():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-        st.subheader("")
+        st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1403,8 +1386,6 @@ def analytics_page():
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
 
-
-
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1480,7 +1461,7 @@ def events_calendar_page():
 
     df_filtrado = df_events[
         (df_events["data_evento"].dt.year == ano_selecionado) &
-        (df_events["data_evento"].dt.month == mes_selecionado)
+        (df_events["data_evento"].dt.month == mes_padrao)
     ].copy()
 
     st.subheader("Visualização do Calendário")
@@ -1716,7 +1697,207 @@ def settings_page():
                 st.warning("Por favor, forneça pelo menos o nome da empresa.")
 
 ###############################################################################
-#                     INICIALIZAÇÃO E MAIN
+#                     FUNÇÕES DE LOGIN E REGISTRO
+###############################################################################
+def login_page():
+    """Página de login do aplicativo."""
+    from PIL import Image
+    import requests
+    from io import BytesIO
+    from datetime import datetime
+
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding-top: 40px;
+        }
+        .css-18e3th9 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        .btn {
+            background-color: #ff4c4c !important; 
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #cc0000 !important; 
+        }
+        .footer {
+            position: fixed;
+            left: 0; 
+            bottom: 0; 
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        .css-1siy2j8 {
+            gap: 0.1rem !important;
+        }
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important; 
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"
+    logo = None
+    try:
+        resp = requests.get(logo_url, timeout=5)
+        if resp.status_code == 200:
+            logo = Image.open(BytesIO(resp.content))
+    except:
+        pass
+
+    if logo:
+        st.image(logo, use_column_width=True)
+
+    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
+
+    with st.form("login_form", clear_on_submit=False):
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
+        btn_login = st.form_submit_button("Log in")
+
+    # Registration Button
+    if st.button("Register"):
+        st.session_state.show_registration_form = True
+
+    # Registration form
+    if st.session_state.get("show_registration_form", False):
+        with st.form("registration_form"):
+            st.subheader("Registration Form")
+            name = st.text_input("Name")
+            email = st.text_input("Email")
+            message = st.text_area("Message")
+            send_button = st.form_submit_button("Send")
+
+            if send_button:
+                if name and email and message:
+                    send_email(name, email, message)
+                    st.session_state.show_registration_form = False  # Hide the form after sending
+                else:
+                    st.warning("Please fill in all fields.")
+
+    if btn_login:
+        if not username_input or not password_input:
+            st.error("Por favor, preencha todos os campos.")
+        else:
+            try:
+                creds = st.secrets["credentials"]
+                admin_user = creds["admin_username"]
+                admin_pass = creds["admin_password"]
+                caixa_user = creds["caixa_username"]
+                caixa_pass = creds["caixa_password"]
+            except KeyError:
+                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+                st.stop()
+
+            import hmac
+
+            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
+                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
+
+            # Verifica ADMIN
+            if verify_credentials(username_input, password_input, admin_user, admin_pass):
+                st.session_state.logged_in = True
+                st.session_state.username = "admin"
+                st.session_state.login_time = datetime.now()
+                st.toast("Login bem-sucedido como ADMIN!")
+                st.experimental_rerun()
+            # Verifica CAIXA
+            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
+                st.session_state.logged_in = True
+                st.session_state.username = "caixa"
+                st.session_state.login_time = datetime.now()
+                st.toast("Login bem-sucedido como CAIXA!")
+                st.experimental_rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+
+    st.markdown(
+        """
+        <div class='footer'>
+            © 2025 | Todos os direitos reservados | Boituva Beach Club
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def main():
+    """
+    Função principal do aplicativo. 
+    Define a ordem de execução, faz login, carrega a página selecionada, etc.
+    """
+    apply_custom_css()
+    initialize_session_state()
+
+    # Se não estiver logado, página de login
+    if not st.session_state.logged_in:
+        login_page()
+        return
+
+    # Caso logado, cria barra lateral e seleciona página
+    selected_page = sidebar_navigation()
+
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = selected_page
+    elif selected_page != st.session_state.current_page:
+        st.session_state.current_page = selected_page
+
+    # Renderiza a página correspondente
+    if selected_page == "Home":
+        home_page()
+    elif selected_page == "Orders":
+        orders_page()
+    elif selected_page == "Products":
+        products_page()
+    elif selected_page == "Stock":
+        stock_page()
+    elif selected_page == "Clients":
+        clients_page()
+    elif selected_page == "Cash":
+        cash_page()
+    elif selected_page == "Analytics":
+        analytics_page()
+    elif selected_page == "Calendário de Eventos":
+        events_calendar_page()
+    elif selected_page == "Settings":
+        settings_page()
+    elif selected_page == "Loyalty Program":
+        loyalty_program_page()
+
+    # Botão "Logout" na sidebar
+    with st.sidebar:
+        if st.button("Logout"):
+            # Remove todas as chaves relevantes do session_state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.toast("Desconectado com sucesso!")
+            st.experimental_rerun()
+
+###############################################################################
+#                     FUNÇÕES DE INICIALIZAÇÃO
 ###############################################################################
 def initialize_session_state():
     """
@@ -1836,28 +2017,116 @@ def sidebar_navigation():
             )
     return selected
 
-def login_page():
-    """Página de login do aplicativo."""
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    from datetime import datetime
+def process_payment(client: str, payment_status: str):
+    """
+    Atualiza status de pedido em aberto -> payment_status, chama refresh_data() e st.experimental_rerun().
+    """
+    query = """
+        UPDATE public.tb_pedido
+        SET status=%s, "Data"=CURRENT_TIMESTAMP
+        WHERE "Cliente"=%s AND status='em aberto'
+    """
+    success = run_query(query, (payment_status, client), commit=True)
+    if success:
+        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
+        refresh_data()
+        st.experimental_rerun()
+    else:
+        st.error("Falha ao processar pagamento.")
 
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """
+    Gera texto simulando uma nota fiscal para exibição. 
+    """
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby("Produto").agg({"Quantidade": "sum", "total": "sum"}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row["total"]
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
+
+###############################################################################
+#                     INICIALIZAÇÃO E MAIN
+###############################################################################
+def initialize_session_state():
+    """
+    Inicializa variáveis no st.session_state:
+    - data: dados carregados
+    - logged_in: status de login
+    - last_settings: configurações mais recentes
+    """
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'last_settings' not in st.session_state:
+        st.session_state.last_settings = get_latest_settings()
+
+def apply_custom_css():
+    """
+    Aplica CSS customizado para toda a aplicação.
+    """
     st.markdown(
         """
         <style>
-        .block-container {
-            max-width: 450px;
-            margin: 0 auto;
-            padding-top: 40px;
+        .css-1d391kg {
+            font-size: 2em;
+            color: #ff4c4c;
         }
-        .css-18e3th9 {
-            font-size: 1.75rem;
-            font-weight: 600;
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .css-1aumxhk {
+            background-color: #ff4c4c;
+            color: white;
+        }
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+        }
+        .css-1v3fvcr {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
             text-align: center;
+            font-size: 12px;
         }
         .btn {
-            background-color: #ff4c4c !important; 
+            background-color: #ff4c4c !important;
             padding: 8px 16px !important;
             font-size: 0.875rem !important;
             color: white !important;
@@ -1869,97 +2138,64 @@ def login_page():
             width: 100%;
         }
         .btn:hover {
-            background-color: #cc0000 !important; 
-        }
-        .footer {
-            position: fixed;
-            left: 0; 
-            bottom: 0; 
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
+            background-color: #cc0000 !important;
         }
         input::placeholder {
             color: #bbb;
             font-size: 0.875rem;
         }
-        .css-1siy2j8 {
-            gap: 0.1rem !important;
-        }
         .css-1siy2j8 input {
-            margin-bottom: 0 !important; 
+            margin-bottom: 0 !important;
             padding-top: 4px;
             padding-bottom: 4px;
         }
+        @media only screen and (max-width: 600px) {
+            table {
+                font-size: 10px;
+            }
+            th, td {
+                padding: 4px;
+            }
+        }
         </style>
+        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
         """,
         unsafe_allow_html=True
     )
 
-    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"
-    logo = None
-    try:
-        resp = requests.get(logo_url, timeout=5)
-        if resp.status_code == 200:
-            logo = Image.open(BytesIO(resp.content))
-    except:
-        pass
-
-    if logo:
-        st.image(logo, use_column_width=True)
-
-    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
-
-    with st.form("login_form", clear_on_submit=False):
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
-        btn_login = st.form_submit_button("Log in")
-
-    if btn_login:
-        if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
-        else:
-            try:
-                creds = st.secrets["credentials"]
-                admin_user = creds["admin_username"]
-                admin_pass = creds["admin_password"]
-                caixa_user = creds["caixa_username"]
-                caixa_pass = creds["caixa_password"]
-            except KeyError:
-                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-                st.stop()
-
-            import hmac
-
-            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
-                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
-
-            # Verifica ADMIN
-            if verify_credentials(username_input, password_input, admin_user, admin_pass):
-                st.session_state.logged_in = True
-                st.session_state.username = "admin"
-                st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como ADMIN!")
-                st.experimental_rerun()
-            # Verifica CAIXA
-            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
-                st.session_state.logged_in = True
-                st.session_state.username = "caixa"
-                st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como CAIXA!")
-                st.experimental_rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    st.markdown(
-        """
-        <div class='footer'>
-            © 2025 | Todos os direitos reservados | Boituva Beach Club
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+def sidebar_navigation():
+    """
+    Cria a barra lateral de navegação com option_menu e retorna qual página foi selecionada.
+    """
+    with st.sidebar:
+        selected = option_menu(
+            "Bar Menu",
+            [
+                "Home", "Orders", "Products", "Stock", "Clients",
+                "Cash", "Analytics", "Calendário de Eventos",
+                "Settings", "Loyalty Program"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt","bar-chart","calendar","gear", "star"
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"background-color": "#1b4f72"},
+                "icon": {"color": "white", "font-size": "18px"},
+                "nav-link": {
+                    "font-size": "14px", "text-align": "left", "margin": "0px",
+                    "color": "white", "--hover-color": "#184563"
+                },
+                "nav-link-selected": {"background-color": "#184563", "color": "white"},
+            }
+        )
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%H:%M')}"
+            )
+    return selected
 
 def main():
     """
