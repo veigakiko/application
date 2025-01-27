@@ -1068,7 +1068,7 @@ def analytics_page():
         ])
 
         # Converter a coluna "Data" para datetime sem componente de tempo
-        df["Data"] = pd.to_datetime(df["Data"]).dt.date
+        df["Data"] = pd.to_datetime(df["Data"]).dt.date  # Mantém apenas a data
 
         # Dropdown para selecionar o cliente
         clientes = df["Cliente"].unique().tolist()
@@ -1088,7 +1088,7 @@ def analytics_page():
 
         st.subheader("Filtrar por Intervalo de Datas")
 
-        # Converte a coluna "Data" para o tipo datetime novamente para filtrar
+        # Converter a coluna "Data" para o tipo datetime novamente para filtrar
         df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
@@ -1119,18 +1119,19 @@ def analytics_page():
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
 
         # --------------------------
-                # Gráfico de Barras Agrupadas (Atualizado)
+        # Gráfico de Barras Agrupadas (Ajustado)
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
-            "Lucro_Liquido": "sum"  # Removido "Custo_total"
+            "Lucro_Liquido": "sum"
         }).reset_index()
 
         # Ordena por Data ASC para que o dia mais antigo apareça primeiro
-        df_daily = df_daily.sort_values("Data", ascending=True)  # Alterado para ascending=True
+        df_daily = df_daily.sort_values("Data", ascending=True)
 
+        # Formatação para exibição no gráfico
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
@@ -1143,7 +1144,7 @@ def analytics_page():
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
-            value_vars=["Valor_total", "Lucro_Liquido"],  # Removido "Custo_total"
+            value_vars=["Valor_total", "Lucro_Liquido"],
             var_name="Métrica",
             value_name="Valor"
         )
@@ -1156,20 +1157,23 @@ def analytics_page():
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
+        # Criação do gráfico com o eixo X formatado corretamente
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
+            # Utiliza "Data:T" para indicar que é uma dimensão temporal
+            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato ajustado para DD/MM/YYYY
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
-                range=["#1b4f72", "#bcbd22"]  # Cor do menu para "Valor_total"
+                range=["#1b4f72", "#bcbd22"]  # Cores definidas para cada métrica
             )),
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
         ).properties(
-            width=1200,  # Aumentado o comprimento do gráfico
+            width=1200,  # Ajuste conforme necessário
             height=400
         )
 
+        # Adição de rótulos de texto para cada barra
         text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
             align="center",
             baseline="bottom",
@@ -1177,7 +1181,7 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data_formatada:N",
+            x="Data:T",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
@@ -1189,11 +1193,12 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data_formatada:N",
+            x="Data:T",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
 
+        # Combinação dos gráficos de barras e textos
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
@@ -1219,6 +1224,7 @@ def analytics_page():
                 """,
                 unsafe_allow_html=True
             )
+
         # --------------------------
         # Tabela "Profit per Day" (Agora Abaixo dos Totais)
         # --------------------------
@@ -1347,7 +1353,7 @@ def analytics_page():
                     strokeWidth=1,
                     strokeOpacity=0.4
                 ).encode(
-                    x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Ajuste do formato aqui
+                    x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato ajustado para DD/MM/YYYY
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
                                  scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
@@ -1366,6 +1372,10 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
+
+
+
 
 
 def events_calendar_page():
