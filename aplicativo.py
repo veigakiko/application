@@ -1053,7 +1053,7 @@ def analytics_page():
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
         SELECT "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario", 
-               "Valor_total", "Custo_total", "Lucro_Liquido", "Fornecedor", "Status"
+               "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         FROM public.vw_pedido_produto_details;
     """
     data = run_query(query)
@@ -1062,7 +1062,7 @@ def analytics_page():
         # Cria um DataFrame com os dados
         df = pd.DataFrame(data, columns=[
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
-            "Valor_total", "Custo_total", "Lucro_Liquido", "Fornecedor", "Status"
+            "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
 
         # Dropdown para selecionar o cliente
@@ -1109,25 +1109,21 @@ def analytics_page():
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_date) & (df_filtrado["Data"] <= end_date)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas
+        # Gráfico de Barras Agrupadas (Atualizado)
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
-            "Custo_total": "sum",
-            "Lucro_Liquido": "sum"
+            "Lucro_Liquido": "sum"  # Removido "Custo_total"
         }).reset_index()
 
-        # Ordena por Data DESC
+        # Ordena por Data DESC para que o dia mais recente apareça primeiro
         df_daily = df_daily.sort_values("Data", ascending=False)
 
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        df_daily["Custo_total_formatado"] = df_daily["Custo_total"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
         df_daily["Lucro_Liquido_formatado"] = df_daily["Lucro_Liquido"].apply(
@@ -1137,7 +1133,7 @@ def analytics_page():
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
-            value_vars=["Valor_total", "Custo_total", "Lucro_Liquido"],
+            value_vars=["Valor_total", "Lucro_Liquido"],  # Removido "Custo_total"
             var_name="Métrica",
             value_name="Valor"
         )
@@ -1147,15 +1143,15 @@ def analytics_page():
         )
 
         df_long["Métrica"] = pd.Categorical(
-            df_long["Métrica"], categories=["Valor_total", "Custo_total", "Lucro_Liquido"], ordered=True
+            df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
             x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
-                domain=["Valor_total", "Custo_total", "Lucro_Liquido"],
-                range=["gray", "blue", "#bcbd22"]
+                domain=["Valor_total", "Lucro_Liquido"],
+                range=["#1b4f72", "#bcbd22"]  # Alterado para usar a cor do menu para "Valor_total"
             )),
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
@@ -1165,18 +1161,6 @@ def analytics_page():
         )
 
         text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
-            align="center",
-            baseline="bottom",
-            dy=-10,
-            color="white",
-            fontSize=12
-        ).encode(
-            x="Data_formatada:N",
-            y="Valor:Q",
-            text="Valor_formatado:N"
-        )
-
-        text_custo_total = alt.Chart(df_long[df_long["Métrica"] == "Custo_total"]).mark_text(
             align="center",
             baseline="bottom",
             dy=-10,
@@ -1200,7 +1184,7 @@ def analytics_page():
             text="Valor_formatado:N"
         )
 
-        chart = (bars + text_valor_total + text_custo_total + text_lucro_liquido).interactive()
+        chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
         st.subheader("Totais no Intervalo Selecionado")
@@ -1227,17 +1211,8 @@ def analytics_page():
             )
 
         # --------------------------
-        # Profit per Day Table
+        # Gráfico "Produtos Mais Lucrativos" (Atualizado)
         # --------------------------
-        st.subheader("Profit per Day")
-        df_daily_table = df_daily.copy()
-        df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
-        df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
-        df_daily_table["Custo total"] = df_daily_table["Custo_total"].apply(format_currency)
-        df_daily_table["Lucro líquido"] = df_daily_table["Lucro_Liquido"].apply(format_currency)
-        df_daily_table = df_daily_table[["Data", "Valor total", "Custo total", "Lucro líquido"]]
-        st.table(df_daily_table)
-
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
@@ -1255,7 +1230,7 @@ def analytics_page():
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="gray").encode(
+            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(  # Alterado para a cor do menu
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
@@ -1268,8 +1243,6 @@ def analytics_page():
             st.altair_chart(chart_produtos, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
-    else:
-        st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
