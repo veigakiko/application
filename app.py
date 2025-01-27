@@ -1043,7 +1043,7 @@ def cash_page():
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-    st.subheader("Detalhes dos Pedidos")
+
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
@@ -1063,7 +1063,7 @@ def analytics_page():
         # --------------------------
         # Filtrar por Intervalo de Datas
         # --------------------------
-        st.subheader("-")
+
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1098,7 +1098,7 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-        st.subheader("-")
+ 
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1127,7 +1127,7 @@ def analytics_page():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-        st.subheader("-")
+
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1214,7 +1214,7 @@ def analytics_page():
         # --------------------------
         # Profit per Day Table
         # --------------------------
-        st.subheader("-")
+
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
@@ -1225,7 +1225,7 @@ def analytics_page():
         # --------------------------
         # Most Profitable Products Chart
         # --------------------------
-        st.subheader("-")
+
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             FROM public.vw_vendas_produto;
@@ -1259,7 +1259,7 @@ def analytics_page():
         # --------------------------
         # Net Profit Distribution by Order Status Chart with Labels
         # --------------------------
-        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
+
 
         # Query para buscar os dados da view vw_lucro_por_produto_status
         query_status_lucro = """
@@ -1308,7 +1308,7 @@ def analytics_page():
         # --------------------------
         # Net Profit by Product per Day Chart
         # --------------------------
-        st.subheader("Lucro Líquido por Produto por Dia")
+
 
         # Query para buscar os dados da view lucro_produto_por_dia
         query_lucro_produto_dia = """
