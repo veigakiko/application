@@ -1354,7 +1354,7 @@ def analytics_page():
                     x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
-                                 scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
+                                 scale=alt.Scale(range=[100, 1000])),  # Ajuste a escala conforme necessário
                     color=alt.Color("Produto:N", legend=None),
                     tooltip=[
                         alt.Tooltip("Produto:N", title="Produto"),
