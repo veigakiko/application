@@ -1056,6 +1056,7 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1319,7 +1320,7 @@ def analytics_page():
             )
 
             # Adiciona labels com os valores em reais
-            labels = donut_chart.mark_text(radius=100, size=12).encode(
+            labels = donut_chart.mark_text(radius=100, size=12, color="white").encode(
                 text=alt.Text("Lucro_Liquido_formatado:N")
             )
 
@@ -1401,6 +1402,8 @@ def analytics_page():
         # --------------------------
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
+
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
