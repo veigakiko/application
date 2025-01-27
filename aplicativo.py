@@ -19,7 +19,7 @@ from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
 ###############################################################################
-#                               UTILIDADES
+#                               UTILIDADE
 ###############################################################################
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
@@ -150,32 +150,19 @@ def load_all_data():
     """
     data = {}
     try:
-        # Orders
-        orders = run_query(
+        data["orders"] = run_query(
             'SELECT "Cliente","Produto","Quantidade","Data",status FROM public.tb_pedido ORDER BY "Data" DESC'
         ) or []
-        data["orders"] = orders
-
-        # Products
-        products = run_query(
+        data["products"] = run_query(
             'SELECT supplier, product, quantity, unit_value, custo_unitario, total_value, creation_date FROM public.tb_products ORDER BY creation_date DESC'
         ) or []
-        data["products"] = products
-
-        # Clients
-        clients = run_query(
+        data["clients"] = run_query(
             'SELECT DISTINCT "Cliente" FROM public.tb_pedido ORDER BY "Cliente"'
         ) or []
-        data["clients"] = clients
-
-        # Stock
-        stock = run_query(
+        data["stock"] = run_query(
             'SELECT "Produto","Quantidade","Transação","Data" FROM public.tb_estoque ORDER BY "Data" DESC'
         ) or []
-        data["stock"] = stock
-
-        # Revenue
-        revenue = run_query(
+        data["revenue"] = run_query(
             """
             SELECT date("Data") as dt, SUM("total") as total_dia
             FROM public.vw_pedido_produto
@@ -184,7 +171,6 @@ def load_all_data():
             ORDER BY date("Data")
             """
         ) or pd.DataFrame()
-        data["revenue"] = revenue
     except Exception as e:
         st.error(f"Erro ao carregar dados: {e}")
     return data
@@ -327,6 +313,7 @@ def home_page():
 
     with col_calendar:
         if events_data:
+            import calendar
             cal = calendar.HTMLCalendar(firstweekday=0)
             html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
@@ -338,8 +325,10 @@ def home_page():
                     f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
                     f'title="{nome}: {descricao}"'
                 )
-                # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
-                html_calendario = html_calendario.replace(f'<td>{dia}</td>', f'<td{highlight_str}>{dia}</td>', 1)
+                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+                    target = f'<td class="{day_class}">{dia}</td>'
+                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+                    html_calendario = html_calendario.replace(target, replacement)
 
             # CSS para estilizar a tabela do calendário
             st.markdown(
@@ -428,9 +417,22 @@ def home_page():
                 """
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
                 if stock_vs_orders_data:
-                    df_svo = pd.DataFrame(stock_vs_orders_data, columns=["Product","Stock_Quantity","Orders_Quantity","Total_in_Stock"])
-                    st.dataframe(df_svo, use_container_width=True)
-                    st.markdown(f"**Total Geral (Stock vs. Orders):** {df_svo['Total_in_Stock'].sum():,}")
+                    df_svo = pd.DataFrame(
+                        stock_vs_orders_data,
+                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
+                    )
+                    df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                    df_display = df_svo[["Product", "Total_in_Stock"]]
+                    df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
+                    df_display = df_display.reset_index(drop=True)
+
+                    styled_df_svo = df_display.style.set_table_styles([
+                        {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                        {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                    ])
+                    st.write(styled_df_svo)
+                    total_val = df_svo["Total_in_Stock"].sum()
+                    st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
                 else:
                     st.info("View 'vw_stock_vs_orders_summary' sem dados ou inexistente.")
             except Exception as e:
@@ -840,11 +842,7 @@ def stock_page():
                                     idx_trans = ["Entrada","Saída"].index(original_trans)
                                 edit_trans = st.selectbox("Tipo", ["Entrada","Saída"], index=idx_trans)
                             with col4:
-                                try:
-                                    original_datetime = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S")
-                                    old_date = original_datetime.date()
-                                except ValueError:
-                                    old_date = date.today()
+                                old_date = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date()
                                 edit_date = st.date_input("Data", value=old_date)
 
                             col_upd, col_del = st.columns(2)
@@ -995,7 +993,7 @@ def cash_page():
     client_list = [row[0] for row in open_clients] if open_clients else []
     selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
 
-    if selected_client and selected_client != "":
+    if selected_client:
         invoice_query = """
             SELECT "Produto", "Quantidade", "total"
             FROM public.vw_pedido_produto
@@ -1061,14 +1059,11 @@ def analytics_page():
     data = run_query(query)
 
     if data:
-        # Cria um DataFrame com os dados e especifica os nomes das colunas
+        # Cria um DataFrame com os dados
         df = pd.DataFrame(data, columns=[
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
-
-        # Converter a coluna "Data" para datetime sem componente de tempo
-        df["Data"] = pd.to_datetime(df["Data"]).dt.date  # Mantém apenas a data
 
         # Dropdown para selecionar o cliente
         clientes = df["Cliente"].unique().tolist()
@@ -1088,7 +1083,7 @@ def analytics_page():
 
         st.subheader("Filtrar por Intervalo de Datas")
 
-        # Converter a coluna "Data" para o tipo datetime novamente para filtrar
+        # Converte a coluna "Data" para o tipo datetime
         df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
@@ -1119,7 +1114,7 @@ def analytics_page():
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Ajustado)
+        # Gráfico de Barras Agrupadas (Mantendo Visual Original)
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1159,8 +1154,8 @@ def analytics_page():
 
         # Criação do gráfico com o eixo X formatado corretamente
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            # Utiliza "Data:T" para indicar que é uma dimensão temporal
-            x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato ajustado para DD/MM/YYYY
+            # Mantém o eixo X categórico com datas formatadas
+            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
@@ -1169,7 +1164,7 @@ def analytics_page():
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
         ).properties(
-            width=1200,  # Ajuste conforme necessário
+            width=1200,  # Aumentado o comprimento do gráfico
             height=400
         )
 
@@ -1181,7 +1176,7 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data:T",
+            x="Data_formatada:N",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
@@ -1193,7 +1188,7 @@ def analytics_page():
             color="white",
             fontSize=12
         ).encode(
-            x="Data:T",
+            x="Data_formatada:N",
             y="Valor:Q",
             text="Valor_formatado:N"
         )
@@ -1261,7 +1256,7 @@ def analytics_page():
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
-                width=1200,
+                width=1200,  # Aumentado o comprimento do gráfico
                 height=400,
                 title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
@@ -1312,7 +1307,7 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
-        # Gráfico: Lucro Líquido por Produto por Dia (Ajustado)
+        # Gráfico: Lucro Líquido por Produto por Dia (Incluído)
         # --------------------------
         st.subheader("Lucro Líquido por Produto por Dia")
 
@@ -1353,7 +1348,8 @@ def analytics_page():
                     strokeWidth=1,
                     strokeOpacity=0.4
                 ).encode(
-                    x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),  # Formato ajustado para DD/MM/YYYY
+                    # Mantém o eixo X categórico com datas formatadas
+                    x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
                                  scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
@@ -1372,11 +1368,6 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
-
-
-
-
-
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
@@ -1467,8 +1458,10 @@ def events_calendar_page():
             f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
             f'title="{ev.nome}: {ev.descricao}"'
         )
-        # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
-        html_calendario = html_calendario.replace(f'<td>{dia}</td>', f'<td{highlight_str}>{dia}</td>', 1)
+        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
+            target = f'<td class="{day_class}">{dia}</td>'
+            replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
+            html_calendario = html_calendario.replace(target, replacement)
 
     st.markdown(
         """
@@ -1976,7 +1969,7 @@ def main():
     # Botão "Logout" na sidebar
     with st.sidebar:
         if st.button("Logout"):
-            for key in ["data", "last_settings", "login_time"]:
+            for key in ["home_page_initialized"]:
                 if key in st.session_state:
                     del st.session_state[key]
             st.session_state.logged_in = False
