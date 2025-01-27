@@ -1059,7 +1059,7 @@ def analytics_page():
 
     if data:
         # Cria um DataFrame com os dados
-        df = pd.DataFrame(data, columns=[
+        df = pd.DataFrame(data, columns=[ 
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
@@ -1261,8 +1261,6 @@ def analytics_page():
             st.altair_chart(chart_produtos, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
-
-
 
         # --------------------------
         # Net Profit by Product per Day Chart
