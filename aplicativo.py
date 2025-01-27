@@ -1137,13 +1137,6 @@ def analytics_page():
 
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
-        df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-        df_daily["Lucro_Liquido_formatado"] = df_daily["Lucro_Liquido"].apply(
-            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        )
-
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
@@ -1152,10 +1145,12 @@ def analytics_page():
             value_name="Valor"
         )
 
+        # Adiciona uma coluna formatada para o tooltip
         df_long["Valor_formatado"] = df_long["Valor"].apply(
             lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
         )
 
+        # Define a ordem das métricas
         df_long["Métrica"] = pd.Categorical(
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
@@ -1164,6 +1159,7 @@ def analytics_page():
         if df_long.empty:
             st.info("Nenhum dado para plotar no gráfico de Barras Agrupadas.")
         else:
+            # Cria o gráfico de barras
             bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
                 x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
                 y=alt.Y("Valor:Q", title="Valor (R$)"),
@@ -1178,6 +1174,7 @@ def analytics_page():
                 height=400
             )
 
+            # Adiciona os valores das barras
             text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
                 align="center",
                 baseline="bottom",
@@ -1202,6 +1199,7 @@ def analytics_page():
                 text="Valor_formatado:N"
             )
 
+            # Combina as camadas do gráfico
             chart = (bars + text_valor_total + text_lucro_liquido).interactive()
             st.altair_chart(chart, use_container_width=True)
 
@@ -1370,7 +1368,7 @@ def analytics_page():
                     ),
                     alt.Size(
                         'Total_Lucro:Q',
-                        scale=alt.Scale(range=[0, 2500]),
+                        scale=alt.Scale(range=[0, 500]),  # Ajuste a escala conforme necessário
                         title='Lucro Líquido',
                         legend=alt.Legend(clipHeight=30, format='s')
                     ),
@@ -1404,7 +1402,6 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
-
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
