@@ -1118,8 +1118,8 @@ def analytics_page():
             "Lucro_Liquido": "sum"  # Removido "Custo_total"
         }).reset_index()
 
-        # Ordena por Data DESC para que o dia mais recente apareça primeiro
-        df_daily = df_daily.sort_values("Data", ascending=False)
+        # Ordena por Data ASC para que o dia mais antigo apareça primeiro
+        df_daily = df_daily.sort_values("Data", ascending=True)  # Alterado para ascending=True
 
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
@@ -1151,12 +1151,12 @@ def analytics_page():
             y=alt.Y("Valor:Q", title="Valor (R$)"),
             color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
                 domain=["Valor_total", "Lucro_Liquido"],
-                range=["#1b4f72", "#bcbd22"]  # Alterado para usar a cor do menu para "Valor_total"
+                range=["#1b4f72", "#bcbd22"]  # Cor do menu para "Valor_total"
             )),
             order=alt.Order("Métrica:N", sort="ascending"),
             tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
         ).properties(
-            width=800,
+            width=1200,  # Aumentado o comprimento do gráfico
             height=400
         )
 
@@ -1187,14 +1187,14 @@ def analytics_page():
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
-        st.subheader("")
+        st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(
                 f"""
-                <div style="font-size:16px;">
+                <div style="font-size:14px;">
                     <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
                 </div>
                 """,
@@ -1203,7 +1203,7 @@ def analytics_page():
         with col2:
             st.markdown(
                 f"""
-                <div style="font-size:16px;">
+                <div style="font-size:14px;">
                     <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
                 </div>
                 """,
@@ -1213,7 +1213,7 @@ def analytics_page():
         # --------------------------
         # Tabela "Profit per Day" (Agora Abaixo dos Totais)
         # --------------------------
-        st.subheader("")
+        st.subheader("Profit per Day")
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
@@ -1246,7 +1246,7 @@ def analytics_page():
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
-                width=800,
+                width=1200,  # Aumentado o comprimento do gráfico
                 height=400,
                 title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
@@ -1254,7 +1254,7 @@ def analytics_page():
             st.altair_chart(chart_produtos, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
-
+            
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
