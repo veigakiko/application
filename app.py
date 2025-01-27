@@ -1112,6 +1112,32 @@ def analytics_page():
         df_filtrado = df[(df["Data"] >= start_datetime) & (df["Data"] <= end_datetime)]
 
         # --------------------------
+        # Totals in the Selected Range
+        # --------------------------
+        st.subheader("Totais no Intervalo Selecionado")
+        soma_valor_total = df_filtrado["Valor_total"].sum()
+        soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with col2:
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # --------------------------
         # Select a Customer
         # --------------------------
         st.subheader("Selecione um Cliente")
@@ -1165,17 +1191,6 @@ def analytics_page():
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
-        # Calcular o Lucro Total por Produto para ordenar
-        product_profit = df_filtrado.groupby('Produto')['Lucro_Liquido'].sum().sort_values(ascending=False)
-        ordered_products = product_profit.index.tolist()
-
-        # Definir a ordem dos produtos como categórico ordenado
-        df_filtrado['Produto'] = pd.Categorical(
-            df_filtrado['Produto'],
-            categories=ordered_products,
-            ordered=True
-        )
-
         # Criação do gráfico com o eixo X formatado corretamente
         bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
             # Mantém o eixo X categórico com datas formatadas
@@ -1220,36 +1235,6 @@ def analytics_page():
         # Combinação dos gráficos de barras e textos
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
-
-        # --------------------------
-        # Totals in Selected Range
-        # --------------------------
-        st.subheader("Totais no Intervalo Selecionado")
-        soma_valor_total = df_filtrado["Valor_total"].sum()
-        soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(
-                f"""
-                <div style="font-size:14px;">
-                    <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        with col2:
-            st.markdown(
-                f"""
-                <div style="font-size:14px;">
-                    <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
-        # --------------------------
-        # Select a Customer (Já implementado acima)
-        # --------------------------
 
         # --------------------------
         # Profit per Day Table
@@ -1410,6 +1395,12 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
+        # --------------------------
+        # Order Details Table
+        # --------------------------
+        st.subheader("Detalhes dos Pedidos")
+        st.dataframe(df_filtrado, use_container_width=True)
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
