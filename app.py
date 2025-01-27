@@ -1043,7 +1043,7 @@ def cash_page():
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-    st.subheader("Detalhes dos Pedidos")
+    st.subheader("")
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
