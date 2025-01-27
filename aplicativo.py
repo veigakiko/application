@@ -990,7 +990,6 @@ def cash_page():
         st.warning("Selecione um cliente.")
         
 
------
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1011,11 +1010,21 @@ def analytics_page():
             "Valor_total", "Custo_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
 
-        # Exibe o DataFrame
-        st.dataframe(df, use_container_width=True)
+        # Dropdown para selecionar o cliente
+        clientes = df["Cliente"].unique().tolist()
+        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
+
+        # Filtra os dados com base no cliente selecionado
+        if cliente_selecionado:
+            df_filtrado = df[df["Cliente"] == cliente_selecionado]
+        else:
+            df_filtrado = df
+
+        # Exibe o DataFrame filtrado
+        st.dataframe(df_filtrado, use_container_width=True)
 
         # Opção para download dos dados
-        download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
+        download_df_as_csv(df_filtrado, "analytics.csv", label="Baixar Dados Analytics")
 
         # --------------------------
         # Seleção de intervalo de datas
@@ -1023,75 +1032,38 @@ def analytics_page():
         st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
-        df["Data"] = pd.to_datetime(df["Data"])
+        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
-        min_date = df["Data"].min().date()  # Convertendo para datetime.date
-        max_date = df["Data"].max().date()  # Convertendo para datetime.date
+        min_date = df_filtrado["Data"].min().date()  # Convertendo para datetime.date
+        max_date = df_filtrado["Data"].max().date()  # Convertendo para datetime.date
 
         # Verifica se as datas são válidas
         if min_date is None or max_date is None:
             st.error("Não há dados disponíveis para exibir.")
             return
 
-        # Define o intervalo padrão como os últimos 7 dias
-        default_end_date = max_date
-        default_start_date = (default_end_date - timedelta(days=6))  # 7 dias atrás (incluindo o dia atual)
-
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input(
-                "Data Inicial",
-                value=default_start_date,  # Data inicial padrão
-                min_value=min_date,
-                max_value=max_date
-            )
+            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
         with col2:
-            end_date = st.date_input(
-                "Data Final",
-                value=default_end_date,  # Data final padrão
-                min_value=min_date,
-                max_value=max_date
-            )
+            end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
         # Converte as datas selecionadas para o tipo datetime
         start_date = pd.to_datetime(start_date)
         end_date = pd.to_datetime(end_date)
 
         # Filtra o DataFrame com base no intervalo de datas selecionado
-        df_filtered = df[(df["Data"] >= start_date) & (df["Data"] <= end_date)]
-
-        # --------------------------
-        # Exibe as métricas de Valor Total e Lucro Líquido
-        # --------------------------
-        st.subheader("Resumo do Período Selecionado")
-
-        # Calcula a soma do Valor Total e do Lucro Líquido
-        soma_valor_total = df_filtered["Valor_total"].sum()
-        soma_lucro_liquido = df_filtered["Lucro_Liquido"].sum()
-
-        # Formata os valores como moeda brasileira (R$)
-        soma_valor_total_formatado = f"R$ {soma_valor_total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-        soma_lucro_liquido_formatado = f"R$ {soma_lucro_liquido:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-        # Exibe as métricas
-        col1, col2 = st.columns(2)
-        with col1:
-            st.metric("Soma Valor Total", soma_valor_total_formatado)
-        with col2:
-            st.metric("Soma Lucro Líquido", soma_lucro_liquido_formatado)
+        df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_date) & (df_filtrado["Data"] <= end_date)]
 
         # --------------------------
         # Gráfico de Barras Agrupadas
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
-        # Converte a coluna "Data" para o tipo datetime
-        df_filtered["Data"] = pd.to_datetime(df_filtered["Data"])
-
         # Agrupa os dados por dia e calcula o total de vendas e lucro líquido
-        df_daily = df_filtered.groupby("Data").agg({
+        df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
             "Lucro_Liquido": "sum"
         }).reset_index()
@@ -1176,6 +1148,20 @@ def analytics_page():
         st.altair_chart(chart, use_container_width=True)
 
         # --------------------------
+        # Totais de Valor Total e Lucro Líquido
+        # --------------------------
+        st.subheader("Totais no Intervalo Selecionado")
+
+        soma_valor_total = df_filtrado["Valor_total"].sum()
+        soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Soma Valor Total", format_currency(soma_valor_total))
+        with col2:
+            st.metric("Soma Lucro Líquido", format_currency(soma_lucro_liquido))
+
+        # --------------------------
         # Gráfico de Produtos Mais Lucrativos
         # --------------------------
         st.subheader("Produtos Mais Lucrativos")
@@ -1196,20 +1182,23 @@ def analytics_page():
             # Ordena os produtos pelo lucro total (do maior para o menor)
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
 
+            # Seleciona os 5 produtos mais lucrativos
+            df_produtos_top5 = df_produtos.head(5)
+
             # Formata o lucro total como moeda brasileira (R$)
-            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
+            df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
             # Cria o gráfico de barras horizontais com Altair
-            chart_produtos = alt.Chart(df_produtos).mark_bar().encode(
+            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="gray").encode(
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),  # Eixo X: Lucro Total
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),  # Eixo Y: Produto (ordenado pelo lucro)
                 tooltip=["Produto", "Total_Lucro_formatado"]  # Tooltip com detalhes
             ).properties(
                 width=800,
                 height=400,
-                title="Produtos Mais Lucrativos"
+                title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
 
             # Exibe o gráfico no Streamlit
