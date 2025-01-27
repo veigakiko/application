@@ -24,7 +24,7 @@ from email.mime.multipart import MIMEMultipart
 
 ###############################################################################
 #                               UTILIDADES
-###############################################################################
+############################################################################### 
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
