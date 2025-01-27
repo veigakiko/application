@@ -1065,6 +1065,18 @@ def analytics_page():
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
 
+        # Verificar os tipos de dados
+        st.write("### Verificação dos Tipos de Dados")
+        st.write(df.dtypes)
+
+        # Converter colunas para tipos apropriados
+        df["Data"] = pd.to_datetime(df["Data"], errors="coerce")
+        df["Valor_total"] = pd.to_numeric(df["Valor_total"], errors="coerce")
+        df["Lucro_Liquido"] = pd.to_numeric(df["Lucro_Liquido"], errors="coerce")
+
+        # Remover linhas com dados inválidos
+        df = df.dropna(subset=["Data", "Valor_total", "Lucro_Liquido"])
+
         # Dropdown para selecionar o cliente
         clientes = df["Cliente"].unique().tolist()
         cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
@@ -1075,16 +1087,14 @@ def analytics_page():
         else:
             df_filtrado = df
 
-        # Exibe o DataFrame filtrado
-        st.dataframe(df_filtrado, use_container_width=True)
+        # Exibe o DataFrame filtrado para verificação
+        st.write("### Dados Filtrados")
+        st.write(df_filtrado)
 
         # Opção para download dos dados
         download_df_as_csv(df_filtrado, "analytics.csv", label="Baixar Dados Analytics")
 
         st.subheader("Filtrar por Intervalo de Datas")
-
-        # Converte a coluna "Data" para o tipo datetime
-        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
         min_date = df_filtrado["Data"].min().date() if not df_filtrado.empty else None
@@ -1108,6 +1118,10 @@ def analytics_page():
         # Filtra o DataFrame com base no intervalo de datas selecionado
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_date) & (df_filtrado["Data"] <= end_date)]
 
+        # Exibe o DataFrame filtrado após o intervalo de datas
+        st.write("### Dados Filtrados por Intervalo de Datas")
+        st.write(df_filtrado)
+
         # --------------------------
         # Gráfico de Barras Agrupadas (Atualizado)
         # --------------------------
@@ -1115,11 +1129,11 @@ def analytics_page():
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
-            "Lucro_Liquido": "sum"  # Removido "Custo_total"
+            "Lucro_Liquido": "sum"
         }).reset_index()
 
         # Ordena por Data ASC para que o dia mais antigo apareça primeiro
-        df_daily = df_daily.sort_values("Data", ascending=True)  # Alterado para ascending=True
+        df_daily = df_daily.sort_values("Data", ascending=True)
 
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
@@ -1133,7 +1147,7 @@ def analytics_page():
         # Transforma o DataFrame para o formato "long"
         df_long = df_daily.melt(
             id_vars=["Data", "Data_formatada"],
-            value_vars=["Valor_total", "Lucro_Liquido"],  # Removido "Custo_total"
+            value_vars=["Valor_total", "Lucro_Liquido"],
             var_name="Métrica",
             value_name="Valor"
         )
@@ -1146,46 +1160,50 @@ def analytics_page():
             df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
         )
 
-        bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
-            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
-            y=alt.Y("Valor:Q", title="Valor (R$)"),
-            color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
-                domain=["Valor_total", "Lucro_Liquido"],
-                range=["#1b4f72", "#bcbd22"]  # Cor do menu para "Valor_total"
-            )),
-            order=alt.Order("Métrica:N", sort="ascending"),
-            tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
-        ).properties(
-            width=1200,  # Aumentado o comprimento do gráfico
-            height=400
-        )
+        # Verifique se há dados para plotar
+        if df_long.empty:
+            st.info("Nenhum dado para plotar no gráfico de Barras Agrupadas.")
+        else:
+            bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
+                x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),
+                y=alt.Y("Valor:Q", title="Valor (R$)"),
+                color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
+                    domain=["Valor_total", "Lucro_Liquido"],
+                    range=["#1b4f72", "#bcbd22"]
+                )),
+                order=alt.Order("Métrica:N", sort="ascending"),
+                tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
+            ).properties(
+                width=1200,
+                height=400
+            )
 
-        text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
-            align="center",
-            baseline="bottom",
-            dy=-10,
-            color="white",
-            fontSize=12
-        ).encode(
-            x="Data_formatada:N",
-            y="Valor:Q",
-            text="Valor_formatado:N"
-        )
+            text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
+                align="center",
+                baseline="bottom",
+                dy=-10,
+                color="white",
+                fontSize=12
+            ).encode(
+                x="Data_formatada:N",
+                y="Valor:Q",
+                text="Valor_formatado:N"
+            )
 
-        text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
-            align="center",
-            baseline="top",
-            dy=10,
-            color="white",
-            fontSize=12
-        ).encode(
-            x="Data_formatada:N",
-            y="Valor:Q",
-            text="Valor_formatado:N"
-        )
+            text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
+                align="center",
+                baseline="top",
+                dy=10,
+                color="white",
+                fontSize=12
+            ).encode(
+                x="Data_formatada:N",
+                y="Valor:Q",
+                text="Valor_formatado:N"
+            )
 
-        chart = (bars + text_valor_total + text_lucro_liquido).interactive()
-        st.altair_chart(chart, use_container_width=True)
+            chart = (bars + text_valor_total + text_lucro_liquido).interactive()
+            st.altair_chart(chart, use_container_width=True)
 
         st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
@@ -1241,12 +1259,12 @@ def analytics_page():
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(  # Alterado para a cor do menu
+            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
-                width=1200,  # Aumentado o comprimento do gráfico
+                width=1200,
                 height=400,
                 title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
@@ -1311,70 +1329,82 @@ def analytics_page():
         if data_lucro_produto_dia:
             df_lucro_produto_dia = pd.DataFrame(data_lucro_produto_dia, columns=["Data", "Produto", "Total_Lucro"])
 
-            # Converte a coluna "Data" para datetime
+            # Converter a coluna "Data" para datetime
             df_lucro_produto_dia["Data"] = pd.to_datetime(df_lucro_produto_dia["Data"], errors="coerce")
 
-            # Remove linhas com datas inválidas
+            # Remover linhas com datas inválidas
             df_lucro_produto_dia = df_lucro_produto_dia.dropna(subset=["Data"])
 
-            # Agrupa os dados por Data e Produto (caso ainda não estejam agrupados)
+            # Assegurar que 'Total_Lucro' é numérico
+            df_lucro_produto_dia["Total_Lucro"] = pd.to_numeric(df_lucro_produto_dia["Total_Lucro"], errors="coerce").fillna(0)
+
+            # Verificar se há dados após as conversões
+            st.write("### Dados para o Gráfico Lucro Líquido por Produto por Dia")
+            st.write(df_lucro_produto_dia)
+
+            # Agrupar os dados por Data e Produto
             df_lucro_produto_dia = df_lucro_produto_dia.groupby(["Data", "Produto"]).agg({
                 "Total_Lucro": "sum"
             }).reset_index()
 
-            # Cria um gráfico de bolhas similar ao primeiro exemplo
-            bubble_chart = alt.Chart(df_lucro_produto_dia).mark_circle(
-                opacity=0.8,
-                stroke='black',
-                strokeWidth=1,
-                strokeOpacity=0.4
-            ).encode(
-                alt.X(
-                    'Data:T',
-                    title=None,
-                    scale=alt.Scale(domain=[df_lucro_produto_dia["Data"].min(), df_lucro_produto_dia["Data"].max()])
-                ),
-                alt.Y(
-                    'Produto:N',
-                    title=None,
-                    sort=alt.EncodingSortField(field="Total_Lucro", op="sum", order='descending')
-                ),
-                alt.Size(
-                    'Total_Lucro:Q',
-                    scale=alt.Scale(range=[0, 2500]),
-                    title='Lucro Líquido',
-                    legend=alt.Legend(clipHeight=30, format='s')
-                ),
-                alt.Color(
-                    'Produto:N',
-                    legend=None
-                ),
-                tooltip=[
-                    alt.Tooltip("Produto:N", title="Produto"),
-                    alt.Tooltip("Data:T", title="Data", format='%Y-%m-%d'),
-                    alt.Tooltip("Total_Lucro:Q", title="Lucro Líquido", format=',.2f')
-                ],
-            ).properties(
-                width=1200,
-                height=400,
-                title=alt.Title(
-                    text="Lucro Líquido por Produto por Dia",
-                    subtitle="O tamanho da bolha representa o lucro líquido total por dia, por tipo de produto",
-                    anchor='start'
+            # Verificar se há dados para plotar
+            if df_lucro_produto_dia.empty:
+                st.info("Nenhum dado para plotar no gráfico Lucro Líquido por Produto por Dia.")
+            else:
+                # Cria um gráfico de bolhas similar ao primeiro exemplo
+                bubble_chart = alt.Chart(df_lucro_produto_dia).mark_circle(
+                    opacity=0.8,
+                    stroke='black',
+                    strokeWidth=1,
+                    strokeOpacity=0.4
+                ).encode(
+                    alt.X(
+                        'Data:T',
+                        title=None,
+                        scale=alt.Scale(domain=[df_lucro_produto_dia["Data"].min(), df_lucro_produto_dia["Data"].max()])
+                    ),
+                    alt.Y(
+                        'Produto:N',
+                        title=None,
+                        sort=alt.EncodingSortField(field="Total_Lucro", op="sum", order='descending')
+                    ),
+                    alt.Size(
+                        'Total_Lucro:Q',
+                        scale=alt.Scale(range=[0, 2500]),
+                        title='Lucro Líquido',
+                        legend=alt.Legend(clipHeight=30, format='s')
+                    ),
+                    alt.Color(
+                        'Produto:N',
+                        legend=None
+                    ),
+                    tooltip=[
+                        alt.Tooltip("Produto:N", title="Produto"),
+                        alt.Tooltip("Data:T", title="Data", format='%Y-%m-%d'),
+                        alt.Tooltip("Total_Lucro:Q", title="Lucro Líquido", format=',.2f')
+                    ],
+                ).properties(
+                    width=1200,
+                    height=400,
+                    title=alt.Title(
+                        text="Lucro Líquido por Produto por Dia",
+                        subtitle="O tamanho da bolha representa o lucro líquido total por dia, por tipo de produto",
+                        anchor='start'
+                    )
+                ).configure_axisY(
+                    domain=False,
+                    ticks=False,
+                    offset=10
+                ).configure_axisX(
+                    grid=False,
+                ).configure_view(
+                    stroke=None
                 )
-            ).configure_axisY(
-                domain=False,
-                ticks=False,
-                offset=10
-            ).configure_axisX(
-                grid=False,
-            ).configure_view(
-                stroke=None
-            )
 
-            st.altair_chart(bubble_chart, use_container_width=True)
+                st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
