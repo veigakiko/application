@@ -1256,35 +1256,45 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
 
         # --------------------------
-        # Novo Gráfico: Donut Chart para Lucro por Status de Pedido
+        # Novo Gráfico Donut Chart - Lucro Líquido por Status_Pedido
         # --------------------------
-        st.subheader("Lucro Líquido por Status de Pedido")
-        query_lucro_status = """
+        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
+
+        # Query para buscar os dados da view vw_lucro_por_produto_status
+        query_status_lucro = """
             SELECT "Status_Pedido", "Lucro_Liquido"
             FROM public.vw_lucro_por_produto_status;
         """
-        data_lucro_status = run_query(query_lucro_status)
+        data_status_lucro = run_query(query_status_lucro)
 
-        if data_lucro_status:
-            df_lucro_status = pd.DataFrame(data_lucro_status, columns=["Status_Pedido", "Lucro_Liquido"])
-            df_lucro_status["Lucro_Liquido"] = pd.to_numeric(df_lucro_status["Lucro_Liquido"], errors="coerce").fillna(0)
+        if data_status_lucro:
+            df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
 
-            # Cria o gráfico de Donut
-            donut_chart = alt.Chart(df_lucro_status).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta("Lucro_Liquido:Q", title="Lucro Líquido (R$)"),
-                color=alt.Color("Status_Pedido:N", title="Status do Pedido"),
-                tooltip=["Status_Pedido", "Lucro_Liquido"]
+            # Agrupa por Status_Pedido e soma o Lucro_Liquido
+            df_status_lucro = df_status_lucro.groupby("Status_Pedido").agg({
+                "Lucro_Liquido": "sum"
+            }).reset_index()
+
+            # Formata os valores monetários
+            df_status_lucro["Lucro_Liquido_formatado"] = df_status_lucro["Lucro_Liquido"].apply(
+                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+
+            # Cria o Donut Chart usando Altair
+            donut_chart = alt.Chart(df_status_lucro).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Lucro_Liquido", type="quantitative"),
+                color=alt.Color(field="Status_Pedido", type="nominal",
+                                scale=alt.Scale(scheme="category10")),
+                tooltip=["Status_Pedido", "Lucro_Liquido_formatado"]
             ).properties(
                 width=600,
-                height=400,
-                title="Lucro Líquido por Status de Pedido"
-            ).interactive()
+                height=600,
+                title="Lucro Líquido por Status do Pedido"
+            )
 
             st.altair_chart(donut_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
-    else:
-        st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
 
             
 def events_calendar_page():
