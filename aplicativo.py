@@ -1059,7 +1059,7 @@ def analytics_page():
 
     if data:
         # Cria um DataFrame com os dados
-        df = pd.DataFrame(data, columns=[
+        df = pd.DataFrame(data, columns=[ 
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
@@ -1127,6 +1127,9 @@ def analytics_page():
                 """,
                 unsafe_allow_html=True
             )
+
+        # **Remoção da Seção "Selecione um Cliente"**
+        # Toda a lógica referente à seleção e filtragem por cliente foi removida.
 
         # --------------------------
         # Total Sales and Net Profit per Day Chart
@@ -1330,7 +1333,6 @@ def analytics_page():
         # --------------------------
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
-
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
