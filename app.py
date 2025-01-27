@@ -1059,7 +1059,7 @@ def analytics_page():
         ])
 
         # --------------------------
-        # Filtrar por Intervalo de Datas
+        # Filtrar por Intervalo de Data
         # --------------------------
       
 
