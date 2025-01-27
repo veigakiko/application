@@ -1056,15 +1056,12 @@ def analytics_page():
                "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         FROM public.vw_pedido_produto_details;
     """
-    data = run_query(query)  # Supondo que run_query é uma função definida para executar consultas SQL
+    data = run_query(query)  # Executa a consulta SQL
 
     if data:
         # Cria um DataFrame com os dados
-        df = pd.DataFrame(data, columns=[
-            "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
-            "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
-        ])
-
+        df = pd.DataFrame(data)
+        
         # Verificar os tipos de dados
         st.write("### Verificação dos Tipos de Dados")
         st.write(df.dtypes)
@@ -1084,7 +1081,7 @@ def analytics_page():
 
         # Dropdown para selecionar o cliente
         clientes = df["Cliente"].unique().tolist()
-        cliente_selecionado = st.selectbox("Selecione um Cliente", ["Todos"] + clientes)
+        cliente_selecionado = st.selectbox("Selecione um Cliente", ["Todos"] + sorted(clientes))
 
         # Filtra os dados com base no cliente selecionado
         if cliente_selecionado != "Todos":
@@ -1128,7 +1125,7 @@ def analytics_page():
         st.write(df_filtrado)
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Atualizado)
+        # Gráfico de Barras Agrupadas
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1176,7 +1173,7 @@ def analytics_page():
                 order=alt.Order("Métrica:N", sort="ascending"),
                 tooltip=["Data_formatada", "Métrica", "Valor_formatado"]
             ).properties(
-                width=1200,
+                width=800,
                 height=400
             )
 
@@ -1233,7 +1230,7 @@ def analytics_page():
             )
 
         # --------------------------
-        # Tabela "Profit per Day" (Agora Abaixo dos Totais)
+        # Tabela "Profit per Day"
         # --------------------------
         st.subheader("Profit per Day")
         df_daily_table = df_daily.copy()
@@ -1244,7 +1241,7 @@ def analytics_page():
         st.table(df_daily_table)
 
         # --------------------------
-        # Gráfico "Produtos Mais Lucrativos" (Atualizado)
+        # Gráfico "Produtos Mais Lucrativos"
         # --------------------------
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
@@ -1254,9 +1251,7 @@ def analytics_page():
         data_produtos = run_query(query_produtos)
 
         if data_produtos:
-            df_produtos = pd.DataFrame(data_produtos, columns=[
-                "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
-            ])
+            df_produtos = pd.DataFrame(data_produtos)
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
             df_produtos_top5 = df_produtos.head(5)
             df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
@@ -1268,7 +1263,7 @@ def analytics_page():
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
-                width=1200,
+                width=800,
                 height=400,
                 title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
@@ -1290,7 +1285,7 @@ def analytics_page():
         data_status_lucro = run_query(query_status_lucro)
 
         if data_status_lucro:
-            df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
+            df_status_lucro = pd.DataFrame(data_status_lucro)
 
             # Agrupa por Status_Pedido e soma o Lucro_Liquido
             df_status_lucro = df_status_lucro.groupby("Status_Pedido").agg({
@@ -1319,7 +1314,7 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
-        # Novo Gráfico: Lucro Líquido por Produto por Dia
+        # Gráfico: Lucro Líquido por Produto por Dia
         # --------------------------
         st.subheader("Lucro Líquido por Produto por Dia")
 
@@ -1331,7 +1326,7 @@ def analytics_page():
         data_lucro_produto_dia = run_query(query_lucro_produto_dia)
 
         if data_lucro_produto_dia:
-            df_lucro_produto_dia = pd.DataFrame(data_lucro_produto_dia, columns=["Data", "Produto", "Total_Lucro"])
+            df_lucro_produto_dia = pd.DataFrame(data_lucro_produto_dia)
 
             # Converter a coluna "Data" para datetime
             df_lucro_produto_dia["Data"] = pd.to_datetime(df_lucro_produto_dia["Data"], errors="coerce")
@@ -1355,7 +1350,7 @@ def analytics_page():
             if df_lucro_produto_dia.empty:
                 st.info("Nenhum dado para plotar no gráfico Lucro Líquido por Produto por Dia.")
             else:
-                # Cria um gráfico de bolhas similar ao primeiro exemplo
+                # Cria um gráfico de bolhas
                 bubble_chart = alt.Chart(df_lucro_produto_dia).mark_circle(
                     opacity=0.8,
                     stroke='black',
@@ -1384,7 +1379,7 @@ def analytics_page():
                     ),
                     tooltip=[
                         alt.Tooltip("Produto:N", title="Produto"),
-                        alt.Tooltip("Data:T", title="Data", format='%Y-%m-%d'),
+                        alt.Tooltip("Data:T", title="Data", format='%d/%m/%Y'),
                         alt.Tooltip("Total_Lucro:Q", title="Lucro Líquido", format=',.2f')
                     ],
                 ).properties(
