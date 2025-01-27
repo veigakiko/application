@@ -1687,93 +1687,172 @@ def main():
             st.toast("Desconectado com sucesso!")
             st.experimental_rerun()
 
-def login_page():
-    """Página de login do aplicativo."""
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    from datetime import datetime
+import streamlit as st
+import requests
+from PIL import Image
+from io import BytesIO
+from datetime import datetime
+import hmac
 
+def login_page():
+    """
+    Página de login reformulada com estilo 'tailwind-like'.
+    """
+
+    # CSS customizado para imitar o estilo do Tailwind
     st.markdown(
         """
         <style>
-        .block-container {
-            max-width: 450px;
-            margin: 0 auto;
-            padding-top: 40px;
+        /* Reset de margens/paddings para a tela de login */
+        html, body, [class*="css"]  {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .css-18e3th9 {
-            font-size: 1.75rem;
-            font-weight: 600;
+
+        /* Container que ocupa toda a tela e centraliza o conteúdo */
+        .login-bg {
+            background-color: #f3f3f3; /* bg-gray-100 */
+            min-height: 100vh;         /* min-h-screen */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Card branco com bordas arredondadas, sombra e padding */
+        .login-card {
+            background-color: #ffffff; /* bg-white */
+            border-radius: 0.5rem;     /* rounded-lg */
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); /* shadow-lg */
+            padding: 2rem;            /* p-8 */
+            max-width: 28rem;         /* max-w-md */
+            width: 100%;              /* w-full */
+            margin: 1rem;             /* mx-4 */
+        }
+
+        /* Título principal */
+        .login-title {
+            font-size: 1.5rem;        /* text-2xl */
+            font-weight: 700;         /* font-bold */
+            color: #1f2937;           /* text-gray-900 */
             text-align: center;
+            margin-bottom: 0.5rem;
         }
-        .btn {
-            background-color: #ff4c4c !important; 
-            padding: 8px 16px !important;
-            font-size: 0.875rem !important;
-            color: white !important;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
+
+        /* Subtítulo (descrição) */
+        .login-subtitle {
+            color: #4b5563;           /* text-gray-600 */
             text-align: center;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn:hover {
-            background-color: #cc0000 !important; 
-        }
-        .footer {
-            position: fixed;
-            left: 0; 
-            bottom: 0; 
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-        }
-        /* Placeholder estilizado */
-        input::placeholder {
-            color: #bbb;
+            margin-bottom: 2rem;      /* mb-8 */
             font-size: 0.875rem;
         }
-        /* Reduz a distância entre os campos de texto (username e password) */
-        .css-1siy2j8 {
-            gap: 0.1rem !important; /* Ajuste fino de espaçamento */
+
+        /* Inputs com borda, cantos arredondados e foco azul */
+        .login-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;  /* px-4 py-2 */
+            border: 1px solid #ccc;   /* border */
+            border-radius: 0.5rem;    /* rounded-lg */
+            font-size: 0.875rem;
         }
-        .css-1siy2j8 input {
-            margin-bottom: 0 !important; 
-            padding-top: 4px;
-            padding-bottom: 4px;
+        .login-input:focus {
+            outline: none;
+            border-color: transparent;
+            box-shadow: 0 0 0 2px #3b82f6;  /* ring-2 ring-blue-500 */
+        }
+
+        /* Espaçamento vertical entre os elementos do formulário */
+        .login-form > div {
+            margin-bottom: 1rem;      /* space-y-4 */
+        }
+
+        /* Mensagem de erro */
+        .login-error {
+            color: #ef4444;           /* text-red-500 */
+            font-size: 0.875rem;      /* text-sm */
+            margin-top: -0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        /* Botão customizado */
+        .login-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;              /* gap-2 */
+            width: 100%;
+            padding: 0.5rem 1rem;     /* py-2 px-4 */
+            background-color: #ff4c4c; 
+            color: #ffffff;
+            font-weight: 700;         /* font-bold */
+            border: none;
+            border-radius: 0.5rem;    /* rounded-lg */
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        /* Efeito hover no botão */
+        .login-button:hover {
+            background-color: #cc0000; 
+        }
+
+        /* Rodapé */
+        .login-footer {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.875rem;      /* text-sm */
+            color: #4b5563;           /* text-gray-600 */
         }
         </style>
         """,
         unsafe_allow_html=True
     )
 
-    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"
-    logo = None
-    try:
-        resp = requests.get(logo_url, timeout=5)
-        if resp.status_code == 200:
-            logo = Image.open(BytesIO(resp.content))
-    except Exception:
-        pass
+    # ========== LAYOUT PRINCIPAL (HTML) ==========
+    st.markdown("<div class='login-bg'>", unsafe_allow_html=True)  # Container que ocupa a tela toda
 
-    if logo:
-        st.image(logo, use_column_width=True)
+    # Card de Login
+    st.markdown("<div class='login-card'>", unsafe_allow_html=True)
 
-    # Removendo st.title("") para não adicionar espaçamento extra
-    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
+    # Título + Subtítulo
+    st.markdown("<div class='login-title'>Boituva Beach Club</div>", unsafe_allow_html=True)
+    st.markdown("<div class='login-subtitle'>🌴 keep the beach vibes flowing! 🎾</div>", unsafe_allow_html=True)
 
+    # Captura as variáveis de estado
+    if "login_error" not in st.session_state:
+        st.session_state.login_error = ""
+
+    # Formulário de Login
     with st.form("login_form", clear_on_submit=False):
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
-        btn_login = st.form_submit_button("Log in")
+        st.markdown("<div class='login-form'>", unsafe_allow_html=True)
 
+        username_input = st.text_input("", placeholder="Username", key="username_input",
+                                       label_visibility="collapsed")
+        password_input = st.text_input("", placeholder="Password", key="password_input",
+                                       type="password", label_visibility="collapsed")
+
+        # Se houver mensagem de erro, exibe
+        if st.session_state.login_error:
+            st.markdown(f"<div class='login-error'>{st.session_state.login_error}</div>", unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)  # Fecha login-form
+
+        # Botão de Login
+        btn_login = st.form_submit_button(
+            "Log in",
+            use_container_width=True
+        )
+
+    # ========== LÓGICA DE VERIFICAÇÃO ==========
     if btn_login:
-        if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
+        input_user = st.session_state["username_input"]
+        input_pass = st.session_state["password_input"]
+
+        if not input_user or not input_pass:
+            st.session_state.login_error = "Please fill in all fields"
+            st.experimental_rerun()
         else:
+            # Resgata as credenciais no Streamlit Secrets
             try:
                 creds = st.secrets["credentials"]
                 admin_user = creds["admin_username"]
@@ -1781,40 +1860,42 @@ def login_page():
                 caixa_user = creds["caixa_username"]
                 caixa_pass = creds["caixa_password"]
             except KeyError:
-                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-                st.stop()
+                st.session_state.login_error = "Credenciais não encontradas em st.secrets['credentials']."
+                st.experimental_rerun()
 
-            import hmac
+            def verify_credentials(u_in, p_in, u_real, p_real):
+                # Comparação em tempo constante
+                return hmac.compare_digest(u_in, u_real) and hmac.compare_digest(p_in, p_real)
 
-            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
-                # Constant-time comparison
-                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
-
-            if verify_credentials(username_input, password_input, admin_user, admin_pass):
+            # Verifica admin
+            if verify_credentials(input_user, input_pass, admin_user, admin_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "admin"
                 st.session_state.login_time = datetime.now()
+                st.session_state.login_error = ""
                 st.toast("Login bem-sucedido como ADMIN!")
                 st.experimental_rerun()
 
-            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
+            # Verifica caixa
+            elif verify_credentials(input_user, input_pass, caixa_user, caixa_pass):
                 st.session_state.logged_in = True
                 st.session_state.username = "caixa"
                 st.session_state.login_time = datetime.now()
+                st.session_state.login_error = ""
                 st.toast("Login bem-sucedido como CAIXA!")
                 st.experimental_rerun()
 
             else:
-                st.error("Usuário ou senha incorretos.")
+                st.session_state.login_error = "Usuário ou senha incorretos."
+                st.experimental_rerun()
 
-    st.markdown(
-        """
-        <div class='footer'>
-            © 2025 | Todos os direitos reservados | Boituva Beach Club
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+    # Rodapé do Card
+    st.markdown("<div class='login-footer'>© 2025 | All rights reserved | Boituva Beach Club</div>", unsafe_allow_html=True)
+
+    # Fecha div do card e da BG
+    st.markdown("</div>", unsafe_allow_html=True)  # .login-card
+    st.markdown("</div>", unsafe_allow_html=True)  # .login-bg
+
 
 if __name__ == "__main__":
     main()
