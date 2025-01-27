@@ -1043,7 +1043,9 @@ def cash_page():
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-       # Query para buscar os dados da view vw_pedido_produto_details
+    st.subheader("Detalhes dos Pedidos")
+
+    # Query para buscar os dados da view vw_pedido_produto_details
     query = """
         SELECT "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario", 
                "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
@@ -1059,9 +1061,9 @@ def analytics_page():
         ])
 
         # --------------------------
-        # Filtrar por Intervalo de Data
+        # Filtrar por Intervalo de Datas
         # --------------------------
-      
+        st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1096,7 +1098,7 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-     
+        st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1119,22 +1121,13 @@ def analytics_page():
                 unsafe_allow_html=True
             )
 
-        # --------------------------
-        # Select a Customer
-        # --------------------------
- 
-
-        clientes = df_filtrado["Cliente"].unique().tolist()
-        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
-
-        # Filtra os dados com base no cliente selecionado
-        if cliente_selecionado and cliente_selecionado != "":
-            df_filtrado = df_filtrado[df_filtrado["Cliente"] == cliente_selecionado]
+        # **Remoção da Seção "Selecione um Cliente"**
+        # A seguir, removemos o seletor de cliente e qualquer filtragem baseada nele.
 
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-   
+        st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1221,7 +1214,7 @@ def analytics_page():
         # --------------------------
         # Profit per Day Table
         # --------------------------
-
+        st.subheader("Profit per Day")
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
@@ -1232,7 +1225,7 @@ def analytics_page():
         # --------------------------
         # Most Profitable Products Chart
         # --------------------------
-
+        st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             FROM public.vw_vendas_produto;
@@ -1266,7 +1259,7 @@ def analytics_page():
         # --------------------------
         # Net Profit Distribution by Order Status Chart with Labels
         # --------------------------
-
+        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
 
         # Query para buscar os dados da view vw_lucro_por_produto_status
         query_status_lucro = """
@@ -1384,6 +1377,7 @@ def analytics_page():
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
 
+
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1457,15 +1451,17 @@ def events_calendar_page():
     )
     df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
+    # Filtrar eventos com base no ano e mês selecionados
     df_filtrado = df_events[
         (df_events["data_evento"].dt.year == ano_selecionado) &
-        (df_events["data_evento"].dt.month == mes_padrao)
+        (df_events["data_evento"].dt.month == mes_selecionado)
     ].copy()
 
     st.subheader("Visualização do Calendário")
 
     cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_padrao)
+    # **Alteração Aqui:** Usar 'mes_selecionado' em vez de 'mes_padrao'
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
     for ev in df_filtrado.itertuples():
         dia = ev.data_evento.day
@@ -1473,10 +1469,11 @@ def events_calendar_page():
             f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
             f'title="{ev.nome}: {ev.descricao}"'
         )
-        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-            target = f'<td class="{day_class}">{dia}</td>'
-            replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-            html_calendario = html_calendario.replace(target, replacement)
+        # Destacar apenas a primeira ocorrência do dia para evitar múltiplas substituições
+        target = f'<td>{dia}</td>'
+        replacement = f'<td{highlight_str}>{dia}</td>'
+        # Substituir apenas a primeira ocorrência para cada evento no dia
+        html_calendario = html_calendario.replace(target, replacement, 1)
 
     st.markdown(
         """
@@ -1600,6 +1597,7 @@ def events_calendar_page():
                         st.error("Falha ao excluir evento.")
     else:
         st.info("Selecione um evento para editar ou excluir.")
+
 
 def loyalty_program_page():
     """Página do programa de fidelidade."""
