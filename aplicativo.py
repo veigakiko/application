@@ -1187,14 +1187,14 @@ def analytics_page():
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
-        st.subheader("Totais no Intervalo Selecionado")
+        st.subheader("")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(
                 f"""
-                <div style="font-size:14px;">
+                <div style="font-size:16px;">
                     <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
                 </div>
                 """,
@@ -1203,7 +1203,7 @@ def analytics_page():
         with col2:
             st.markdown(
                 f"""
-                <div style="font-size:14px;">
+                <div style="font-size:16px;">
                     <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
                 </div>
                 """,
@@ -1213,7 +1213,7 @@ def analytics_page():
         # --------------------------
         # Tabela "Profit per Day" (Agora Abaixo dos Totais)
         # --------------------------
-        st.subheader("Profit per Day")
+        st.subheader("")
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
