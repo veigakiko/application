@@ -418,7 +418,7 @@ def home_page():
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
                 if stock_vs_orders_data:
                     df_svo = pd.DataFrame(stock_vs_orders_data, columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"])
-                    df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
+                    df_svo = df_svo.sort_values("Total_in_Stock", ascending=False)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
                     df_display = df_display.reset_index(drop=True)
@@ -1042,8 +1042,6 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
-
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1374,7 +1372,6 @@ def analytics_page():
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
 
-
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1456,7 +1453,7 @@ def events_calendar_page():
     st.subheader("Visualização do Calendário")
 
     cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
+    html_calendario = cal.formatmonth(ano_selecionado, mes_padrao)
 
     for ev in df_filtrado.itertuples():
         dia = ev.data_evento.day
