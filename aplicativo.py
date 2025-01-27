@@ -400,6 +400,9 @@ def orders_page():
     st.title("Gerenciar Pedidos")
     tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
 
+    # ------------------------------------------------------------------
+    # Aba 0: Novo Pedido
+    # ------------------------------------------------------------------
     with tabs[0]:
         st.subheader("Novo Pedido")
         product_data = st.session_state.data.get("products", [])
@@ -419,21 +422,24 @@ def orders_page():
 
             submit_button = st.form_submit_button("Registrar Pedido")
 
+        # Se "Registrar Pedido" for clicado
         if submit_button:
             if customer_name and product and quantity > 0:
                 query_insert = """
                     INSERT INTO public.tb_pedido("Cliente","Produto","Quantidade","Data",status)
-                    VALUES (%s,%s,%s,%s,'em aberto')
+                    VALUES (%s, %s, %s, %s, 'em aberto')
                 """
                 success = run_query(query_insert, (customer_name, product, quantity, datetime.now()), commit=True)
                 if success:
                     st.toast("Pedido registrado com sucesso!")
                     refresh_data()
+                    st.experimental_rerun()  # Recarrega a página e exibe tabela atualizada
                 else:
                     st.error("Falha ao registrar pedido.")
             else:
                 st.warning("Preencha todos os campos.")
 
+        # Mostra os últimos 5 pedidos registrados
         st.subheader("Últimos 5 Pedidos Registrados")
         orders_data = st.session_state.data.get("orders", [])
         if orders_data:
@@ -450,14 +456,22 @@ def orders_page():
                 unsafe_allow_html=True
             )
             st.markdown('<div class="small-font">', unsafe_allow_html=True)
-            st.write(df_recent_orders.reset_index(drop=True).style.set_table_styles([
-                {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '4px')]},
-                {'selector': 'td', 'props': [('padding', '4px'), ('text-align', 'left')]}
-            ]))
+            st.write(
+                df_recent_orders.reset_index(drop=True)
+                .style.set_table_styles([
+                    {'selector': 'th',
+                     'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '4px')]},
+                    {'selector': 'td',
+                     'props': [('padding', '4px'), ('text-align', 'left')]}
+                ])
+            )
             st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("Nenhum pedido encontrado.")
 
+    # ------------------------------------------------------------------
+    # Aba 1: Listagem de Pedidos
+    # ------------------------------------------------------------------
     with tabs[1]:
         st.subheader("Listagem de Pedidos")
         orders_data = st.session_state.data.get("orders", [])
@@ -467,8 +481,11 @@ def orders_page():
             st.dataframe(df_orders, use_container_width=True)
             download_df_as_csv(df_orders, "orders.csv", label="Baixar Pedidos CSV")
 
+            # Se usuário é admin, pode editar/deletar
             if st.session_state.get("username") == "admin":
                 st.markdown("### Editar ou Deletar Pedido")
+
+                # Cria chave única para identificar cada pedido
                 df_orders["unique_key"] = df_orders.apply(
                     lambda row: f"{row['Cliente']}|{row['Produto']}|{row['Data'].strftime('%Y-%m-%d %H:%M:%S')}",
                     axis=1
@@ -493,15 +510,25 @@ def orders_page():
                             with col1:
                                 product_data = st.session_state.data.get("products", [])
                                 product_list = [row[1] for row in product_data] if product_data else ["No products"]
-                                edit_prod = st.selectbox("Produto", product_list, index=product_list.index(original_product) if original_product in product_list else 0)
+                                if original_product in product_list:
+                                    idx_prod = product_list.index(original_product)
+                                else:
+                                    idx_prod = 0
+                                edit_prod = st.selectbox("Produto", product_list, index=idx_prod)
+
                             with col2:
                                 edit_qty = st.number_input("Quantidade", min_value=1, step=1, value=int(original_qty))
+
                             with col3:
                                 status_opts = [
                                     "em aberto", "Received - Debited", "Received - Credit",
                                     "Received - Pix", "Received - Cash"
                                 ]
-                                edit_status = st.selectbox("Status", status_opts, index=status_opts.index(original_status) if original_status in status_opts else 0)
+                                if original_status in status_opts:
+                                    idx_st = status_opts.index(original_status)
+                                else:
+                                    idx_st = 0
+                                edit_status = st.selectbox("Status", status_opts, index=idx_st)
 
                             col_upd, col_del = st.columns(2)
                             with col_upd:
@@ -509,6 +536,7 @@ def orders_page():
                             with col_del:
                                 delete_btn = st.form_submit_button("Deletar Pedido")
 
+                        # Botão Deletar
                         if delete_btn:
                             q_del = """
                                 DELETE FROM public.tb_pedido
@@ -518,9 +546,11 @@ def orders_page():
                             if success:
                                 st.toast("Pedido deletado com sucesso!")
                                 refresh_data()
+                                st.experimental_rerun()  # Força recarregar página
                             else:
                                 st.error("Falha ao deletar pedido.")
 
+                        # Botão Atualizar
                         if update_btn:
                             q_upd = """
                                 UPDATE public.tb_pedido
@@ -534,6 +564,7 @@ def orders_page():
                             if success:
                                 st.toast("Pedido atualizado com sucesso!")
                                 refresh_data()
+                                st.experimental_rerun()  # Força recarregar a página
                             else:
                                 st.error("Falha ao atualizar pedido.")
         else:
