@@ -1042,6 +1042,8 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
+
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1111,7 +1113,7 @@ def analytics_page():
         df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Mantendo Visual Original)
+        # Gráfico de Barras Agrupadas (Total de Vendas e Lucro Líquido por Dia)
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1307,7 +1309,7 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
-        # Gráfico: Lucro Líquido por Produto por Dia (Incluído)
+        # Gráfico: Lucro Líquido por Produto por Dia (Ajustado)
         # --------------------------
         st.subheader("Lucro Líquido por Produto por Dia")
 
@@ -1334,6 +1336,9 @@ def analytics_page():
                 "Total_Lucro": "sum"
             }).reset_index()
 
+            # Filtrar para incluir apenas registros com Total_Lucro > 0
+            df_lucro_produto_dia = df_lucro_produto_dia[df_lucro_produto_dia["Total_Lucro"] > 0]
+
             # Converter novamente para datetime para o Altair
             df_lucro_produto_dia["Data"] = pd.to_datetime(df_lucro_produto_dia["Data"])
 
@@ -1348,7 +1353,7 @@ def analytics_page():
                     strokeWidth=1,
                     strokeOpacity=0.4
                 ).encode(
-                    # Mantém o eixo X categórico com datas formatadas
+                    # Mantém o eixo X temporal com datas formatadas
                     x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
@@ -1368,6 +1373,7 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
