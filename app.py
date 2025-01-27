@@ -1042,7 +1042,8 @@ def cash_page():
 
 
 
-
+import altair as alt
+import pandas as pd
 
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
@@ -1103,7 +1104,7 @@ def analytics_page():
         df_filtrado = df[(df["Data"] >= start_datetime) & (df["Data"] <= end_datetime)]
 
         # --------------------------
-        # Totals in the Selected Range
+        # Totais no Intervalo Selecionado
         # --------------------------
         st.subheader("Totais no Intervalo Selecionado")
         soma_valor_total = df_filtrado["Valor_total"].sum()
@@ -1330,6 +1331,9 @@ def analytics_page():
         # --------------------------
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
+
+
+
 
 
 def events_calendar_page():
