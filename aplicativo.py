@@ -1044,7 +1044,7 @@ def cash_page():
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
-    st.subheader("Detalhes dos Pedidos")
+
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
@@ -1064,7 +1064,7 @@ def analytics_page():
         # --------------------------
         # Filtrar por Intervalo de Datas
         # --------------------------
-        st.subheader("Filtrar por Intervalo de Datas")
+
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1099,14 +1099,14 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-        st.subheader("Totais no Intervalo Selecionado")
+
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
         with col1:
             st.markdown(
                 f"""
-                <div style="font-size:14px;">
+                <div style="font-size:16px;">
                     <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
                 </div>
                 """,
@@ -1128,7 +1128,7 @@ def analytics_page():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-        st.subheader("Total de Vendas e Lucro Líquido por Dia")
+
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1215,7 +1215,7 @@ def analytics_page():
         # --------------------------
         # Profit per Day Table
         # --------------------------
-        st.subheader("Profit per Day")
+
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
@@ -1226,7 +1226,7 @@ def analytics_page():
         # --------------------------
         # Most Profitable Products Chart
         # --------------------------
-        st.subheader("Produtos Mais Lucrativos")
+
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             FROM public.vw_vendas_produto;
@@ -1355,7 +1355,7 @@ def analytics_page():
                     x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
-                                 scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
+                                 scale=alt.Scale(range=[150, 1500])),  # Ajuste a escala conforme necessário
                     color=alt.Color("Produto:N", legend=None),
                     tooltip=[
                         alt.Tooltip("Produto:N", title="Produto"),
@@ -1375,9 +1375,8 @@ def analytics_page():
         # --------------------------
         # Order Details Table
         # --------------------------
-        st.subheader("Detalhes dos Pedidos")
-        st.dataframe(df_filtrado, use_container_width=True)
 
+        st.dataframe(df_filtrado, use_container_width=True)
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
