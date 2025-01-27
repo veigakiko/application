@@ -32,7 +32,7 @@ def download_df_as_csv(df: pd.DataFrame, filename: str, label: str = "Baixar CSV
 
 def download_df_as_json(df: pd.DataFrame, filename: str, label: str = "Baixar JSON"):
     """Permite o download de um DataFrame como JSON."""
-    json_data = df.to_json(orient='records', lines=False)
+    json_data = df.to_json(orient='records', lines=False)  # Ajustado para JSON padrão
     st.download_button(label=label, data=json_data, file_name=filename, mime="application/json")
 
 def download_df_as_html(df: pd.DataFrame, filename: str, label: str = "Baixar HTML"):
@@ -93,36 +93,6 @@ def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     except:
         return ""
 
-###############################################################################
-#                               TWILIO (WHATSAPP)
-###############################################################################
-def send_whatsapp(recipient_number: str, media_url: str = None):
-    """
-    Envia WhatsApp via Twilio (dados em st.secrets["twilio"]).
-    Exemplo de 'recipient_number': '5511999999999' (sem '+').
-    """
-    from twilio.rest import Client
-    try:
-        account_sid = st.secrets["twilio"]["account_sid"]
-        auth_token = st.secrets["twilio"]["auth_token"]
-        whatsapp_from = st.secrets["twilio"]["whatsapp_from"]
-
-        client = Client(account_sid, auth_token)
-        if media_url:
-            message = client.messages.create(
-                body="Segue o PDF solicitado!",
-                from_=whatsapp_from,
-                to=f"whatsapp:+{recipient_number}",
-                media_url=[media_url]
-            )
-        else:
-            message = client.messages.create(
-                body="Olá! Teste de mensagem via Twilio WhatsApp.",
-                from_=whatsapp_from,
-                to=f"whatsapp:+{recipient_number}"
-            )
-    except Exception as e:
-        st.error(f"Erro ao enviar WhatsApp: {e}")
 
 ###############################################################################
 #                            CONEXÃO COM BANCO
@@ -229,6 +199,7 @@ def get_latest_settings():
 ###############################################################################
 def home_page():
     """Página inicial do aplicativo."""
+    # Verifica se temos um registro em last_settings no session_state
     last_settings = st.session_state.get("last_settings", None)
 
     if last_settings:
@@ -237,9 +208,10 @@ def home_page():
         address_value = last_settings[2]    # Column: address
         telephone_value = last_settings[5]  # Column: telephone
 
-        # Centraliza o título
+        # 1) Center the page title
         st.markdown(f"<h1 style='text-align:center;'>{company_value}</h1>", unsafe_allow_html=True)
-        # Linha após o número de telefone
+
+        # 2) Include a line after the telephone
         st.markdown(
             f"""
             <p style='font-size:14px; text-align:center; margin-top:-10px;'>
@@ -251,15 +223,19 @@ def home_page():
             unsafe_allow_html=True
         )
     else:
+        # Fallback se não houver registro em tb_settings
         st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
 
     # -----------------------------------------------------------------------
-    # Calendário e eventos (código original)
+    # A PARTIR DAQUI, O CÓDIGO ORIGINAL DA HOME (CALENDÁRIO, EVENTOS, ETC.)
     # -----------------------------------------------------------------------
+
+    # Obtém data atual e separa ano/mês para buscar eventos
     current_date = date.today()
     ano_atual = current_date.year
     mes_atual = current_date.month
 
+    # Obter eventos do banco de dados para o mês atual
     events_query = """
         SELECT nome, descricao, data_evento 
         FROM public.tb_eventos 
@@ -268,6 +244,7 @@ def home_page():
     """
     events_data = run_query(events_query, (ano_atual, mes_atual))
 
+    # Duas colunas: uma para o calendário, outra para a lista de eventos
     col_calendar, col_events = st.columns([1, 1], gap="large")
 
     with col_calendar:
@@ -276,6 +253,7 @@ def home_page():
             cal = calendar.HTMLCalendar(firstweekday=0)
             html_calendario = cal.formatmonth(ano_atual, mes_atual)
 
+            # Destacar dias com eventos
             for ev in events_data:
                 nome, descricao, data_evento = ev
                 dia = data_evento.day
@@ -288,6 +266,7 @@ def home_page():
                     replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
                     html_calendario = html_calendario.replace(target, replacement)
 
+            # CSS para estilizar a tabela do calendário
             st.markdown(
                 """
                 <style>
@@ -339,6 +318,8 @@ def home_page():
 
     # Seções adicionais para usuários 'admin'
     if st.session_state.get("username") == "admin":
+
+        # ------------------- Open Orders Summary -------------------
         with st.expander("Open Orders Summary"):
             open_orders_query = """
                 SELECT "Cliente", SUM("total") AS Total
@@ -363,6 +344,7 @@ def home_page():
             else:
                 st.info("Nenhum pedido em aberto encontrado.")
 
+        # ------------------- Stock vs. Orders Summary -------------------
         with st.expander("Stock vs. Orders Summary"):
             try:
                 stock_vs_orders_query = """
@@ -392,6 +374,7 @@ def home_page():
             except Exception as e:
                 st.info(f"Erro ao gerar resumo Stock vs. Orders: {e}")
 
+        # --------------------- Profit per day ---------------------
         with st.expander("Profit per day"):
             try:
                 query_lucro = """
@@ -842,6 +825,7 @@ def stock_page():
         else:
             st.info("Nenhuma movimentação de estoque encontrada.")
 
+
 def clients_page():
     """Página para gerenciar clientes."""
     st.title("Clientes")
@@ -943,59 +927,6 @@ def clients_page():
         except Exception as e:
             st.error(f"Erro ao carregar clientes: {e}")
 
-def process_payment(client, payment_status):
-    """Processa o pagamento atualizando o status do pedido."""
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s, "Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
-    """
-    success = run_query(query, (payment_status, client), commit=True)
-    if success:
-        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
-    else:
-        st.error("Falha ao processar pagamento.")
-
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """Gera uma representação textual da nota fiscal para impressão."""
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
-
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby('Produto').agg({'Quantidade': 'sum', 'total': 'sum'}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row['total']
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
-
 def cash_page():
     """Página para gerar e gerenciar notas fiscais."""
     st.title("Cash")
@@ -1057,7 +988,218 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
+        
 
+def analytics_page():
+    """Página de Analytics para visualização de dados detalhados."""
+    st.title("Analytics")
+    st.subheader("Detalhes dos Pedidos")
+
+    # Query para buscar os dados da view vw_pedido_produto_details
+    query = """
+        SELECT "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario", 
+               "Valor_total", "Custo_total", "Lucro_Liquido", "Fornecedor", "Status"
+        FROM public.vw_pedido_produto_details;
+    """
+    data = run_query(query)
+
+    if data:
+        # Cria um DataFrame com os dados
+        df = pd.DataFrame(data, columns=[
+            "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
+            "Valor_total", "Custo_total", "Lucro_Liquido", "Fornecedor", "Status"
+        ])
+
+        # Exibe o DataFrame
+        st.dataframe(df, use_container_width=True)
+
+        # Opção para download dos dados
+        download_df_as_csv(df, "analytics.csv", label="Baixar Dados Analytics")
+
+        # --------------------------
+        # Seleção de intervalo de datas
+        # --------------------------
+        st.subheader("Filtrar por Intervalo de Datas")
+
+        # Converte a coluna "Data" para o tipo datetime
+        df["Data"] = pd.to_datetime(df["Data"])
+
+        # Obtém as datas mínima e máxima do DataFrame
+        min_date = df["Data"].min().date()  # Convertendo para datetime.date
+        max_date = df["Data"].max().date()  # Convertendo para datetime.date
+
+        # Verifica se as datas são válidas
+        if min_date is None or max_date is None:
+            st.error("Não há dados disponíveis para exibir.")
+            return
+
+        # Define o intervalo padrão como os últimos 7 dias
+        default_end_date = max_date
+        default_start_date = (default_end_date - timedelta(days=6))  # 7 dias atrás (incluindo o dia atual)
+
+        # Cria dois campos de data para seleção do intervalo
+        col1, col2 = st.columns(2)
+        with col1:
+            start_date = st.date_input(
+                "Data Inicial",
+                value=default_start_date,  # Data inicial padrão
+                min_value=min_date,
+                max_value=max_date
+            )
+        with col2:
+            end_date = st.date_input(
+                "Data Final",
+                value=default_end_date,  # Data final padrão
+                min_value=min_date,
+                max_value=max_date
+            )
+
+        # Converte as datas selecionadas para o tipo datetime
+        start_date = pd.to_datetime(start_date)
+        end_date = pd.to_datetime(end_date)
+
+        # Filtra o DataFrame com base no intervalo de datas selecionado
+        df_filtered = df[(df["Data"] >= start_date) & (df["Data"] <= end_date)]
+
+        # --------------------------
+        # Gráfico de Barras Agrupadas
+        # --------------------------
+        st.subheader("Total de Vendas e Lucro Líquido por Dia")
+
+        # Converte a coluna "Data" para o tipo datetime
+        df_filtered["Data"] = pd.to_datetime(df_filtered["Data"])
+
+        # Agrupa os dados por dia e calcula o total de vendas e lucro líquido
+        df_daily = df_filtered.groupby("Data").agg({
+            "Valor_total": "sum",
+            "Lucro_Liquido": "sum"
+        }).reset_index()
+
+        # Ordena os dados pela data em ordem crescente
+        df_daily = df_daily.sort_values("Data")
+
+        # Formata a data para o padrão brasileiro (DD/MM/AAAA) apenas para exibição
+        df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
+
+        # Formata o valor total e o lucro líquido como moeda brasileira (R$)
+        df_daily["Valor_total_formatado"] = df_daily["Valor_total"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+        df_daily["Lucro_Liquido_formatado"] = df_daily["Lucro_Liquido"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+
+        # Transforma o DataFrame para o formato "long" (necessário para o gráfico de barras agrupadas)
+        df_long = df_daily.melt(
+            id_vars=["Data", "Data_formatada"],
+            value_vars=["Valor_total", "Lucro_Liquido"],
+            var_name="Métrica",
+            value_name="Valor"
+        )
+
+        # Formata os valores no DataFrame longo
+        df_long["Valor_formatado"] = df_long["Valor"].apply(
+            lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+        )
+
+        # Define a ordem das métricas para garantir que o Valor Total fique acima do Lucro Líquido
+        df_long["Métrica"] = pd.Categorical(
+            df_long["Métrica"], categories=["Valor_total", "Lucro_Liquido"], ordered=True
+        )
+
+        # Cria o gráfico de barras agrupadas com Altair
+        bars = alt.Chart(df_long).mark_bar(opacity=0.7).encode(
+            x=alt.X("Data_formatada:N", title="Data", sort=alt.SortField("Data")),  # Eixo X: Data formatada e ordenada
+            y=alt.Y("Valor:Q", title="Valor (R$)"),  # Eixo Y: Valor
+            color=alt.Color("Métrica:N", title="Métrica", scale=alt.Scale(
+                domain=["Valor_total", "Lucro_Liquido"],
+                range=["gray", "#bcbd22"]  # Cinza para Valor Total, Verde-amarelado para Lucro Líquido
+            )),
+            order=alt.Order("Métrica:N", sort="ascending"),  # Ordena as barras para Valor Total ficar acima
+            tooltip=["Data_formatada", "Métrica", "Valor_formatado"]  # Tooltip com detalhes
+        ).properties(
+            width=800,
+            height=400
+        )
+
+        # Adiciona rótulos para Valor Total (acima da barra cinza)
+        text_valor_total = alt.Chart(df_long[df_long["Métrica"] == "Valor_total"]).mark_text(
+            align="center",
+            baseline="bottom",  # Posiciona o texto acima da barra
+            dy=-10,  # Ajuste fino da posição vertical
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
+        ).encode(
+            x="Data_formatada:N",
+            y="Valor:Q",
+            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+        )
+
+        # Adiciona rótulos para Lucro Líquido (na parte de baixo da barra verde-amarelada)
+        text_lucro_liquido = alt.Chart(df_long[df_long["Métrica"] == "Lucro_Liquido"]).mark_text(
+            align="center",
+            baseline="top",  # Posiciona o texto na parte de baixo da barra
+            dy=10,  # Ajuste fino da posição vertical
+            color="white",  # Cor do texto em branco
+            fontSize=12  # Tamanho da fonte
+        ).encode(
+            x="Data_formatada:N",
+            y="Valor:Q",
+            text="Valor_formatado:N"  # Exibe o valor formatado como texto
+        )
+
+        # Combina as barras e os rótulos
+        chart = (bars + text_valor_total + text_lucro_liquido).interactive()
+
+        # Exibe o gráfico no Streamlit
+        st.altair_chart(chart, use_container_width=True)
+
+        # --------------------------
+        # Gráfico de Produtos Mais Lucrativos
+        # --------------------------
+        st.subheader("Produtos Mais Lucrativos")
+
+        # Query para buscar os dados da view vw_vendas_produto
+        query_produtos = """
+            SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
+            FROM public.vw_vendas_produto;
+        """
+        data_produtos = run_query(query_produtos)
+
+        if data_produtos:
+            # Cria um DataFrame com os dados
+            df_produtos = pd.DataFrame(data_produtos, columns=[
+                "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
+            ])
+
+            # Ordena os produtos pelo lucro total (do maior para o menor)
+            df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
+
+            # Formata o lucro total como moeda brasileira (R$)
+            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
+                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+            )
+
+            # Cria o gráfico de barras horizontais com Altair
+            chart_produtos = alt.Chart(df_produtos).mark_bar().encode(
+                x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),  # Eixo X: Lucro Total
+                y=alt.Y("Produto:N", title="Produto", sort="-x"),  # Eixo Y: Produto (ordenado pelo lucro)
+                tooltip=["Produto", "Total_Lucro_formatado"]  # Tooltip com detalhes
+            ).properties(
+                width=800,
+                height=400,
+                title="Produtos Mais Lucrativos"
+            ).interactive()
+
+            # Exibe o gráfico no Streamlit
+            st.altair_chart(chart_produtos, use_container_width=True)
+
+        else:
+            st.info("Nenhum dado encontrado na view vw_vendas_produto.")
+
+    else:
+        st.info("Nenhum dado encontrado na view vw_pedido_produto_details.")
+        
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
@@ -1322,6 +1464,7 @@ def settings_page():
 
     st.subheader("Configurações da Empresa")
 
+    # Preenche o form com os valores do último registro (se existir)
     with st.form(key='settings_form'):
         company = st.text_input("Company", value=last_settings[1] if last_settings else "")
         address = st.text_input("Address", value=last_settings[2] if last_settings else "")
@@ -1329,11 +1472,13 @@ def settings_page():
         email = st.text_input("Email", value=last_settings[4] if last_settings else "")
         telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
         contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
+
+        # Renomeado para "Update Registration"
         submit_settings = st.form_submit_button("Update Registration")
 
     if submit_settings:
+        # Se já existe um registro, faz UPDATE; caso contrário, INSERT
         if last_settings:
-            # Atualiza o registro existente
             q_upd = """
                 UPDATE public.tb_settings
                 SET company=%s, address=%s, cnpj_cpf=%s, email=%s,
@@ -1352,7 +1497,7 @@ def settings_page():
             else:
                 st.error("Failed to update record.")
         else:
-            # Não existe registro: insere
+            # Caso não tenha nenhum registro, insere um novo
             if company.strip():
                 q_ins = """
                     INSERT INTO public.tb_settings
@@ -1461,14 +1606,12 @@ def sidebar_navigation():
             "Bar Menu",
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
-                "Cash",
-                "Calendário de Eventos",
+                "Cash", "Analytics", "Calendário de Eventos",
                 "Settings"
             ],
             icons=[
                 "house", "file-text", "box", "list-task", "layers",
-                "receipt",
-                "gift", "calendar", "gear"
+                "receipt", "bar-chart", "calendar", "gear"
             ],
             menu_icon="cast",
             default_index=0,
@@ -1516,6 +1659,8 @@ def main():
         clients_page()
     elif selected_page == "Cash":
         cash_page()
+    elif selected_page == "Analytics":
+        analytics_page()
     elif selected_page == "Programa de Fidelidade":
         loyalty_program_page()
     elif selected_page == "Calendário de Eventos":
@@ -1583,7 +1728,7 @@ def login_page():
         }
         /* Reduz a distância entre os campos de texto (username e password) */
         .css-1siy2j8 {
-            gap: 0.1rem !important;
+            gap: 0.1rem !important; /* Ajuste fino de espaçamento */
         }
         .css-1siy2j8 input {
             margin-bottom: 0 !important; 
@@ -1607,6 +1752,7 @@ def login_page():
     if logo:
         st.image(logo, use_column_width=True)
 
+    # Removendo st.title("") para não adicionar espaçamento extra
     st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
 
     with st.form("login_form", clear_on_submit=False):
