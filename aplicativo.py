@@ -1193,14 +1193,39 @@ def analytics_page():
             st.metric("Soma Lucro Líquido", format_currency(soma_lucro_liquido))
 
         # --------------------------
-        # Profit per Day Table
+        # Profit per day table
         # --------------------------
         st.subheader("Profit per Day")
-        df_daily_table = df_daily.copy()
-        df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
-        df_daily_table["Lucro Líquido"] = df_daily_table["Lucro_Liquido"].apply(format_currency)
-        df_daily_table = df_daily_table[["Data", "Lucro Líquido"]]
-        st.table(df_daily_table)
+        try:
+            query_lucro = """
+                SELECT "Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"
+                FROM public.vw_lucro_dia
+                ORDER BY "Data" DESC
+            """
+            data_lucro = run_query(query_lucro)
+            if data_lucro:
+                df_lucro = pd.DataFrame(
+                    data_lucro,
+                    columns=["Data","Soma_Valor_total","Soma_Custo_total","Soma_Lucro_Liquido"]
+                )
+                df_lucro["Soma_Valor_total"] = pd.to_numeric(df_lucro["Soma_Valor_total"], errors="coerce").fillna(0)
+                df_lucro["Soma_Custo_total"] = pd.to_numeric(df_lucro["Soma_Custo_total"], errors="coerce").fillna(0)
+                df_lucro["Soma_Lucro_Liquido"] = pd.to_numeric(df_lucro["Soma_Lucro_Liquido"], errors="coerce").fillna(0)
+
+                df_lucro.columns = ["Data", "Valor total", "Custo total", "Lucro líquido"]
+                df_lucro["Valor total"] = df_lucro["Valor total"].apply(format_currency)
+                df_lucro["Custo total"] = df_lucro["Custo total"].apply(format_currency)
+                df_lucro["Lucro líquido"] = df_lucro["Lucro líquido"].apply(format_currency)
+
+                styled_df_lucro = df_lucro.style.set_table_styles([
+                    {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                    {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+                ])
+                st.write(styled_df_lucro)
+            else:
+                st.info("Nenhum dado encontrado em vw_lucro_dia.")
+        except Exception as e:
+            st.error(f"Erro ao exibir dados de lucro: {e}")
 
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
