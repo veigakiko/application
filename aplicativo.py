@@ -1056,7 +1056,7 @@ def analytics_page():
                "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         FROM public.vw_pedido_produto_details;
     """
-    data = run_query(query)
+    data = run_query(query)  # Supondo que run_query é uma função definida para executar consultas SQL
 
     if data:
         # Cria um DataFrame com os dados
@@ -1077,12 +1077,17 @@ def analytics_page():
         # Remover linhas com dados inválidos
         df = df.dropna(subset=["Data", "Valor_total", "Lucro_Liquido"])
 
+        # Confirmar conversão
+        st.write("### Verificação Após Conversão")
+        st.write(df.dtypes)
+        st.write(df.head())
+
         # Dropdown para selecionar o cliente
         clientes = df["Cliente"].unique().tolist()
-        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
+        cliente_selecionado = st.selectbox("Selecione um Cliente", ["Todos"] + clientes)
 
         # Filtra os dados com base no cliente selecionado
-        if cliente_selecionado:
+        if cliente_selecionado != "Todos":
             df_filtrado = df[df["Cliente"] == cliente_selecionado]
         else:
             df_filtrado = df
@@ -1135,6 +1140,7 @@ def analytics_page():
         # Ordena por Data ASC para que o dia mais antigo apareça primeiro
         df_daily = df_daily.sort_values("Data", ascending=True)
 
+        # Formatação das datas
         df_daily["Data_formatada"] = df_daily["Data"].dt.strftime("%d/%m/%Y")
 
         # Transforma o DataFrame para o formato "long"
@@ -1338,7 +1344,7 @@ def analytics_page():
 
             # Verificar se há dados após as conversões
             st.write("### Dados para o Gráfico Lucro Líquido por Produto por Dia")
-            st.write(df_lucro_produto_dia)
+            st.write(df_lucro_produto_dia.head())
 
             # Agrupar os dados por Data e Produto
             df_lucro_produto_dia = df_lucro_produto_dia.groupby(["Data", "Produto"]).agg({
@@ -1402,7 +1408,7 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
-
+            
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
     st.title("Calendário de Eventos")
