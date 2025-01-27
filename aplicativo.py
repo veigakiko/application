@@ -283,8 +283,8 @@ def home_page():
         st.markdown(
             f"""
             <p style='font-size:14px; text-align:center; margin-top:-10px;'>
-                <strong>Address:</strong> {address_value}<br>
-                <strong>Telephone:</strong> {telephone_value}
+                <strong>Endereço:</strong> {address_value}<br>
+                <strong>Telefone:</strong> {telephone_value}
             </p>
             <hr>
             """,
@@ -417,10 +417,7 @@ def home_page():
                 """
                 stock_vs_orders_data = run_query(stock_vs_orders_query)
                 if stock_vs_orders_data:
-                    df_svo = pd.DataFrame(
-                        stock_vs_orders_data,
-                        columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"]
-                    )
+                    df_svo = pd.DataFrame(stock_vs_orders_data, columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"])
                     df_svo.sort_values("Total_in_Stock", ascending=False, inplace=True)
                     df_display = df_svo[["Product", "Total_in_Stock"]]
                     df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
@@ -1122,6 +1119,9 @@ def analytics_page():
             "Valor_total": "sum",
             "Lucro_Liquido": "sum"
         }).reset_index()
+
+        # Filtrar apenas as datas com valores > 0
+        df_daily = df_daily[(df_daily["Valor_total"] > 0) | (df_daily["Lucro_Liquido"] > 0)]
 
         # Ordena por Data ASC para que o dia mais antigo apareça primeiro
         df_daily = df_daily.sort_values("Data", ascending=True)
