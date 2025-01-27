@@ -1063,7 +1063,7 @@ def analytics_page():
         # --------------------------
         # Filtrar por Intervalo de Datas
         # --------------------------
-        st.subheader("Filtrar por Intervalo de Datas")
+        st.subheader("-")
 
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
@@ -1098,7 +1098,7 @@ def analytics_page():
         # --------------------------
         # Totals in the Selected Range
         # --------------------------
-        st.subheader("Totais no Intervalo Selecionado")
+        st.subheader("-")
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1127,7 +1127,7 @@ def analytics_page():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
-        st.subheader("Total de Vendas e Lucro Líquido por Dia")
+        st.subheader("-")
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1214,7 +1214,7 @@ def analytics_page():
         # --------------------------
         # Profit per Day Table
         # --------------------------
-        st.subheader("Profit per Day")
+        st.subheader("-")
         df_daily_table = df_daily.copy()
         df_daily_table["Data"] = df_daily_table["Data"].dt.strftime("%d/%m/%Y")
         df_daily_table["Valor total"] = df_daily_table["Valor_total"].apply(format_currency)
@@ -1225,7 +1225,7 @@ def analytics_page():
         # --------------------------
         # Most Profitable Products Chart
         # --------------------------
-        st.subheader("Produtos Mais Lucrativos")
+        st.subheader("-")
         query_produtos = """
             SELECT "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             FROM public.vw_vendas_produto;
