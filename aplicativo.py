@@ -1041,9 +1041,6 @@ def cash_page():
         st.warning("Selecione um cliente.")
 
 
-
-
-
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1059,7 +1056,7 @@ def analytics_page():
 
     if data:
         # Cria um DataFrame com os dados
-        df = pd.DataFrame(data, columns=[ 
+        df = pd.DataFrame(data, columns=[
             "Data", "Cliente", "Produto", "Quantidade", "Valor", "Custo_Unitario",
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
@@ -1083,10 +1080,7 @@ def analytics_page():
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
         with col1:
-            # Set Start Date to the first day of the current month
-            current_date = date.today()
-            start_date_default = current_date.replace(day=1)
-            start_date = st.date_input("Data Inicial", start_date_default, min_value=min_date, max_value=max_date)
+            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
         with col2:
             end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
@@ -1244,23 +1238,73 @@ def analytics_page():
                 "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             ])
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
-            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
+            df_produtos_top5 = df_produtos.head(5)
+            df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            chart_produtos = alt.Chart(df_produtos).mark_bar(color="#1b4f72").encode(
+            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
                 width=1200,  # Aumentado o comprimento do gráfico
                 height=400,
-                title="Produtos Mais Lucrativos"
+                title="Top 5 Produtos Mais Lucrativos"
             ).interactive()
 
             st.altair_chart(chart_produtos, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
+
+        # --------------------------
+        # Net Profit Distribution by Order Status Chart with Labels
+        # --------------------------
+        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
+
+        # Query para buscar os dados da view vw_lucro_por_produto_status
+        query_status_lucro = """
+            SELECT "Status_Pedido", "Lucro_Liquido"
+            FROM public.vw_lucro_por_produto_status;
+        """
+        data_status_lucro = run_query(query_status_lucro)
+
+        if data_status_lucro:
+            df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
+
+            # Agrupa por Status_Pedido e soma o Lucro_Liquido
+            df_status_lucro = df_status_lucro.groupby("Status_Pedido").agg({
+                "Lucro_Liquido": "sum"
+            }).reset_index()
+
+            # Formata os valores monetários
+            df_status_lucro["Lucro_Liquido_formatado"] = df_status_lucro["Lucro_Liquido"].apply(
+                lambda x: format_currency(x)
+            )
+
+            # Cria o Donut Chart usando Altair
+            donut_chart = alt.Chart(df_status_lucro).mark_arc(innerRadius=50).encode(
+                theta=alt.Theta(field="Lucro_Liquido", type="quantitative"),
+                color=alt.Color(field="Status_Pedido", type="nominal",
+                                scale=alt.Scale(scheme="category10")),
+                tooltip=["Status_Pedido", "Lucro_Liquido_formatado"]
+            ).properties(
+                width=300,
+                height=300,
+                title="Lucro Líquido por Status do Pedido"
+            )
+
+            # Adiciona labels com os valores em reais
+            labels = donut_chart.mark_text(radius=100, size=12, color="white").encode(
+                text=alt.Text("Lucro_Liquido_formatado:N")
+            )
+
+            # Combinação do Donut Chart com Labels
+            final_donut = donut_chart + labels
+
+            st.altair_chart(final_donut, use_container_width=True)
+        else:
+            st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
 
         # --------------------------
         # Net Profit by Product per Day Chart
@@ -1311,7 +1355,7 @@ def analytics_page():
                     x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
-                                 scale=alt.Scale(range=[200, 2000])),  # Ajuste a escala conforme necessário
+                                 scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
                     color=alt.Color("Produto:N", legend=None),
                     tooltip=[
                         alt.Tooltip("Produto:N", title="Produto"),
@@ -1333,6 +1377,7 @@ def analytics_page():
         # --------------------------
         st.subheader("Detalhes dos Pedidos")
         st.dataframe(df_filtrado, use_container_width=True)
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
