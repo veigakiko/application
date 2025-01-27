@@ -14,13 +14,17 @@ import calendar
 import altair as alt
 import numpy as np
 from sklearn.linear_model import LinearRegression
-import mitosheet  # Para usar o MitoSheet
+import mitosheet  # For MitoSheet
 from mitosheet.streamlit.v1 import spreadsheet
 from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 ###############################################################################
-#                               UTILIDADEs
-###############################################################################
+#                               UTILIDADES
+############################################################################### 
 def format_currency(value: float) -> str:
     """Formata um valor float para o formato de moeda brasileira."""
     return f"R$ {value:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
@@ -73,7 +77,7 @@ def convert_df_to_pdf(df: pd.DataFrame) -> bytes:
             pdf.cell(60, 10, str(item), border=1)
         pdf.ln()
 
-    return pdf.output(dest='S')
+    return pdf.output(dest='S').encode('latin1')
 
 def upload_pdf_to_fileio(pdf_bytes: bytes) -> str:
     """
@@ -201,66 +205,46 @@ def get_latest_settings():
     return None
 
 ###############################################################################
-#                           FUNÇÕES ESPECÍFICAS
+#                           FUNÇÕES DE EMAIL
 ###############################################################################
-def process_payment(client: str, payment_status: str):
+def send_email(name, user_email, message):
     """
-    Atualiza status de pedido em aberto -> payment_status, chama refresh_data() e st.experimental_rerun().
+    Envia um email com os detalhes de registro do usuário.
     """
-    query = """
-        UPDATE public.tb_pedido
-        SET status=%s, "Data"=CURRENT_TIMESTAMP
-        WHERE "Cliente"=%s AND status='em aberto'
+    # Email configuration from st.secrets
+    try:
+        sender_email = st.secrets["email"]["sender_email"]       # Sender's email
+        sender_password = st.secrets["email"]["sender_password"] # Sender's email password
+        receiver_email = st.secrets["email"]["receiver_email"]   # Receiver's email
+    except KeyError:
+        st.error("Configurações de email não encontradas em st.secrets['email'].")
+        return
+
+    # Create the email
+    subject = f"New Registration from {name}"
+    body = f"""
+    New user registration:
+
+    Name: {name}
+    Email: {user_email}
+    Message: {message}
     """
-    success = run_query(query, (payment_status, client), commit=True)
-    if success:
-        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
-        refresh_data()
-        st.experimental_rerun()
-    else:
-        st.error("Falha ao processar pagamento.")
 
-def generate_invoice_for_printer(df: pd.DataFrame):
-    """
-    Gera texto simulando uma nota fiscal para exibição. 
-    """
-    company = "Boituva Beach Club"
-    address = "Avenida do Trabalhador 1879"
-    city = "Boituva - SP 18552-100"
-    cnpj = "05.365.434/0001-09"
-    phone = "(13) 99154-5481"
+    msg = MIMEMultipart()
+    msg["From"] = sender_email
+    msg["To"] = receiver_email
+    msg["Subject"] = subject
+    msg.attach(MIMEText(body, "plain"))
 
-    invoice = []
-    invoice.append("==================================================")
-    invoice.append("                      NOTA FISCAL                ")
-    invoice.append("==================================================")
-    invoice.append(f"Empresa: {company}")
-    invoice.append(f"Endereço: {address}")
-    invoice.append(f"Cidade: {city}")
-    invoice.append(f"CNPJ: {cnpj}")
-    invoice.append(f"Telefone: {phone}")
-    invoice.append("--------------------------------------------------")
-    invoice.append("DESCRIÇÃO             QTD     TOTAL")
-    invoice.append("--------------------------------------------------")
-
-    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
-    grouped_df = df.groupby("Produto").agg({"Quantidade": "sum", "total": "sum"}).reset_index()
-    total_general = 0
-    for _, row in grouped_df.iterrows():
-        description = f"{row['Produto'][:20]:<20}"
-        quantity = f"{int(row['Quantidade']):>5}"
-        total_item = row["total"]
-        total_general += total_item
-        total_formatted = format_currency(total_item)
-        invoice.append(f"{description} {quantity} {total_formatted}")
-
-    invoice.append("--------------------------------------------------")
-    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
-    invoice.append("==================================================")
-    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
-    invoice.append("==================================================")
-
-    st.text("\n".join(invoice))
+    try:
+        # Send the email using SMTP
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:  # Use Gmail's SMTP server
+            server.starttls()  # Secure the connection
+            server.login(sender_email, sender_password)
+            server.sendmail(sender_email, receiver_email, msg.as_string())
+        st.success("Email enviado com sucesso!")
+    except Exception as e:
+        st.error(f"Falha ao enviar email: {e}")
 
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
@@ -297,7 +281,7 @@ def home_page():
     # Obtém data atual e separa ano/mês para buscar eventos
     current_date = date.today()
     ano_atual = current_date.year
-    mes_atual = current_date.month
+    mes_padrao = current_date.month
 
     # Obter eventos do banco de dados para o mês atual
     events_query = """
@@ -306,16 +290,15 @@ def home_page():
         WHERE EXTRACT(YEAR FROM data_evento) = %s AND EXTRACT(MONTH FROM data_evento) = %s
         ORDER BY data_evento
     """
-    events_data = run_query(events_query, (ano_atual, mes_atual))
+    events_data = run_query(events_query, (ano_atual, mes_padrao))
 
     # Duas colunas: uma para o calendário, outra para a lista de eventos
     col_calendar, col_events = st.columns([1, 1], gap="large")
 
     with col_calendar:
         if events_data:
-            import calendar
             cal = calendar.HTMLCalendar(firstweekday=0)
-            html_calendario = cal.formatmonth(ano_atual, mes_atual)
+            html_calendario = cal.formatmonth(ano_atual, mes_padrao)
 
             # Destacar dias com eventos
             for ev in events_data:
@@ -381,6 +364,7 @@ def home_page():
     st.markdown("---")
 
     # Seções adicionais para usuários 'admin'
+
     if st.session_state.get("username") == "admin":
 
         # ------------------- Open Orders Summary -------------------
@@ -785,8 +769,19 @@ def stock_page():
         """
         data_svo = run_query(query_svo)
         if data_svo:
-            df_svo = pd.DataFrame(data_svo, columns=["Product","Stock_Quantity","Orders_Quantity","Total_in_Stock"])
-            st.dataframe(df_svo, use_container_width=True)
+            df_svo = pd.DataFrame(data_svo, columns=["Product", "Stock_Quantity", "Orders_Quantity", "Total_in_Stock"])
+            df_svo = df_svo.sort_values("Total_in_Stock", ascending=False)
+            df_display = df_svo[["Product", "Total_in_Stock"]]
+            df_display["Total_in_Stock"] = df_display["Total_in_Stock"].apply(lambda x: f"{x:,}")
+            df_display = df_display.reset_index(drop=True)
+
+            styled_df_svo = df_display.style.set_table_styles([
+                {'selector': 'th', 'props': [('background-color', '#ff4c4c'), ('color', 'white'), ('padding', '8px')]},
+                {'selector': 'td', 'props': [('padding', '8px'), ('text-align', 'right')]}
+            ])
+            st.write(styled_df_svo)
+            total_val = df_svo["Total_in_Stock"].sum()
+            st.markdown(f"**Total Geral (Stock vs. Orders):** {total_val:,}")
         else:
             st.info("Nenhum dado encontrado em vw_stock_vs_orders_summary.")
 
@@ -839,7 +834,10 @@ def stock_page():
                                     idx_trans = ["Entrada","Saída"].index(original_trans)
                                 edit_trans = st.selectbox("Tipo", ["Entrada","Saída"], index=idx_trans)
                             with col4:
-                                old_date = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date()
+                                try:
+                                    old_date = datetime.strptime(original_date, "%Y-%m-%d %H:%M:%S").date()
+                                except ValueError:
+                                    old_date = date.today()
                                 edit_date = st.date_input("Data", value=old_date)
 
                             col_upd, col_del = st.columns(2)
@@ -1042,6 +1040,10 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
+
+
+
+
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
     st.title("Analytics")
@@ -1062,30 +1064,17 @@ def analytics_page():
             "Valor_total", "Lucro_Liquido", "Fornecedor", "Status"
         ])
 
-        # Dropdown para selecionar o cliente
-        clientes = df["Cliente"].unique().tolist()
-        cliente_selecionado = st.selectbox("Selecione um Cliente", [""] + clientes)
-
-        # Filtra os dados com base no cliente selecionado
-        if cliente_selecionado and cliente_selecionado != "":
-            df_filtrado = df[df["Cliente"] == cliente_selecionado]
-        else:
-            df_filtrado = df
-
-        # Exibe o DataFrame filtrado
-        st.dataframe(df_filtrado, use_container_width=True)
-
-        # Opção para download dos dados
-        download_df_as_csv(df_filtrado, "analytics.csv", label="Baixar Dados Analytics")
-
+        # --------------------------
+        # Filtrar por Intervalo de Datas
+        # --------------------------
         st.subheader("Filtrar por Intervalo de Datas")
 
         # Converte a coluna "Data" para o tipo datetime
-        df_filtrado["Data"] = pd.to_datetime(df_filtrado["Data"])
+        df["Data"] = pd.to_datetime(df["Data"])
 
         # Obtém as datas mínima e máxima do DataFrame
-        min_date = df_filtrado["Data"].min().date() if not df_filtrado.empty else None
-        max_date = df_filtrado["Data"].max().date() if not df_filtrado.empty else None
+        min_date = df["Data"].min().date() if not df.empty else None
+        max_date = df["Data"].max().date() if not df.empty else None
 
         if min_date is None or max_date is None:
             st.error("Não há dados disponíveis para exibir.")
@@ -1094,7 +1083,10 @@ def analytics_page():
         # Cria dois campos de data para seleção do intervalo
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Data Inicial", min_date, min_value=min_date, max_value=max_date)
+            # Set Start Date to the first day of the current month
+            current_date = date.today()
+            start_date_default = current_date.replace(day=1)
+            start_date = st.date_input("Data Inicial", start_date_default, min_value=min_date, max_value=max_date)
         with col2:
             end_date = st.date_input("Data Final", max_date, min_value=min_date, max_value=max_date)
 
@@ -1108,10 +1100,36 @@ def analytics_page():
         end_datetime = pd.to_datetime(end_date)
 
         # Filtra o DataFrame com base no intervalo de datas selecionado
-        df_filtrado = df_filtrado[(df_filtrado["Data"] >= start_datetime) & (df_filtrado["Data"] <= end_datetime)]
+        df_filtrado = df[(df["Data"] >= start_datetime) & (df["Data"] <= end_datetime)]
 
         # --------------------------
-        # Gráfico de Barras Agrupadas (Total de Vendas e Lucro Líquido por Dia)
+        # Totals in the Selected Range
+        # --------------------------
+        st.subheader("Totais no Intervalo Selecionado")
+        soma_valor_total = df_filtrado["Valor_total"].sum()
+        soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        with col2:
+            st.markdown(
+                f"""
+                <div style="font-size:14px;">
+                    <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+
+        # --------------------------
+        # Total Sales and Net Profit per Day Chart
         # --------------------------
         st.subheader("Total de Vendas e Lucro Líquido por Dia")
 
@@ -1197,31 +1215,8 @@ def analytics_page():
         chart = (bars + text_valor_total + text_lucro_liquido).interactive()
         st.altair_chart(chart, use_container_width=True)
 
-        st.subheader("Totais no Intervalo Selecionado")
-        soma_valor_total = df_filtrado["Valor_total"].sum()
-        soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(
-                f"""
-                <div style="font-size:14px;">
-                    <strong>Soma Valor Total:</strong> {format_currency(soma_valor_total)}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        with col2:
-            st.markdown(
-                f"""
-                <div style="font-size:14px;">
-                    <strong>Soma Lucro Líquido:</strong> {format_currency(soma_lucro_liquido)}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-
         # --------------------------
-        # Tabela "Profit per Day" (Agora Abaixo dos Totais)
+        # Profit per Day Table
         # --------------------------
         st.subheader("Profit per Day")
         df_daily_table = df_daily.copy()
@@ -1232,7 +1227,7 @@ def analytics_page():
         st.table(df_daily_table)
 
         # --------------------------
-        # Gráfico "Produtos Mais Lucrativos" (Atualizado)
+        # Most Profitable Products Chart
         # --------------------------
         st.subheader("Produtos Mais Lucrativos")
         query_produtos = """
@@ -1246,19 +1241,18 @@ def analytics_page():
                 "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
             ])
             df_produtos = df_produtos.sort_values("Total_Lucro", ascending=False)
-            df_produtos_top5 = df_produtos.head(5)
-            df_produtos_top5["Total_Lucro_formatado"] = df_produtos_top5["Total_Lucro"].apply(
+            df_produtos["Total_Lucro_formatado"] = df_produtos["Total_Lucro"].apply(
                 lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
             )
 
-            chart_produtos = alt.Chart(df_produtos_top5).mark_bar(color="#1b4f72").encode(
+            chart_produtos = alt.Chart(df_produtos).mark_bar(color="#1b4f72").encode(
                 x=alt.X("Total_Lucro:Q", title="Lucro Total (R$)"),
                 y=alt.Y("Produto:N", title="Produto", sort="-x"),
                 tooltip=["Produto", "Total_Lucro_formatado"]
             ).properties(
                 width=1200,  # Aumentado o comprimento do gráfico
                 height=400,
-                title="Top 5 Produtos Mais Lucrativos"
+                title="Produtos Mais Lucrativos"
             ).interactive()
 
             st.altair_chart(chart_produtos, use_container_width=True)
@@ -1266,48 +1260,7 @@ def analytics_page():
             st.info("Nenhum dado encontrado na view vw_vendas_produto.")
 
         # --------------------------
-        # Novo Gráfico Donut Chart - Lucro Líquido por Status_Pedido
-        # --------------------------
-        st.subheader("Distribuição do Lucro Líquido por Status do Pedido")
-
-        # Query para buscar os dados da view vw_lucro_por_produto_status
-        query_status_lucro = """
-            SELECT "Status_Pedido", "Lucro_Liquido"
-            FROM public.vw_lucro_por_produto_status;
-        """
-        data_status_lucro = run_query(query_status_lucro)
-
-        if data_status_lucro:
-            df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
-
-            # Agrupa por Status_Pedido e soma o Lucro_Liquido
-            df_status_lucro = df_status_lucro.groupby("Status_Pedido").agg({
-                "Lucro_Liquido": "sum"
-            }).reset_index()
-
-            # Formata os valores monetários
-            df_status_lucro["Lucro_Liquido_formatado"] = df_status_lucro["Lucro_Liquido"].apply(
-                lambda x: f"R$ {x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-            )
-
-            # Cria o Donut Chart usando Altair
-            donut_chart = alt.Chart(df_status_lucro).mark_arc(innerRadius=50).encode(
-                theta=alt.Theta(field="Lucro_Liquido", type="quantitative"),
-                color=alt.Color(field="Status_Pedido", type="nominal",
-                                scale=alt.Scale(scheme="category10")),
-                tooltip=["Status_Pedido", "Lucro_Liquido_formatado"]
-            ).properties(
-                width=300,
-                height=300,
-                title="Lucro Líquido por Status do Pedido"
-            )
-
-            st.altair_chart(donut_chart, use_container_width=True)
-        else:
-            st.info("Nenhum dado encontrado na view vw_lucro_por_produto_status.")
-
-        # --------------------------
-        # Gráfico: Lucro Líquido por Produto por Dia (Ajustado)
+        # Net Profit by Product per Day Chart
         # --------------------------
         st.subheader("Lucro Líquido por Produto por Dia")
 
@@ -1355,7 +1308,7 @@ def analytics_page():
                     x=alt.X("Data:T", title="Data", axis=alt.Axis(format="%d/%m/%Y")),
                     y=alt.Y("Produto:N", title="Produto"),
                     size=alt.Size("Total_Lucro:Q", title="Lucro Líquido",
-                                 scale=alt.Scale(range=[50, 500])),  # Ajuste a escala conforme necessário
+                                 scale=alt.Scale(range=[200, 2000])),  # Ajuste a escala conforme necessário
                     color=alt.Color("Produto:N", legend=None),
                     tooltip=[
                         alt.Tooltip("Produto:N", title="Produto"),
@@ -1371,6 +1324,13 @@ def analytics_page():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
+        # --------------------------
+        # Order Details Table
+        # --------------------------
+        st.subheader("Detalhes dos Pedidos")
+        st.dataframe(df_filtrado, use_container_width=True)
+
 
 def events_calendar_page():
     """Página para gerenciar o calendário de eventos."""
@@ -1445,62 +1405,85 @@ def events_calendar_page():
     )
     df_events["data_evento"] = pd.to_datetime(df_events["data_evento"], errors="coerce")
 
+    # Filtrar eventos com base no ano e mês selecionados
     df_filtrado = df_events[
         (df_events["data_evento"].dt.year == ano_selecionado) &
         (df_events["data_evento"].dt.month == mes_selecionado)
     ].copy()
 
+    # Agrupar e contar eventos por dia
+    event_counts = df_filtrado.groupby(df_filtrado["data_evento"].dt.day).size().to_dict()
+
     st.subheader("Visualização do Calendário")
 
     cal = calendar.HTMLCalendar(firstweekday=0)
-    html_calendario = cal.formatmonth(ano_selecionado, mes_padrao)
+    # Usar o mês e ano selecionados
+    html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
-    for ev in df_filtrado.itertuples():
-        dia = ev.data_evento.day
-        highlight_str = (
-            f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
-            f'title="{ev.nome}: {ev.descricao}"'
-        )
-        for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-            target = f'<td class="{day_class}">{dia}</td>'
-            replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-            html_calendario = html_calendario.replace(target, replacement)
-
-    st.markdown(
-        """
-        <style>
+    # Definir o estilo para dias com eventos
+    css_custom = """
+    <style>
+    table {
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    th {
+        background-color: #1b4f72;
+        color: white;
+        padding: 5px;
+    }
+    td {
+        width: 14.28%;
+        height: 80px;
+        text-align: center;
+        vertical-align: top;
+        border: 1px solid #ddd;
+        position: relative;
+    }
+    td.event-day {
+        background-color: #1b4f72; /* Azul padrão */
+        color: white;
+        font-weight: bold;
+    }
+    td.event-day span {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background-color: rgba(255, 255, 255, 0.3);
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-size: 10px;
+    }
+    @media only screen and (max-width: 600px) {
         table {
-            width: 80%;
-            margin-left: auto;
-            margin-right: auto;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        th {
-            background-color: #1b4f72;
-            color: white;
-            padding: 5px;
+            width: 100%;
+            font-size: 10px;
         }
         td {
-            width: 14.28%;
             height: 60px;
-            text-align: center;
-            vertical-align: top;
-            border: 1px solid #ddd;
         }
-        @media only screen and (max-width: 600px) {
-            table {
-                width: 100%;
-                font-size: 10px;
-            }
-            td {
-                height: 40px;
-            }
+        td.event-day span {
+            font-size: 8px;
+            bottom: 2px;
+            right: 2px;
         }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    }
+    </style>
+    """
+    st.markdown(css_custom, unsafe_allow_html=True)
+
+    for dia, count in event_counts.items():
+        # Criar a string de substituição com a contagem de eventos
+        # Formato esperado: <td>dia</td>
+        target = f'<td>{dia}</td>'
+        # Substituir por: <td class="event-day" title="X evento(s)">dia<br/><span>X</span></td>
+        replacement = f'<td class="event-day" title="{count} evento(s)">{dia}<br/><span>{count}</span></td>'
+        # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
+        html_calendario = html_calendario.replace(target, replacement, 1)
+
     st.markdown(html_calendario, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1683,6 +1666,386 @@ def settings_page():
                 st.warning("Por favor, forneça pelo menos o nome da empresa.")
 
 ###############################################################################
+#                     FUNÇÕES DE LOGIN E REGISTRO
+###############################################################################
+def login_page():
+    """Página de login do aplicativo."""
+    from PIL import Image
+    import requests
+    from io import BytesIO
+    from datetime import datetime
+
+    st.markdown(
+        """
+        <style>
+        .block-container {
+            max-width: 450px;
+            margin: 0 auto;
+            padding-top: 40px;
+        }
+        .css-18e3th9 {
+            font-size: 1.75rem;
+            font-weight: 600;
+            text-align: center;
+        }
+        .btn {
+            background-color: #ff4c4c !important; 
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #cc0000 !important; 
+        }
+        .footer {
+            position: fixed;
+            left: 0; 
+            bottom: 0; 
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        .css-1siy2j8 {
+            gap: 0.1rem !important;
+        }
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important; 
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"
+    logo = None
+    try:
+        resp = requests.get(logo_url, timeout=5)
+        if resp.status_code == 200:
+            logo = Image.open(BytesIO(resp.content))
+    except:
+        pass
+
+    if logo:
+        st.image(logo, use_column_width=True)
+
+    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
+
+    with st.form("login_form", clear_on_submit=False):
+        username_input = st.text_input("", placeholder="Username")
+        password_input = st.text_input("", type="password", placeholder="Password")
+        btn_login = st.form_submit_button("Log in")
+
+    # Registration Button
+    if st.button("Register"):
+        st.session_state.show_registration_form = True
+
+    # Registration form
+    if st.session_state.get("show_registration_form", False):
+        with st.form("registration_form"):
+            st.subheader("Registration Form")
+            name = st.text_input("Name")
+            email = st.text_input("Email")
+            message = st.text_area("Message")
+            send_button = st.form_submit_button("Send")
+
+            if send_button:
+                if name and email and message:
+                    send_email(name, email, message)
+                    st.session_state.show_registration_form = False  # Hide the form after sending
+                else:
+                    st.warning("Please fill in all fields.")
+
+    if btn_login:
+        if not username_input or not password_input:
+            st.error("Por favor, preencha todos os campos.")
+        else:
+            try:
+                creds = st.secrets["credentials"]
+                admin_user = creds["admin_username"]
+                admin_pass = creds["admin_password"]
+                caixa_user = creds["caixa_username"]
+                caixa_pass = creds["caixa_password"]
+            except KeyError:
+                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
+                st.stop()
+
+            import hmac
+
+            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
+                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
+
+            # Verifica ADMIN
+            if verify_credentials(username_input, password_input, admin_user, admin_pass):
+                st.session_state.logged_in = True
+                st.session_state.username = "admin"
+                st.session_state.login_time = datetime.now()
+                st.toast("Login bem-sucedido como ADMIN!")
+                st.experimental_rerun()
+            # Verifica CAIXA
+            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
+                st.session_state.logged_in = True
+                st.session_state.username = "caixa"
+                st.session_state.login_time = datetime.now()
+                st.toast("Login bem-sucedido como CAIXA!")
+                st.experimental_rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+
+    st.markdown(
+        """
+        <div class='footer'>
+            © 2025 | Todos os direitos reservados | Boituva Beach Club
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def main():
+    """
+    Função principal do aplicativo. 
+    Define a ordem de execução, faz login, carrega a página selecionada, etc.
+    """
+    apply_custom_css()
+    initialize_session_state()
+
+    # Se não estiver logado, página de login
+    if not st.session_state.logged_in:
+        login_page()
+        return
+
+    # Caso logado, cria barra lateral e seleciona página
+    selected_page = sidebar_navigation()
+
+    if 'current_page' not in st.session_state:
+        st.session_state.current_page = selected_page
+    elif selected_page != st.session_state.current_page:
+        st.session_state.current_page = selected_page
+
+    # Renderiza a página correspondente
+    if selected_page == "Home":
+        home_page()
+    elif selected_page == "Orders":
+        orders_page()
+    elif selected_page == "Products":
+        products_page()
+    elif selected_page == "Stock":
+        stock_page()
+    elif selected_page == "Clients":
+        clients_page()
+    elif selected_page == "Cash":
+        cash_page()
+    elif selected_page == "Analytics":
+        analytics_page()
+    elif selected_page == "Calendário de Eventos":
+        events_calendar_page()
+    elif selected_page == "Settings":
+        settings_page()
+    elif selected_page == "Loyalty Program":
+        loyalty_program_page()
+
+    # Botão "Logout" na sidebar
+    with st.sidebar:
+        if st.button("Logout"):
+            # Remove todas as chaves relevantes do session_state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
+            st.toast("Desconectado com sucesso!")
+            st.experimental_rerun()
+
+###############################################################################
+#                     FUNÇÕES DE INICIALIZAÇÃO
+###############################################################################
+def initialize_session_state():
+    """
+    Inicializa variáveis no st.session_state:
+    - data: dados carregados
+    - logged_in: status de login
+    - last_settings: configurações mais recentes
+    """
+    if 'data' not in st.session_state:
+        st.session_state.data = load_all_data()
+    if 'logged_in' not in st.session_state:
+        st.session_state.logged_in = False
+    if 'last_settings' not in st.session_state:
+        st.session_state.last_settings = get_latest_settings()
+
+def apply_custom_css():
+    """
+    Aplica CSS customizado para toda a aplicação.
+    """
+    st.markdown(
+        """
+        <style>
+        .css-1d391kg {
+            font-size: 2em;
+            color: #ff4c4c;
+        }
+        .stDataFrame table {
+            width: 100%;
+            overflow-x: auto;
+        }
+        .css-1aumxhk {
+            background-color: #ff4c4c;
+            color: white;
+        }
+        @media only screen and (max-width: 600px) {
+            .css-1d391kg {
+                font-size: 1.5em;
+            }
+        }
+        .css-1v3fvcr {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+        }
+        .btn {
+            background-color: #ff4c4c !important;
+            padding: 8px 16px !important;
+            font-size: 0.875rem !important;
+            color: white !important;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            text-align: center;
+            cursor: pointer;
+            width: 100%;
+        }
+        .btn:hover {
+            background-color: #cc0000 !important;
+        }
+        input::placeholder {
+            color: #bbb;
+            font-size: 0.875rem;
+        }
+        .css-1siy2j8 input {
+            margin-bottom: 0 !important;
+            padding-top: 4px;
+            padding-bottom: 4px;
+        }
+        @media only screen and (max-width: 600px) {
+            table {
+                font-size: 10px;
+            }
+            th, td {
+                padding: 4px;
+            }
+        }
+        </style>
+        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def sidebar_navigation():
+    """
+    Cria a barra lateral de navegação com option_menu e retorna qual página foi selecionada.
+    """
+    with st.sidebar:
+        selected = option_menu(
+            "Bar Menu",
+            [
+                "Home", "Orders", "Products", "Stock", "Clients",
+                "Cash", "Analytics", "Calendário de Eventos",
+                "Settings", "Loyalty Program"
+            ],
+            icons=[
+                "house","file-text","box","list-task","layers",
+                "receipt","bar-chart","calendar","gear", "star"
+            ],
+            menu_icon="cast",
+            default_index=0,
+            styles={
+                "container": {"background-color": "#1b4f72"},
+                "icon": {"color": "white", "font-size": "18px"},
+                "nav-link": {
+                    "font-size": "14px", "text-align": "left", "margin": "0px",
+                    "color": "white", "--hover-color": "#184563"
+                },
+                "nav-link-selected": {"background-color": "#184563", "color": "white"},
+            }
+        )
+        if 'login_time' in st.session_state:
+            st.write(
+                f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%H:%M')}"
+            )
+    return selected
+
+def process_payment(client: str, payment_status: str):
+    """
+    Atualiza status de pedido em aberto -> payment_status, chama refresh_data() e st.experimental_rerun().
+    """
+    query = """
+        UPDATE public.tb_pedido
+        SET status=%s, "Data"=CURRENT_TIMESTAMP
+        WHERE "Cliente"=%s AND status='em aberto'
+    """
+    success = run_query(query, (payment_status, client), commit=True)
+    if success:
+        st.toast(f"Pagamento via {payment_status.split('-')[-1].strip()} processado com sucesso!")
+        refresh_data()
+        st.experimental_rerun()
+    else:
+        st.error("Falha ao processar pagamento.")
+
+def generate_invoice_for_printer(df: pd.DataFrame):
+    """
+    Gera texto simulando uma nota fiscal para exibição. 
+    """
+    company = "Boituva Beach Club"
+    address = "Avenida do Trabalhador 1879"
+    city = "Boituva - SP 18552-100"
+    cnpj = "05.365.434/0001-09"
+    phone = "(13) 99154-5481"
+
+    invoice = []
+    invoice.append("==================================================")
+    invoice.append("                      NOTA FISCAL                ")
+    invoice.append("==================================================")
+    invoice.append(f"Empresa: {company}")
+    invoice.append(f"Endereço: {address}")
+    invoice.append(f"Cidade: {city}")
+    invoice.append(f"CNPJ: {cnpj}")
+    invoice.append(f"Telefone: {phone}")
+    invoice.append("--------------------------------------------------")
+    invoice.append("DESCRIÇÃO             QTD     TOTAL")
+    invoice.append("--------------------------------------------------")
+
+    df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+    grouped_df = df.groupby("Produto").agg({"Quantidade": "sum", "total": "sum"}).reset_index()
+    total_general = 0
+    for _, row in grouped_df.iterrows():
+        description = f"{row['Produto'][:20]:<20}"
+        quantity = f"{int(row['Quantidade']):>5}"
+        total_item = row["total"]
+        total_general += total_item
+        total_formatted = format_currency(total_item)
+        invoice.append(f"{description} {quantity} {total_formatted}")
+
+    invoice.append("--------------------------------------------------")
+    invoice.append(f"{'TOTAL GERAL:':>30} {format_currency(total_general):>10}")
+    invoice.append("==================================================")
+    invoice.append("OBRIGADO PELA SUA PREFERÊNCIA!")
+    invoice.append("==================================================")
+
+    st.text("\n".join(invoice))
+
+###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
 def initialize_session_state():
@@ -1779,11 +2142,11 @@ def sidebar_navigation():
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash", "Analytics", "Calendário de Eventos",
-                "Settings"
+                "Settings", "Loyalty Program"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
-                "receipt","bar-chart","calendar","gear"
+                "receipt","bar-chart","calendar","gear", "star"
             ],
             menu_icon="cast",
             default_index=0,
@@ -1799,134 +2162,9 @@ def sidebar_navigation():
         )
         if 'login_time' in st.session_state:
             st.write(
-                f"{st.session_state.username} logado às {st.session_state.login_time.strftime('%H:%M')}"
+                f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%H:%M')}"
             )
     return selected
-
-def login_page():
-    """Página de login do aplicativo."""
-    from PIL import Image
-    import requests
-    from io import BytesIO
-    from datetime import datetime
-
-    st.markdown(
-        """
-        <style>
-        .block-container {
-            max-width: 450px;
-            margin: 0 auto;
-            padding-top: 40px;
-        }
-        .css-18e3th9 {
-            font-size: 1.75rem;
-            font-weight: 600;
-            text-align: center;
-        }
-        .btn {
-            background-color: #ff4c4c !important; 
-            padding: 8px 16px !important;
-            font-size: 0.875rem !important;
-            color: white !important;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn:hover {
-            background-color: #cc0000 !important; 
-        }
-        .footer {
-            position: fixed;
-            left: 0; 
-            bottom: 0; 
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: #999;
-        }
-        input::placeholder {
-            color: #bbb;
-            font-size: 0.875rem;
-        }
-        .css-1siy2j8 {
-            gap: 0.1rem !important;
-        }
-        .css-1siy2j8 input {
-            margin-bottom: 0 !important; 
-            padding-top: 4px;
-            padding-bottom: 4px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
-
-    logo_url = "https://via.placeholder.com/300x100?text=Boituva+Beach+Club"
-    logo = None
-    try:
-        resp = requests.get(logo_url, timeout=5)
-        if resp.status_code == 200:
-            logo = Image.open(BytesIO(resp.content))
-    except:
-        pass
-
-    if logo:
-        st.image(logo, use_column_width=True)
-
-    st.markdown("<p style='text-align: center;'>🌴keep the beach vibes flowing!🎾</p>", unsafe_allow_html=True)
-
-    with st.form("login_form", clear_on_submit=False):
-        username_input = st.text_input("", placeholder="Username")
-        password_input = st.text_input("", type="password", placeholder="Password")
-        btn_login = st.form_submit_button("Log in")
-
-    if btn_login:
-        if not username_input or not password_input:
-            st.error("Por favor, preencha todos os campos.")
-        else:
-            try:
-                creds = st.secrets["credentials"]
-                admin_user = creds["admin_username"]
-                admin_pass = creds["admin_password"]
-                caixa_user = creds["caixa_username"]
-                caixa_pass = creds["caixa_password"]
-            except KeyError:
-                st.error("Credenciais não encontradas em st.secrets['credentials']. Verifique a configuração.")
-                st.stop()
-
-            import hmac
-
-            def verify_credentials(input_user, input_pass, actual_user, actual_pass):
-                return hmac.compare_digest(input_user, actual_user) and hmac.compare_digest(input_pass, actual_pass)
-
-            # Verifica ADMIN
-            if verify_credentials(username_input, password_input, admin_user, admin_pass):
-                st.session_state.logged_in = True
-                st.session_state.username = "admin"
-                st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como ADMIN!")
-                st.experimental_rerun()
-            # Verifica CAIXA
-            elif verify_credentials(username_input, password_input, caixa_user, caixa_pass):
-                st.session_state.logged_in = True
-                st.session_state.username = "caixa"
-                st.session_state.login_time = datetime.now()
-                st.toast("Login bem-sucedido como CAIXA!")
-                st.experimental_rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    st.markdown(
-        """
-        <div class='footer'>
-            © 2025 | Todos os direitos reservados | Boituva Beach Club
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
 
 def main():
     """
@@ -1968,14 +2206,15 @@ def main():
         events_calendar_page()
     elif selected_page == "Settings":
         settings_page()
+    elif selected_page == "Loyalty Program":
+        loyalty_program_page()
 
     # Botão "Logout" na sidebar
     with st.sidebar:
         if st.button("Logout"):
-            for key in ["home_page_initialized"]:
-                if key in st.session_state:
-                    del st.session_state[key]
-            st.session_state.logged_in = False
+            # Remove todas as chaves relevantes do session_state
+            for key in list(st.session_state.keys()):
+                del st.session_state[key]
             st.toast("Desconectado com sucesso!")
             st.experimental_rerun()
 
