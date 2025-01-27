@@ -1458,59 +1458,79 @@ def events_calendar_page():
         (df_events["data_evento"].dt.month == mes_selecionado)
     ].copy()
 
+    # Agrupar e contar eventos por dia
+    event_counts = df_filtrado.groupby(df_filtrado["data_evento"].dt.day).size().to_dict()
+
     st.subheader("Visualização do Calendário")
 
     cal = calendar.HTMLCalendar(firstweekday=0)
-    # **Alteração Aqui:** Usar 'mes_selecionado' em vez de 'mes_padrao'
+    # Usar o mês e ano selecionados
     html_calendario = cal.formatmonth(ano_selecionado, mes_selecionado)
 
-    for ev in df_filtrado.itertuples():
-        dia = ev.data_evento.day
-        highlight_str = (
-            f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
-            f'title="{ev.nome}: {ev.descricao}"'
-        )
-        # Destacar apenas a primeira ocorrência do dia para evitar múltiplas substituições
-        target = f'<td>{dia}</td>'
-        replacement = f'<td{highlight_str}>{dia}</td>'
-        # Substituir apenas a primeira ocorrência para cada evento no dia
-        html_calendario = html_calendario.replace(target, replacement, 1)
-
-    st.markdown(
-        """
-        <style>
+    # Definir o estilo para dias com eventos
+    css_custom = """
+    <style>
+    table {
+        width: 80%;
+        margin-left: auto;
+        margin-right: auto;
+        border-collapse: collapse;
+        font-size: 12px;
+    }
+    th {
+        background-color: #1b4f72;
+        color: white;
+        padding: 5px;
+    }
+    td {
+        width: 14.28%;
+        height: 80px;
+        text-align: center;
+        vertical-align: top;
+        border: 1px solid #ddd;
+        position: relative;
+    }
+    td.event-day {
+        background-color: #1b4f72; /* Azul padrão */
+        color: white;
+        font-weight: bold;
+    }
+    td.event-day span {
+        position: absolute;
+        bottom: 5px;
+        right: 5px;
+        background-color: rgba(255, 255, 255, 0.3);
+        padding: 2px 5px;
+        border-radius: 3px;
+        font-size: 10px;
+    }
+    @media only screen and (max-width: 600px) {
         table {
-            width: 80%;
-            margin-left: auto;
-            margin-right: auto;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        th {
-            background-color: #1b4f72;
-            color: white;
-            padding: 5px;
+            width: 100%;
+            font-size: 10px;
         }
         td {
-            width: 14.28%;
             height: 60px;
-            text-align: center;
-            vertical-align: top;
-            border: 1px solid #ddd;
         }
-        @media only screen and (max-width: 600px) {
-            table {
-                width: 100%;
-                font-size: 10px;
-            }
-            td {
-                height: 40px;
-            }
+        td.event-day span {
+            font-size: 8px;
+            bottom: 2px;
+            right: 2px;
         }
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+    }
+    </style>
+    """
+    st.markdown(css_custom, unsafe_allow_html=True)
+
+    for dia, count in event_counts.items():
+        # Criar a string de substituição com a contagem de eventos
+        # Formato esperado: <td>dia</td>
+        target = f'<td>{dia}</td>'
+        # Substituir por: <td class="event-day" title="X evento(s)">dia<br/><span>X</span></td>
+        replacement = f'<td class="event-day" title="{count} evento(s)">{dia}<br/><span>{count}</span></td>'
+        # Substituir apenas a primeira ocorrência para evitar múltiplas substituições
+        html_calendario = html_calendario.replace(target, replacement, 1)
+
     st.markdown(html_calendario, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -1598,7 +1618,6 @@ def events_calendar_page():
                         st.error("Falha ao excluir evento.")
     else:
         st.info("Selecione um evento para editar ou excluir.")
-
 
 def loyalty_program_page():
     """Página do programa de fidelidade."""
