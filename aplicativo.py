@@ -1162,6 +1162,7 @@ def analytics_page():
         # Totals in the Selected Range
         # --------------------------
 
+
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1294,7 +1295,6 @@ def analytics_page():
             FROM public.vw_vendas_produto;
         """
         data_produtos = run_query(query_produtos)
-
         if data_produtos:
             df_produtos = pd.DataFrame(data_produtos, columns=[
                 "Produto", "Total_Quantidade", "Total_Valor", "Total_Lucro"
@@ -1330,7 +1330,6 @@ def analytics_page():
             FROM public.vw_lucro_por_produto_status;
         """
         data_status_lucro = run_query(query_status_lucro)
-
         if data_status_lucro:
             df_status_lucro = pd.DataFrame(data_status_lucro, columns=["Status_Pedido", "Lucro_Liquido"])
 
@@ -2104,8 +2103,11 @@ def sidebar_navigation():
                 "container": {"background-color": menu_color},  # Apply selected color
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
-                    "font-size": "14px", "text-align": "left", "margin": "0px",
-                    "color": "white", "--hover-color": "#184563"
+                    "font-size": "14px",
+                    "text-align": "left",
+                    "margin": "0px",
+                    "color": "white",
+                    "hover-color": "#184563"  # Corrected property
                 },
                 "nav-link-selected": {"background-color": "#184563", "color": "white"},
             }
