@@ -21,6 +21,7 @@ from mitosheet.streamlit.v1.spreadsheet import _get_mito_backend
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import json  # Import adicional para manipulação de JSON
 
 ###############################################################################
 #                               UTILIDADES
@@ -190,18 +191,18 @@ def refresh_data():
 @st.cache_data(show_spinner=False)
 def get_latest_settings():
     """
-    Retorna o último registro de tb_settings (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at).
+    Retorna o último registro de tb_settings (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, selected_menu_color, menu_labels, created_at).
     Se vazio, retorna None.
     """
     query = """
-        SELECT id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at
+        SELECT id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, selected_menu_color, menu_labels, created_at
         FROM public.tb_settings
         ORDER BY id DESC
         LIMIT 1
     """
     result = run_query(query)
     if result:
-        return result[0]  # Now includes menu_color at index 7
+        return result[0]  # Inclui selected_menu_color e menu_labels
     return None
 
 ###############################################################################
@@ -255,7 +256,7 @@ def home_page():
     last_settings = st.session_state.get("last_settings", None)
 
     if last_settings:
-        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at)
+        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, selected_menu_color, menu_labels, created_at)
         company_value = last_settings[1]    # Column: company
         address_value = last_settings[2]    # Column: address
         telephone_value = last_settings[5]  # Column: telephone
@@ -1515,7 +1516,7 @@ def events_calendar_page():
     # Filtrar eventos com base no ano e mês selecionados
     df_filtrado = df_events[
         (df_events["data_evento"].dt.year == ano_selecionado) &
-        (df_events["data_evento"].dt.month == mes_selecionado)
+        (df_events["data_evento"].dt.month == mes_padrao)
     ].copy()
 
     # Agrupar e contar eventos por dia
@@ -1594,7 +1595,7 @@ def events_calendar_page():
     st.markdown(html_calendario, unsafe_allow_html=True)
     st.markdown("<br>", unsafe_allow_html=True)
 
-    st.subheader(f"Eventos de {calendar.month_name[mes_selecionado]} / {ano_selecionado}")
+    st.subheader(f"Eventos de {calendar.month_name[mes_padrao]} / {ano_selecionado}")
     if len(df_filtrado) == 0:
         st.info("Nenhum evento neste mês.")
     else:
@@ -1715,69 +1716,123 @@ def settings_page():
 
     last_settings = st.session_state.get("last_settings", None)
 
-    # Mostrar texto acima do form, com valores do último registro
+    # Mostrar informações atuais da configuração
     if last_settings:
-        st.markdown(f"**Company:** {last_settings[1]}")
-        st.markdown(f"**Address:** {last_settings[2]}")
+        st.markdown(f"**Empresa:** {last_settings[1]}")
+        st.markdown(f"**Endereço:** {last_settings[2]}")
         st.markdown(f"**CNPJ/CPF:** {last_settings[3]}")
         st.markdown(f"**Email:** {last_settings[4]}")
-        st.markdown(f"**Telephone:** {last_settings[5]}")
-        st.markdown(f"**Contract Number:** {last_settings[6]}")
-        st.markdown(f"**Menu Color:** {last_settings[7] if last_settings[7] else '#1b4f72'}")  # Display current color
+        st.markdown(f"**Telefone:** {last_settings[5]}")
+        st.markdown(f"**Número do Contrato:** {last_settings[6]}")
+        st.markdown(f"**Cor do Menu:** {last_settings[7] if last_settings[7] else '#1b4f72'}")
+        st.markdown(f"**Cor do Menu Selecionado:** {last_settings[8] if last_settings[8] else '#184563'}")
+        
+        # Exibir os nomes personalizados do menu, se existirem
+        if last_settings[9]:
+            st.markdown("**Nomes Personalizados do Menu:**")
+            for key, value in last_settings[9].items():
+                st.markdown(f" - **{key}**: {value}")
+        else:
+            st.markdown("**Nomes Personalizados do Menu:** Padrão")
+    else:
+        st.info("Nenhuma configuração encontrada. Por favor, insira as configurações abaixo.")
 
     st.subheader("Configurações da Empresa")
 
     with st.form(key='settings_form'):
-        company = st.text_input("Company", value=last_settings[1] if last_settings else "")
-        address = st.text_input("Address", value=last_settings[2] if last_settings else "")
-        cnpj_cpf = st.text_input("CNPJ/CPF", value=last_settings[3] if last_settings else "")
-        email = st.text_input("Email", value=last_settings[4] if last_settings else "")
-        telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
-        contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
-        menu_color = st.color_picker(
-            "Menu Color",
-            value=last_settings[7] if last_settings and last_settings[7] else "#1b4f72"
-        )  # Add color picker
+        # Organizar informações da empresa em duas colunas
+        col1, col2 = st.columns(2)
+        with col1:
+            company = st.text_input("Empresa", value=last_settings[1] if last_settings else "")
+            address = st.text_input("Endereço", value=last_settings[2] if last_settings else "")
+            cnpj_cpf = st.text_input("CNPJ/CPF", value=last_settings[3] if last_settings else "")
+        with col2:
+            email = st.text_input("Email", value=last_settings[4] if last_settings else "")
+            telephone = st.text_input("Telefone", value=last_settings[5] if last_settings else "")
+            contract_number = st.text_input("Número do Contrato", value=last_settings[6] if last_settings else "")
 
-        submit_settings = st.form_submit_button("Update Registration")
+        # Seleção de cores
+        col3, col4 = st.columns(2)
+        with col3:
+            menu_color = st.color_picker(
+                "Cor do Menu",
+                value=last_settings[7] if last_settings and last_settings[7] else "#1b4f72"
+            )
+        with col4:
+            selected_menu_color = st.color_picker(
+                "Cor do Menu Selecionado",
+                value=last_settings[8] if last_settings and len(last_settings) >= 9 and last_settings[8] else "#184563"
+            )
+
+        st.subheader("Nomes Personalizados do Menu")
+        menu_items = [
+            "Home", "Orders", "Products", "Stock", "Clients",
+            "Cash", "Analytics", "Calendário de Eventos",
+            "Settings", "Loyalty Program"
+        ]
+
+        menu_labels = {}
+        if last_settings and last_settings[9]:
+            menu_labels = last_settings[9]
+
+        # Organizar os campos de nome do menu em colunas para melhor aparência
+        for item in menu_items:
+            menu_labels[item] = st.text_input(
+                f"Nome para '{item}'",
+                value=menu_labels.get(item, item) if menu_labels else item
+            )
+
+        submit_settings = st.form_submit_button("Atualizar Configurações")
 
     if submit_settings:
         if last_settings:
+            # Atualizar registro existente
             q_upd = """
                 UPDATE public.tb_settings
                 SET company=%s, address=%s, cnpj_cpf=%s, email=%s,
-                    telephone=%s, contract_number=%s, menu_color=%s, created_at=CURRENT_TIMESTAMP
+                    telephone=%s, contract_number=%s, menu_color=%s,
+                    selected_menu_color=%s, menu_labels=%s, created_at=CURRENT_TIMESTAMP
                 WHERE id=%s
             """
             success = run_query(
                 q_upd,
-                (company, address, cnpj_cpf, email, telephone, contract_number, menu_color, last_settings[0]),
+                (
+                    company, address, cnpj_cpf, email,
+                    telephone, contract_number, menu_color,
+                    selected_menu_color, json.dumps(menu_labels),
+                    last_settings[0]
+                ),
                 commit=True
             )
             if success:
-                st.success("Registro atualizado com sucesso!")
+                st.success("Configurações atualizadas com sucesso!")
                 get_latest_settings.clear()
                 st.session_state.last_settings = get_latest_settings()
             else:
-                st.error("Falha ao atualizar registro.")
+                st.error("Falha ao atualizar as configurações.")
         else:
+            # Inserir novo registro
             if company.strip():
                 q_ins = """
                     INSERT INTO public.tb_settings
-                        (company, address, cnpj_cpf, email, telephone, contract_number, menu_color)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        (company, address, cnpj_cpf, email, telephone, contract_number, menu_color, selected_menu_color, menu_labels)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 success = run_query(
                     q_ins,
-                    (company, address, cnpj_cpf, email, telephone, contract_number, menu_color),
+                    (
+                        company, address, cnpj_cpf, email,
+                        telephone, contract_number, menu_color,
+                        selected_menu_color, json.dumps(menu_labels)
+                    ),
                     commit=True
                 )
                 if success:
-                    st.success("Registro inserido com sucesso!")
+                    st.success("Configurações salvas com sucesso!")
                     get_latest_settings.clear()
                     st.session_state.last_settings = get_latest_settings()
                 else:
-                    st.error("Falha ao salvar registro.")
+                    st.error("Falha ao salvar as configurações.")
             else:
                 st.warning("Por favor, forneça pelo menos o nome da empresa.")
 
@@ -2009,31 +2064,18 @@ def apply_custom_css():
     st.markdown(
         """
         <style>
+        /* Centralizar o título */
         .css-1d391kg {
             font-size: 2em;
             color: #ff4c4c;
+            text-align: center;
         }
+        /* Melhorar a aparência das tabelas */
         .stDataFrame table {
             width: 100%;
             overflow-x: auto;
         }
-        .css-1aumxhk {
-            background-color: #ff4c4c;
-            color: white;
-        }
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-        }
-        .css-1v3fvcr {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-        }
+        /* Estilizar os botões */
         .btn {
             background-color: #ff4c4c !important;
             padding: 8px 16px !important;
@@ -2049,15 +2091,12 @@ def apply_custom_css():
         .btn:hover {
             background-color: #cc0000 !important;
         }
+        /* Estilizar os placeholders dos inputs */
         input::placeholder {
             color: #bbb;
             font-size: 0.875rem;
         }
-        .css-1siy2j8 input {
-            margin-bottom: 0 !important;
-            padding-top: 4px;
-            padding-bottom: 4px;
-        }
+        /* Ajustar o layout em telas pequenas */
         @media only screen and (max-width: 600px) {
             table {
                 font-size: 10px;
@@ -2066,8 +2105,18 @@ def apply_custom_css():
                 padding: 4px;
             }
         }
+        /* Estilizar o rodapé */
+        .footer {
+            position: fixed;
+            left: 0;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
         </style>
-        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
+        <div class='footer'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
         """,
         unsafe_allow_html=True
     )
@@ -2076,22 +2125,49 @@ def sidebar_navigation():
     """
     Cria a barra lateral de navegação com option_menu e retorna qual página foi selecionada.
     """
-    # Default menu color
+    # Definições padrão
     menu_color = "#1b4f72"
+    selected_menu_color = "#184563"
+    menu_labels = {
+        "Home": "Home",
+        "Orders": "Orders",
+        "Products": "Products",
+        "Stock": "Stock",
+        "Clients": "Clients",
+        "Cash": "Cash",
+        "Analytics": "Analytics",
+        "Calendário de Eventos": "Calendário de Eventos",
+        "Settings": "Settings",
+        "Loyalty Program": "Loyalty Program"
+    }
 
-    # Retrieve menu_color from settings if available
-    if st.session_state.last_settings and len(st.session_state.last_settings) >= 8:
-        retrieved_color = st.session_state.last_settings[7]
-        if retrieved_color:
-            menu_color = retrieved_color
+    # Recuperar configurações personalizadas, se existirem
+    if st.session_state.last_settings:
+        # Índices assumidos:
+        # 0: id, 1: company, 2: address, 3: cnpj_cpf, 4: email, 5: telephone,
+        # 6: contract_number, 7: menu_color, 8: selected_menu_color, 9: menu_labels, 10: created_at
+        if len(st.session_state.last_settings) >= 8 and st.session_state.last_settings[7]:
+            menu_color = st.session_state.last_settings[7]
+        if len(st.session_state.last_settings) >= 9 and st.session_state.last_settings[8]:
+            selected_menu_color = st.session_state.last_settings[8]
+        if len(st.session_state.last_settings) >= 10 and st.session_state.last_settings[9]:
+            custom_labels = st.session_state.last_settings[9]
+            menu_labels.update(custom_labels)
 
     with st.sidebar:
         selected = option_menu(
             "Bar Menu",
             [
-                "Home", "Orders", "Products", "Stock", "Clients",
-                "Cash", "Analytics", "Calendário de Eventos",
-                "Settings", "Loyalty Program"
+                menu_labels.get("Home", "Home"),
+                menu_labels.get("Orders", "Orders"),
+                menu_labels.get("Products", "Products"),
+                menu_labels.get("Stock", "Stock"),
+                menu_labels.get("Clients", "Clients"),
+                menu_labels.get("Cash", "Cash"),
+                menu_labels.get("Analytics", "Analytics"),
+                menu_labels.get("Calendário de Eventos", "Calendário de Eventos"),
+                menu_labels.get("Settings", "Settings"),
+                menu_labels.get("Loyalty Program", "Loyalty Program")
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
@@ -2100,16 +2176,16 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": menu_color},  # Apply selected color
+                "container": {"background-color": menu_color},  # Cor do menu
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px",
                     "text-align": "left",
                     "margin": "0px",
                     "color": "white",
-                    "hover-color": "#184563"  # Corrected property
+                    "hover-color": selected_menu_color  # Cor ao passar o mouse
                 },
-                "nav-link-selected": {"background-color": "#184563", "color": "white"},
+                "nav-link-selected": {"background-color": selected_menu_color, "color": "white"},
             }
         )
         if 'login_time' in st.session_state:
@@ -2179,11 +2255,6 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("==================================================")
 
     st.text("\n".join(invoice))
-
-###############################################################################
-#                     FUNÇÕES DE INICIALIZAÇÃO
-###############################################################################
-# (Already defined above)
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
