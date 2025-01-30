@@ -456,9 +456,9 @@ def home_page():
                 st.error(f"Erro ao exibir dados de lucro: {e}")
 
 def orders_page():
-    """Página de pedidos."""
+    """Página de pedidos com adição da aba Cash Number."""
     st.title("Gerenciar Pedidos")
-    tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos"])
+    tabs = st.tabs(["Novo Pedido", "Listagem de Pedidos", "Cash Number"])
 
     # ---------------------- Aba 0: Novo Pedido ----------------------
     with tabs[0]:
@@ -593,6 +593,69 @@ def orders_page():
                                 st.error("Falha ao atualizar pedido.")
         else:
             st.info("Nenhum pedido encontrado.")
+
+    # ---------------------- Aba 2: Cash Number ----------------------
+    with tabs[2]:
+        st.subheader("Cash Number")
+
+        open_clients_query = 'SELECT DISTINCT "Cliente" FROM public.vw_pedido_produto WHERE status=%s'
+        open_clients = run_query(open_clients_query, ('em aberto',))
+        client_list = [row[0] for row in open_clients] if open_clients else []
+        selected_client = st.selectbox("Selecione um Cliente", [""] + client_list)
+
+        if selected_client:
+            invoice_query = """
+                SELECT "Produto", "Quantidade", "total"
+                FROM public.vw_pedido_produto
+                WHERE "Cliente"=%s AND status=%s
+            """
+            invoice_data = run_query(invoice_query, (selected_client, 'em aberto'))
+            if invoice_data:
+                df = pd.DataFrame(invoice_data, columns=["Produto","Quantidade","total"])
+
+                df["total"] = pd.to_numeric(df["total"], errors="coerce").fillna(0)
+                total_sem_desconto = df["total"].sum()
+
+                cupons_validos = {
+                    "10": 0.10, "15": 0.15, "20": 0.20, "25": 0.25,
+                    "30": 0.30, "35": 0.35, "40": 0.40, "45": 0.45,
+                    "50": 0.50, "55": 0.55, "60": 0.60, "65": 0.65,
+                    "70": 0.70, "75": 0.75, "80": 0.80, "85": 0.85,
+                    "90": 0.90, "95": 0.95, "100":1.00,
+                }
+                coupon_code = st.text_input("CUPOM (desconto opcional)")
+                desconto_aplicado = 0.0
+                if coupon_code in cupons_validos:
+                    desconto_aplicado = cupons_validos[coupon_code]
+                    st.toast(f"Cupom {coupon_code} aplicado! Desconto de {desconto_aplicado*100:.0f}%")
+
+                total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
+
+                # Gerar Nota Fiscal para Impressora
+                generate_invoice_for_printer(df)
+
+                st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
+                st.write(f"**Desconto:** {desconto_aplicado*100:.0f}%")
+                st.write(f"**Total com desconto:** {format_currency(total_com_desconto)}")
+
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    if st.button("Debit"):
+                        process_payment(selected_client, "Received - Debited")
+                with col2:
+                    if st.button("Credit"):
+                        process_payment(selected_client, "Received - Credit")
+                with col3:
+                    if st.button("Pix"):
+                        process_payment(selected_client, "Received - Pix")
+                with col4:
+                    if st.button("Cash"):
+                        process_payment(selected_client, "Received - Cash")
+            else:
+                st.info("Não há pedidos em aberto para esse cliente.")
+        else:
+            st.warning("Selecione um cliente.")
+
 
 def products_page():
     """Página de Produtos."""
