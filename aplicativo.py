@@ -2183,11 +2183,25 @@ def sidebar_navigation():
                     "text-align": "left",
                     "margin": "0px",
                     "color": "white",
-                    "hover-color": selected_menu_color  # Cor ao passar o mouse
+                    # "hover-color": selected_menu_color  # Removido
                 },
                 "nav-link-selected": {"background-color": selected_menu_color, "color": "white"},
             }
         )
+        
+        # Adiciona CSS personalizado para definir a cor de hover
+        st.markdown(
+            f"""
+            <style>
+            /* Define a cor de background dos itens do menu ao passar o mouse */
+            .streamlit-option-menu .stOption:hover {{
+                background-color: {selected_menu_color};
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True
+        )
+        
         if 'login_time' in st.session_state:
             st.write(
                 f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%H:%M')}"
