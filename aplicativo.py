@@ -190,18 +190,18 @@ def refresh_data():
 @st.cache_data(show_spinner=False)
 def get_latest_settings():
     """
-    Retorna o último registro de tb_settings (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at).
+    Retorna o último registro de tb_settings (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at).
     Se vazio, retorna None.
     """
     query = """
-        SELECT id, company, address, cnpj_cpf, email, telephone, contract_number, created_at
+        SELECT id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at
         FROM public.tb_settings
         ORDER BY id DESC
         LIMIT 1
     """
     result = run_query(query)
     if result:
-        return result[0]
+        return result[0]  # Now includes menu_color at index 7
     return None
 
 ###############################################################################
@@ -255,7 +255,7 @@ def home_page():
     last_settings = st.session_state.get("last_settings", None)
 
     if last_settings:
-        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, created_at)
+        # last_settings = (id, company, address, cnpj_cpf, email, telephone, contract_number, menu_color, created_at)
         company_value = last_settings[1]    # Column: company
         address_value = last_settings[2]    # Column: address
         telephone_value = last_settings[5]  # Column: telephone
@@ -655,7 +655,6 @@ def orders_page():
                 st.info("Não há pedidos em aberto para esse cliente.")
         else:
             st.warning("Selecione um cliente.")
-
 
 def products_page():
     """Página de Produtos."""
@@ -1079,6 +1078,7 @@ def cash_page():
 
             total_com_desconto = total_sem_desconto * (1 - desconto_aplicado)
 
+            # Gerar Nota Fiscal para Impressora
             generate_invoice_for_printer(df)
 
             st.write(f"**Total sem desconto:** {format_currency(total_sem_desconto)}")
@@ -1102,7 +1102,6 @@ def cash_page():
             st.info("Não há pedidos em aberto para esse cliente.")
     else:
         st.warning("Selecione um cliente.")
-
 
 def analytics_page():
     """Página de Analytics para visualização de dados detalhados."""
@@ -1725,6 +1724,7 @@ def settings_page():
         st.markdown(f"**Email:** {last_settings[4]}")
         st.markdown(f"**Telephone:** {last_settings[5]}")
         st.markdown(f"**Contract Number:** {last_settings[6]}")
+        st.markdown(f"**Menu Color:** {last_settings[7] if last_settings[7] else '#1b4f72'}")  # Display current color
 
     st.subheader("Configurações da Empresa")
 
@@ -1735,6 +1735,10 @@ def settings_page():
         email = st.text_input("Email", value=last_settings[4] if last_settings else "")
         telephone = st.text_input("Telephone", value=last_settings[5] if last_settings else "")
         contract_number = st.text_input("Contract Number", value=last_settings[6] if last_settings else "")
+        menu_color = st.color_picker(
+            "Menu Color",
+            value=last_settings[7] if last_settings and last_settings[7] else "#1b4f72"
+        )  # Add color picker
 
         submit_settings = st.form_submit_button("Update Registration")
 
@@ -1743,12 +1747,12 @@ def settings_page():
             q_upd = """
                 UPDATE public.tb_settings
                 SET company=%s, address=%s, cnpj_cpf=%s, email=%s,
-                    telephone=%s, contract_number=%s, created_at=CURRENT_TIMESTAMP
+                    telephone=%s, contract_number=%s, menu_color=%s, created_at=CURRENT_TIMESTAMP
                 WHERE id=%s
             """
             success = run_query(
                 q_upd,
-                (company, address, cnpj_cpf, email, telephone, contract_number, last_settings[0]),
+                (company, address, cnpj_cpf, email, telephone, contract_number, menu_color, last_settings[0]),
                 commit=True
             )
             if success:
@@ -1761,10 +1765,14 @@ def settings_page():
             if company.strip():
                 q_ins = """
                     INSERT INTO public.tb_settings
-                        (company, address, cnpj_cpf, email, telephone, contract_number)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                        (company, address, cnpj_cpf, email, telephone, contract_number, menu_color)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
-                success = run_query(q_ins, (company, address, cnpj_cpf, email, telephone, contract_number), commit=True)
+                success = run_query(
+                    q_ins,
+                    (company, address, cnpj_cpf, email, telephone, contract_number, menu_color),
+                    commit=True
+                )
                 if success:
                     st.success("Registro inserido com sucesso!")
                     get_latest_settings.clear()
@@ -1990,6 +1998,10 @@ def initialize_session_state():
         st.session_state.logged_in = False
     if 'last_settings' not in st.session_state:
         st.session_state.last_settings = get_latest_settings()
+    if 'show_registration_form' not in st.session_state:
+        st.session_state.show_registration_form = False
+    if 'points' not in st.session_state:
+        st.session_state.points = 0
 
 def apply_custom_css():
     """
@@ -2065,6 +2077,15 @@ def sidebar_navigation():
     """
     Cria a barra lateral de navegação com option_menu e retorna qual página foi selecionada.
     """
+    # Default menu color
+    menu_color = "#1b4f72"
+
+    # Retrieve menu_color from settings if available
+    if st.session_state.last_settings and len(st.session_state.last_settings) >= 8:
+        retrieved_color = st.session_state.last_settings[7]
+        if retrieved_color:
+            menu_color = retrieved_color
+
     with st.sidebar:
         selected = option_menu(
             "Bar Menu",
@@ -2080,7 +2101,7 @@ def sidebar_navigation():
             menu_icon="cast",
             default_index=0,
             styles={
-                "container": {"background-color": "#1b4f72"},
+                "container": {"background-color": menu_color},  # Apply selected color
                 "icon": {"color": "white", "font-size": "18px"},
                 "nav-link": {
                     "font-size": "14px", "text-align": "left", "margin": "0px",
@@ -2095,6 +2116,9 @@ def sidebar_navigation():
             )
     return selected
 
+###############################################################################
+#                     FUNÇÕES AUXILIARES
+###############################################################################
 def process_payment(client: str, payment_status: str):
     """
     Atualiza status de pedido em aberto -> payment_status, chama refresh_data() e st.experimental_rerun().
@@ -2155,177 +2179,12 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     st.text("\n".join(invoice))
 
 ###############################################################################
+#                     FUNÇÕES DE INICIALIZAÇÃO
+###############################################################################
+# (Already defined above)
+
+###############################################################################
 #                     INICIALIZAÇÃO E MAIN
 ###############################################################################
-def initialize_session_state():
-    """
-    Inicializa variáveis no st.session_state:
-    - data: dados carregados
-    - logged_in: status de login
-    - last_settings: configurações mais recentes
-    """
-    if 'data' not in st.session_state:
-        st.session_state.data = load_all_data()
-    if 'logged_in' not in st.session_state:
-        st.session_state.logged_in = False
-    if 'last_settings' not in st.session_state:
-        st.session_state.last_settings = get_latest_settings()
-
-def apply_custom_css():
-    """
-    Aplica CSS customizado para toda a aplicação.
-    """
-    st.markdown(
-        """
-        <style>
-        .css-1d391kg {
-            font-size: 2em;
-            color: #ff4c4c;
-        }
-        .stDataFrame table {
-            width: 100%;
-            overflow-x: auto;
-        }
-        .css-1aumxhk {
-            background-color: #ff4c4c;
-            color: white;
-        }
-        @media only screen and (max-width: 600px) {
-            .css-1d391kg {
-                font-size: 1.5em;
-            }
-        }
-        .css-1v3fvcr {
-            position: fixed;
-            left: 0;
-            bottom: 0;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-        }
-        .btn {
-            background-color: #ff4c4c !important;
-            padding: 8px 16px !important;
-            font-size: 0.875rem !important;
-            color: white !important;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            text-align: center;
-            cursor: pointer;
-            width: 100%;
-        }
-        .btn:hover {
-            background-color: #cc0000 !important;
-        }
-        input::placeholder {
-            color: #bbb;
-            font-size: 0.875rem;
-        }
-        .css-1siy2j8 input {
-            margin-bottom: 0 !important;
-            padding-top: 4px;
-            padding-bottom: 4px;
-        }
-        @media only screen and (max-width: 600px) {
-            table {
-                font-size: 10px;
-            }
-            th, td {
-                padding: 4px;
-            }
-        }
-        </style>
-        <div class='css-1v3fvcr'>© 2025 | Todos os direitos reservados | Boituva Beach Club</div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def sidebar_navigation():
-    """
-    Cria a barra lateral de navegação com option_menu e retorna qual página foi selecionada.
-    """
-    with st.sidebar:
-        selected = option_menu(
-            "Bar Menu",
-            [
-                "Home", "Orders", "Products", "Stock", "Clients",
-                "Cash", "Analytics", "Calendário de Eventos",
-                "Settings", "Loyalty Program"
-            ],
-            icons=[
-                "house","file-text","box","list-task","layers",
-                "receipt","bar-chart","calendar","gear", "star"
-            ],
-            menu_icon="cast",
-            default_index=0,
-            styles={
-                "container": {"background-color": "#1b4f72"},
-                "icon": {"color": "white", "font-size": "18px"},
-                "nav-link": {
-                    "font-size": "14px", "text-align": "left", "margin": "0px",
-                    "color": "white", "--hover-color": "#184563"
-                },
-                "nav-link-selected": {"background-color": "#184563", "color": "white"},
-            }
-        )
-        if 'login_time' in st.session_state:
-            st.write(
-                f"{st.session_state.username.capitalize()} logado às {st.session_state.login_time.strftime('%H:%M')}"
-            )
-    return selected
-
-def main():
-    """
-    Função principal do aplicativo. 
-    Define a ordem de execução, faz login, carrega a página selecionada, etc.
-    """
-    apply_custom_css()
-    initialize_session_state()
-
-    # Se não estiver logado, página de login
-    if not st.session_state.logged_in:
-        login_page()
-        return
-
-    # Caso logado, cria barra lateral e seleciona página
-    selected_page = sidebar_navigation()
-
-    if 'current_page' not in st.session_state:
-        st.session_state.current_page = selected_page
-    elif selected_page != st.session_state.current_page:
-        st.session_state.current_page = selected_page
-
-    # Renderiza a página correspondente
-    if selected_page == "Home":
-        home_page()
-    elif selected_page == "Orders":
-        orders_page()
-    elif selected_page == "Products":
-        products_page()
-    elif selected_page == "Stock":
-        stock_page()
-    elif selected_page == "Clients":
-        clients_page()
-    elif selected_page == "Cash":
-        cash_page()
-    elif selected_page == "Analytics":
-        analytics_page()
-    elif selected_page == "Calendário de Eventos":
-        events_calendar_page()
-    elif selected_page == "Settings":
-        settings_page()
-    elif selected_page == "Loyalty Program":
-        loyalty_program_page()
-
-    # Botão "Logout" na sidebar
-    with st.sidebar:
-        if st.button("Logout"):
-            # Remove todas as chaves relevantes do session_state
-            for key in list(st.session_state.keys()):
-                del st.session_state[key]
-            st.toast("Desconectado com sucesso!")
-            st.experimental_rerun()
-
 if __name__ == "__main__":
     main()
