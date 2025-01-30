@@ -278,89 +278,6 @@ def home_page():
         # Fallback se não houver registro em tb_settings
         st.markdown("<h1 style='text-align:center;'>Home</h1>", unsafe_allow_html=True)
 
-    # Obtém data atual e separa ano/mês para buscar eventos
-    current_date = date.today()
-    ano_atual = current_date.year
-    mes_padrao = current_date.month
-
-    # Obter eventos do banco de dados para o mês atual
-    events_query = """
-        SELECT nome, descricao, data_evento 
-        FROM public.tb_eventos 
-        WHERE EXTRACT(YEAR FROM data_evento) = %s AND EXTRACT(MONTH FROM data_evento) = %s
-        ORDER BY data_evento
-    """
-    events_data = run_query(events_query, (ano_atual, mes_padrao))
-
-    # Duas colunas: uma para o calendário, outra para a lista de eventos
-    col_calendar, col_events = st.columns([1, 1], gap="large")
-
-    with col_calendar:
-        if events_data:
-            cal = calendar.HTMLCalendar(firstweekday=0)
-            html_calendario = cal.formatmonth(ano_atual, mes_padrao)
-
-            # Destacar dias com eventos
-            for ev in events_data:
-                nome, descricao, data_evento = ev
-                dia = data_evento.day
-                highlight_str = (
-                    f' style="background-color:#1b4f72; color:white; font-weight:bold;" '
-                    f'title="{nome}: {descricao}"'
-                )
-                for day_class in ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]:
-                    target = f'<td class="{day_class}">{dia}</td>'
-                    replacement = f'<td class="{day_class}"{highlight_str}>{dia}</td>'
-                    html_calendario = html_calendario.replace(target, replacement)
-
-            # CSS para estilizar a tabela do calendário
-            st.markdown(
-                """
-                <style>
-                table {
-                    width: 100%;
-                    border-collapse: collapse;
-                    font-size: 12px;
-                }
-                th {
-                    background-color: #1b4f72;
-                    color: white;
-                    padding: 5px;
-                }
-                td {
-                    width: 14.28%;
-                    height: 45px;
-                    text-align: center;
-                    vertical-align: top;
-                    border: 1px solid #ddd;
-                }
-                @media only screen and (max-width: 600px) {
-                    table {
-                        font-size: 10px;
-                    }
-                    td {
-                        height: 35px;
-                    }
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-            st.markdown(html_calendario, unsafe_allow_html=True)
-        else:
-            st.info("Nenhum evento registrado para este mês.")
-
-    with col_events:
-        st.markdown("### Lista de Eventos")
-        if events_data:
-            events_sorted = sorted(events_data, key=lambda x: x[2].day, reverse=True)
-            for ev in events_sorted:
-                nome, descricao, data_evento = ev
-                dia = data_evento.day
-                st.write(f"**{dia}** - {nome}: {descricao}")
-        else:
-            st.write("Nenhum evento para este mês.")
-
     st.markdown("---")
 
     # Seções adicionais para usuários 'admin'
@@ -454,6 +371,11 @@ def home_page():
                     st.info("Nenhum dado encontrado em vw_lucro_dia.")
             except Exception as e:
                 st.error(f"Erro ao exibir dados de lucro: {e}")
+
+        # -------------------------- Include Analytics Page Below --------------------------
+        st.markdown("---")
+        st.header("Analytics Overview")
+        analytics_page_content()
 
 def orders_page():
     """Página de pedidos com adição da aba Cash Number."""
@@ -1103,10 +1025,9 @@ def cash_page():
     else:
         st.warning("Selecione um cliente.")
 
-def analytics_page():
-    """Página de Analytics para visualização de dados detalhados."""
-    st.title("Analytics")
-
+def analytics_page_content():
+    """Função que contém o conteúdo da página Analytics para ser incluída no Home."""
+    st.header("Analytics")
 
     # Query para buscar os dados da view vw_pedido_produto_details
     query = """
@@ -1781,9 +1702,6 @@ def settings_page():
             else:
                 st.warning("Por favor, forneça pelo menos o nome da empresa.")
 
-###############################################################################
-#                     FUNÇÕES DE LOGIN E REGISTRO
-###############################################################################
 def login_page():
     """Página de login do aplicativo."""
     from PIL import Image
@@ -1964,7 +1882,7 @@ def main():
     elif selected_page == "Cash":
         cash_page()
     elif selected_page == "Analytics":
-        analytics_page()
+        analytics_page_content()  # Changed to include content
     elif selected_page == "Calendário de Eventos":
         events_calendar_page()
     elif selected_page == "Settings":
