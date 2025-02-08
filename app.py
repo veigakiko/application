@@ -1633,7 +1633,7 @@ def powerbi_page():
     st.title("Power BI")
     st.markdown(
         '''
-        <iframe title="beachclub" width="700" height="573.5" src="https://app.powerbi.com/view?r=eyJrIjoiNmQwOWFlMGItMzQ5Yi00OWY0LTkzY2MtMmQzMmIxN2UyNDIxIiwidCI6ImJjYmY3MThmLTNjZmMtNGE3Ny05NTI0LWE2NWY5MjBkYTM1MSJ9&embedImagePlaceholder=true" frameborder="0" allowFullScreen="true"></iframe>
+        <iframe title="beachclub" width="800" height="673.5" src="https://app.powerbi.com/view?r=eyJrIjoiNmQwOWFlMGItMzQ5Yi00OWY0LTkzY2MtMmQzMmIxN2UyNDIxIiwidCI6ImJjYmY3MThmLTNjZmMtNGE3Ny05NTI0LWE2NWY5MjBkYTM1MSJ9&embedImagePlaceholder=true" frameborder="0" allowFullScreen="true"></iframe>
         ''',
         unsafe_allow_html=True
     )
