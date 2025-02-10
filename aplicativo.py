@@ -1352,6 +1352,7 @@ def analytics_page_content():
         # --------------------------
         # Net Profit by Product per Day Chart
         # --------------------------
+        
         st.subheader("Lucro Líquido por Produto por Dia")
 
         # Query para buscar os dados da view lucro_produto_por_dia
@@ -1414,6 +1415,8 @@ def analytics_page_content():
                 st.altair_chart(bubble_chart, use_container_width=True)
         else:
             st.info("Nenhum dado encontrado na view lucro_produto_por_dia.")
+
+         gerar_resumo_autoatendimento()
 
         # --------------------------
         # Order Details Table
