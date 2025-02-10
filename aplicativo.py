@@ -249,6 +249,60 @@ def send_email(name, user_email, message):
 ###############################################################################
 #                           PÁGINAS DO APLICATIVO
 ###############################################################################
+def gerar_resumo_autoatendimento():
+    """
+    Gera um resumo automático da análise do autoatendimento com base nos dados do banco.
+    """
+    # Consultar os dados de vendas e lucros
+    query = """
+        SELECT "Produto", SUM("Quantidade") AS Total_Vendas, SUM("Lucro_Liquido") AS Lucro_Total
+        FROM public.vw_pedido_produto_details
+        GROUP BY "Produto"
+        ORDER BY Lucro_Total DESC;
+    """
+    dados_vendas = run_query(query)
+    
+    if not dados_vendas:
+        st.warning("Não há dados disponíveis para gerar o resumo do autoatendimento.")
+        return
+    
+    df_vendas = pd.DataFrame(dados_vendas, columns=["Produto", "Total_Vendas", "Lucro_Total"])
+    
+    # Identificar os produtos mais lucrativos
+    produtos_mais_lucrativos = df_vendas.nlargest(5, "Lucro_Total")
+    produtos_top = produtos_mais_lucrativos["Produto"].tolist()
+    
+    # Identificar os produtos com menor demanda
+    produtos_menos_vendidos = df_vendas.nsmallest(5, "Total_Vendas")
+    produtos_menos = produtos_menos_vendidos["Produto"].tolist()
+    
+    # Consultar os dias de maior faturamento
+    query_faturamento = """
+        SELECT date("Data") AS Data, SUM("Valor_total") AS Total_Vendas
+        FROM public.vw_pedido_produto_details
+        GROUP BY date("Data")
+        ORDER BY Total_Vendas DESC;
+    """
+    dados_faturamento = run_query(query_faturamento)
+    
+    if dados_faturamento:
+        df_faturamento = pd.DataFrame(dados_faturamento, columns=["Data", "Total_Vendas"])
+        dias_picos = df_faturamento.nlargest(3, "Total_Vendas")["Data"].tolist()
+    else:
+        dias_picos = []
+    
+    # Construir o resumo dinâmico
+    resumo = f"""
+    ### 🔍 Resumo da Análise do Autoatendimento 📊
+    
+    ✅ **Produtos mais lucrativos:** {', '.join(produtos_top)}
+    ✅ **Picos de venda:** {', '.join(str(d) for d in dias_picos)}
+    ✅ **Produtos com baixa rotação:** {', '.join(produtos_menos)}
+    ✅ **Sugestões:** Reavaliar preços, combos promocionais e reposição de estoque.
+    
+    """
+    st.markdown(resumo)
+
 def home_page():
     """Página inicial do aplicativo."""
     # Verifica se temos um registro em last_settings no session_state
@@ -376,6 +430,12 @@ def home_page():
         st.markdown("---")
         st.header("Analytics Overview")
         analytics_page_content()
+        
+    # Adicionar o resumo automaticamente
+        gerar_resumo_autoatendimento()
+    
+        st.markdown("---")
+
 
 def orders_page():
     """Página de pedidos com adição da aba Cash Number."""
