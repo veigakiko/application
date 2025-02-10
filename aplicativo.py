@@ -429,10 +429,11 @@ def home_page():
         # -------------------------- Include Analytics Page Below --------------------------
         st.markdown("---")
         st.header("Analytics Overview")
+        gerar_resumo_autoatendimento()
         analytics_page_content()
         
     # Adicionar o resumo automaticamente
-        gerar_resumo_autoatendimento()
+        
     
         st.markdown("---")
 
