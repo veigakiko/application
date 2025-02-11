@@ -1048,6 +1048,7 @@ def analytics_page_content():
         # Filtrar por Intervalo de Datas
         # --------------------------
 
+
         # Converte a coluna "Data" para o tipo datetime
         df["Data"] = pd.to_datetime(df["Data"])
 
@@ -1082,6 +1083,7 @@ def analytics_page_content():
         # Totals in the Selected Range
         # --------------------------
 
+
         soma_valor_total = df_filtrado["Valor_total"].sum()
         soma_lucro_liquido = df_filtrado["Lucro_Liquido"].sum()
         col1, col2 = st.columns(2)
@@ -1110,6 +1112,7 @@ def analytics_page_content():
         # --------------------------
         # Total Sales and Net Profit per Day Chart
         # --------------------------
+
 
         df_daily = df_filtrado.groupby("Data").agg({
             "Valor_total": "sum",
@@ -1627,17 +1630,6 @@ def loyalty_program_page():
         else:
             st.error("Pontos insuficientes.")
 
-# NOVA FUNÇÃO: Página Power BI
-def powerbi_page():
-    """Página do Power BI."""
-    st.title("Power BI")
-    st.markdown(
-        '''
-        <iframe title="beachclub" width="800" height="673.5" src="https://app.powerbi.com/view?r=eyJrIjoiNmQwOWFlMGItMzQ5Yi00OWY0LTkzY2MtMmQzMmIxN2UyNDIxIiwidCI6ImJjYmY3MThmLTNjZmMtNGE3Ny05NTI0LWE2NWY5MjBkYTM1MSJ9&embedImagePlaceholder=true" frameborder="0" allowFullScreen="true"></iframe>
-        ''',
-        unsafe_allow_html=True
-    )
-
 def settings_page():
     """Página de configurações para salvar/atualizar dados da empresa."""
     st.title("Settings")
@@ -1897,8 +1889,6 @@ def main():
         settings_page()
     elif selected_page == "Loyalty Program":
         loyalty_program_page()
-    elif selected_page == "Power BI":
-        powerbi_page()
 
     # Botão "Logout" na sidebar
     with st.sidebar:
@@ -2019,11 +2009,11 @@ def sidebar_navigation():
             [
                 "Home", "Orders", "Products", "Stock", "Clients",
                 "Cash", "Analytics", "Calendário de Eventos",
-                "Settings", "Loyalty Program", "Power BI"
+                "Settings", "Loyalty Program"
             ],
             icons=[
                 "house","file-text","box","list-task","layers",
-                "receipt","bar-chart","calendar","gear", "star", "speedometer2"
+                "receipt","bar-chart","calendar","gear", "star"
             ],
             menu_icon="cast",
             default_index=0,
@@ -2107,6 +2097,11 @@ def generate_invoice_for_printer(df: pd.DataFrame):
     invoice.append("==================================================")
 
     st.text("\n".join(invoice))
+
+###############################################################################
+#                     FUNÇÕES DE INICIALIZAÇÃO
+###############################################################################
+# (Already defined above)
 
 ###############################################################################
 #                     INICIALIZAÇÃO E MAIN
